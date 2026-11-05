@@ -39,6 +39,8 @@ public enum PermissionCode {
 
 	STUDENT_ENROLLMENT_MANAGE("student.enrollment.manage"),
 
+	STUDENT_GUARDIAN_MANAGE("student.guardian.manage"),
+
 	// Staff
 	TEACHER_VIEW("teacher.view"),
 

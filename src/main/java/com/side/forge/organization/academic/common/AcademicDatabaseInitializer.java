@@ -23,28 +23,41 @@ public class AcademicDatabaseInitializer implements ApplicationRunner {
 
 	private final NamedParameterJdbcTemplate jdbc;
 
-	private record PermissionSeed(PermissionCode code, String name, String description) {
+	private record PermissionSeed(PermissionCode code, String name, String module, String description) {
 	}
 
 	private static final List<PermissionSeed> ACADEMIC_PERMISSIONS = List.of(
-			new PermissionSeed(PermissionCode.ACADEMIC_SESSION_VIEW, "View academic sessions",
+			new PermissionSeed(PermissionCode.ACADEMIC_SESSION_VIEW, "View academic sessions", "ACADEMICS",
 					"View organization academic sessions"),
-			new PermissionSeed(PermissionCode.ACADEMIC_SESSION_MANAGE, "Manage academic sessions",
+			new PermissionSeed(PermissionCode.ACADEMIC_SESSION_MANAGE, "Manage academic sessions", "ACADEMICS",
 					"Create, start and complete academic sessions"),
-			new PermissionSeed(PermissionCode.CLASS_VIEW, "View classes", "View classes and sections"),
-			new PermissionSeed(PermissionCode.CLASS_MANAGE, "Manage classes", "Create and manage classes and sections"),
-			new PermissionSeed(PermissionCode.SECTION_VIEW, "View sections",
+			new PermissionSeed(PermissionCode.CLASS_VIEW, "View classes", "ACADEMICS", "View classes and sections"),
+			new PermissionSeed(PermissionCode.CLASS_MANAGE, "Manage classes", "ACADEMICS",
+					"Create and manage classes and sections"),
+			new PermissionSeed(PermissionCode.SECTION_VIEW, "View sections", "ACADEMICS",
 					"View class sections within academic sessions"),
-			new PermissionSeed(PermissionCode.SECTION_MANAGE, "Manage sections",
+			new PermissionSeed(PermissionCode.SECTION_MANAGE, "Manage sections", "ACADEMICS",
 					"Create, update and deactivate class sections"),
-			new PermissionSeed(PermissionCode.SUBJECT_VIEW, "View subjects",
+			new PermissionSeed(PermissionCode.SUBJECT_VIEW, "View subjects", "ACADEMICS",
 					"View reusable organization subjects"),
-			new PermissionSeed(PermissionCode.SUBJECT_MANAGE, "Manage subjects",
+			new PermissionSeed(PermissionCode.SUBJECT_MANAGE, "Manage subjects", "ACADEMICS",
 					"Create, update and deactivate organization subjects"),
-			new PermissionSeed(PermissionCode.CLASS_SUBJECT_VIEW, "View class subjects",
+			new PermissionSeed(PermissionCode.CLASS_SUBJECT_VIEW, "View class subjects", "ACADEMICS",
 					"View subject assignments for classes in academic sessions"),
-			new PermissionSeed(PermissionCode.CLASS_SUBJECT_MANAGE, "Manage class subjects",
-					"Assign and remove subjects for classes in academic sessions")
+			new PermissionSeed(PermissionCode.CLASS_SUBJECT_MANAGE, "Manage class subjects", "ACADEMICS",
+					"Assign and remove subjects for classes in academic sessions"),
+			new PermissionSeed(PermissionCode.STUDENT_VIEW, "View students", "STUDENT",
+					"View students in the current school"),
+			new PermissionSeed(PermissionCode.STUDENT_CREATE, "Create students", "STUDENT",
+					"Register students"),
+			new PermissionSeed(PermissionCode.STUDENT_UPDATE, "Update students", "STUDENT",
+					"Update student records"),
+			new PermissionSeed(PermissionCode.STUDENT_DELETE, "Delete students", "STUDENT",
+					"Delete or archive student records"),
+			new PermissionSeed(PermissionCode.STUDENT_ENROLLMENT_MANAGE, "Manage student enrollment", "STUDENT",
+					"Enroll and transfer students"),
+			new PermissionSeed(PermissionCode.STUDENT_GUARDIAN_MANAGE, "Manage student guardians", "STUDENT",
+					"Create and manage parent/guardian records and student associations")
 	);
 
 	private static final Map<String, List<PermissionCode>> ROLE_PERMISSION_MAPPINGS = Map.of(
@@ -53,24 +66,33 @@ public class AcademicDatabaseInitializer implements ApplicationRunner {
 					PermissionCode.CLASS_VIEW, PermissionCode.CLASS_MANAGE,
 					PermissionCode.SECTION_VIEW, PermissionCode.SECTION_MANAGE,
 					PermissionCode.SUBJECT_VIEW, PermissionCode.SUBJECT_MANAGE,
-					PermissionCode.CLASS_SUBJECT_VIEW, PermissionCode.CLASS_SUBJECT_MANAGE),
+					PermissionCode.CLASS_SUBJECT_VIEW, PermissionCode.CLASS_SUBJECT_MANAGE,
+					PermissionCode.STUDENT_VIEW, PermissionCode.STUDENT_CREATE,
+					PermissionCode.STUDENT_UPDATE, PermissionCode.STUDENT_DELETE,
+					PermissionCode.STUDENT_ENROLLMENT_MANAGE, PermissionCode.STUDENT_GUARDIAN_MANAGE),
 			"PRINCIPAL", List.of(
 					PermissionCode.ACADEMIC_SESSION_VIEW, PermissionCode.ACADEMIC_SESSION_MANAGE,
 					PermissionCode.CLASS_VIEW, PermissionCode.CLASS_MANAGE,
 					PermissionCode.SECTION_VIEW, PermissionCode.SECTION_MANAGE,
 					PermissionCode.SUBJECT_VIEW, PermissionCode.SUBJECT_MANAGE,
-					PermissionCode.CLASS_SUBJECT_VIEW, PermissionCode.CLASS_SUBJECT_MANAGE),
+					PermissionCode.CLASS_SUBJECT_VIEW, PermissionCode.CLASS_SUBJECT_MANAGE,
+					PermissionCode.STUDENT_VIEW, PermissionCode.STUDENT_CREATE,
+					PermissionCode.STUDENT_UPDATE, PermissionCode.STUDENT_ENROLLMENT_MANAGE,
+					PermissionCode.STUDENT_GUARDIAN_MANAGE),
+			"RECEPTIONIST", List.of(
+					PermissionCode.STUDENT_VIEW, PermissionCode.STUDENT_CREATE,
+					PermissionCode.STUDENT_GUARDIAN_MANAGE),
 			"TEACHER", List.of(
 					PermissionCode.ACADEMIC_SESSION_VIEW, PermissionCode.CLASS_VIEW,
 					PermissionCode.SECTION_VIEW, PermissionCode.SUBJECT_VIEW,
-					PermissionCode.CLASS_SUBJECT_VIEW),
+					PermissionCode.CLASS_SUBJECT_VIEW, PermissionCode.STUDENT_VIEW),
 			"SCHOOL_STAFF", List.of(
 					PermissionCode.ACADEMIC_SESSION_VIEW, PermissionCode.CLASS_VIEW,
 					PermissionCode.SECTION_VIEW, PermissionCode.SUBJECT_VIEW,
-					PermissionCode.CLASS_SUBJECT_VIEW),
+					PermissionCode.CLASS_SUBJECT_VIEW, PermissionCode.STUDENT_VIEW),
 			"ACCOUNTANT", List.of(
 					PermissionCode.ACADEMIC_SESSION_VIEW, PermissionCode.CLASS_VIEW,
-					PermissionCode.SECTION_VIEW)
+					PermissionCode.SECTION_VIEW, PermissionCode.STUDENT_VIEW)
 	);
 
 	@Override
@@ -98,13 +120,14 @@ public class AcademicDatabaseInitializer implements ApplicationRunner {
 	private void seedAcademicPermissions() {
 		String sql = """
 				INSERT INTO permissions (code, name, module, description, created_at, updated_at)
-				SELECT :code, :name, 'ACADEMICS', :description, CURRENT_TIMESTAMP(6), CURRENT_TIMESTAMP(6)
+				SELECT :code, :name, :module, :description, CURRENT_TIMESTAMP(6), CURRENT_TIMESTAMP(6)
 				WHERE NOT EXISTS (SELECT 1 FROM permissions WHERE code = :code)
 				""";
 		for (PermissionSeed seed : ACADEMIC_PERMISSIONS) {
 			jdbc.update(sql, Map.of(
 					"code", seed.code().getValue(),
 					"name", seed.name(),
+					"module", seed.module(),
 					"description", seed.description()));
 		}
 	}
@@ -154,6 +177,28 @@ public class AcademicDatabaseInitializer implements ApplicationRunner {
 				"ALTER TABLE class_subjects ADD CONSTRAINT fk_class_subjects_class_org FOREIGN KEY (class_id, organization_id) REFERENCES classes (id, organization_id)");
 		addForeignKeyIfAbsent("class_subjects", "fk_class_subjects_subject_org",
 				"ALTER TABLE class_subjects ADD CONSTRAINT fk_class_subjects_subject_org FOREIGN KEY (subject_id, organization_id) REFERENCES subjects (id, organization_id)");
+		addForeignKeyIfAbsent("students", "fk_students_org",
+				"ALTER TABLE students ADD CONSTRAINT fk_students_org FOREIGN KEY (organization_id) REFERENCES organizations (id)");
+		addForeignKeyIfAbsent("students", "fk_students_user",
+				"ALTER TABLE students ADD CONSTRAINT fk_students_user FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE SET NULL");
+		addForeignKeyIfAbsent("guardians", "fk_guardians_org",
+				"ALTER TABLE guardians ADD CONSTRAINT fk_guardians_org FOREIGN KEY (organization_id) REFERENCES organizations (id)");
+		addForeignKeyIfAbsent("guardians", "fk_guardians_user",
+				"ALTER TABLE guardians ADD CONSTRAINT fk_guardians_user FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE SET NULL");
+		addForeignKeyIfAbsent("student_guardians", "fk_student_guardians_org",
+				"ALTER TABLE student_guardians ADD CONSTRAINT fk_student_guardians_org FOREIGN KEY (organization_id) REFERENCES organizations (id)");
+		addForeignKeyIfAbsent("student_guardians", "fk_student_guardians_student_org",
+				"ALTER TABLE student_guardians ADD CONSTRAINT fk_student_guardians_student_org FOREIGN KEY (student_id, organization_id) REFERENCES students (id, organization_id)");
+		addForeignKeyIfAbsent("student_guardians", "fk_student_guardians_guardian_org",
+				"ALTER TABLE student_guardians ADD CONSTRAINT fk_student_guardians_guardian_org FOREIGN KEY (guardian_id, organization_id) REFERENCES guardians (id, organization_id)");
+		addForeignKeyIfAbsent("student_enrollments", "fk_student_enrollments_org",
+				"ALTER TABLE student_enrollments ADD CONSTRAINT fk_student_enrollments_org FOREIGN KEY (organization_id) REFERENCES organizations (id)");
+		addForeignKeyIfAbsent("student_enrollments", "fk_student_enrollments_student_org",
+				"ALTER TABLE student_enrollments ADD CONSTRAINT fk_student_enrollments_student_org FOREIGN KEY (student_id, organization_id) REFERENCES students (id, organization_id)");
+		addForeignKeyIfAbsent("student_enrollments", "fk_student_enrollments_session_org",
+				"ALTER TABLE student_enrollments ADD CONSTRAINT fk_student_enrollments_session_org FOREIGN KEY (academic_session_id, organization_id) REFERENCES academic_sessions (id, organization_id)");
+		addForeignKeyIfAbsent("student_enrollments", "fk_student_enrollments_class_org",
+				"ALTER TABLE student_enrollments ADD CONSTRAINT fk_student_enrollments_class_org FOREIGN KEY (class_id, organization_id) REFERENCES classes (id, organization_id)");
 	}
 
 	private void addForeignKeyIfAbsent(String tableName, String constraintName, String alterSql) {
