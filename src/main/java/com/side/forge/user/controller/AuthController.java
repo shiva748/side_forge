@@ -1,5 +1,6 @@
 package com.side.forge.user.controller;
 
+import io.swagger.v3.oas.annotations.tags.Tag;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -17,6 +18,7 @@ import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 
 @RestController
+@Tag(name = "Authentication", description = "User registration and login")
 @RequestMapping("/api/auth")
 @RequiredArgsConstructor
 public class AuthController {

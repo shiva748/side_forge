@@ -2,8 +2,8 @@ package com.side.forge.security;
 
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
-import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.HttpMethod;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.dao.DaoAuthenticationProvider;
 import org.springframework.security.config.Customizer;
@@ -33,16 +33,19 @@ public class SecurityConfig {
 	@Bean
 	public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
 		http.cors(Customizer.withDefaults())
-				// CSRF is disabled as explicitly requested for the current API/Postman
-				// workflow.
+				// CSRF is disabled as explicitly requested for the current API/Postman workflow.
 				.csrf(csrf -> csrf.disable())
 				.sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
 				.authenticationProvider(daoAuthenticationProvider())
 				.exceptionHandling(exceptions -> exceptions
 						.authenticationEntryPoint(new HttpStatusEntryPoint(HttpStatus.UNAUTHORIZED)))
-				.authorizeHttpRequests(auth -> auth.requestMatchers("/api/auth/**", "/api/public/**").permitAll()
+				.authorizeHttpRequests(auth -> auth
+						.requestMatchers("/api/auth/**", "/api/public/**").permitAll()
 						.requestMatchers(HttpMethod.POST, "/api/organizations/onboarding").permitAll()
-						.requestMatchers("/", "/index.html", "/favicon.ico", "/assets/**").permitAll()
+						.requestMatchers(
+                                "/", "/index.html", "/favicon.ico", "/assets/**",
+                                "/swagger-ui.html", "/swagger-ui/**", "/v3/api-docs/**", "/v3/api-docs.yaml"
+                        ).permitAll()
 						.requestMatchers("/api/platform/**", "/api/organizations/**", "/api/me/**").authenticated()
 						.anyRequest().authenticated())
 				.addFilterBefore(jwtFilter, UsernamePasswordAuthenticationFilter.class)

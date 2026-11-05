@@ -4,9 +4,9 @@ package com.side.forge.organization.onboarding.mapper;
 import org.mapstruct.Mapper;
 import org.mapstruct.Mapping;
 
-import com.side.forge.organization.entity.Organization;
 import com.side.forge.organization.onboarding.dto.OnboardingRequestDto;
 import com.side.forge.organization.onboarding.entity.OnboardingRequest;
+import com.side.forge.organization.entity.Organization;
 
 @Mapper(componentModel = "spring")
 public interface OnboardingMapper {

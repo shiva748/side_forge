@@ -1,5 +1,7 @@
 package com.side.forge.user.controller;
 
+import io.swagger.v3.oas.annotations.security.SecurityRequirement;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
@@ -14,6 +16,8 @@ import lombok.RequiredArgsConstructor;
 
 @RestController
 @RequiredArgsConstructor
+@Tag(name = "User", description = "Authenticated user profile operations")
+@SecurityRequirement(name = "jwtCookie")
 @RequestMapping("/api/me")
 public class UserController {
 

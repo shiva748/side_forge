@@ -16,7 +16,8 @@ import com.side.forge.authorization.enums.PermissionCode;
 @Target({ElementType.METHOD, ElementType.TYPE})
 @Retention(RetentionPolicy.RUNTIME)
 @Documented
-@PreAuthorize("@permissionChecker.hasPermissionByName('{value}')")
+@PreAuthorize("@permissionChecker.hasPermissionByName(T(com.side.forge.authorization.enums.PermissionCode).valueOf('{value}').value)")
 public @interface RequirePermission {
+
 	PermissionCode value();
 }
