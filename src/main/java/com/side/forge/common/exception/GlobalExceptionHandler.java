@@ -3,14 +3,19 @@ package com.side.forge.common.exception;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
+import org.springframework.web.bind.MissingServletRequestParameterException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.method.annotation.HandlerMethodValidationException;
+import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 
 import com.side.forge.common.dto.ApiResponse;
 
 import jakarta.persistence.EntityNotFoundException;
+import jakarta.validation.ConstraintViolationException;
 import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
@@ -30,6 +35,26 @@ public class GlobalExceptionHandler {
 				.map(error -> error.getField() + ": " + error.getDefaultMessage()).findFirst()
 				.orElse("Request validation failed");
 		return ResponseEntity.badRequest().body(new ApiResponse<>(false, message));
+	}
+
+	@ExceptionHandler(ConstraintViolationException.class)
+	public ResponseEntity<?> handleConstraintViolation(ConstraintViolationException ex) {
+		String message = ex.getConstraintViolations().stream()
+				.map(v -> v.getMessage())
+				.findFirst()
+				.orElse("Request validation failed");
+		return ResponseEntity.badRequest().body(new ApiResponse<>(false, message));
+	}
+
+	@ExceptionHandler(HandlerMethodValidationException.class)
+	public ResponseEntity<?> handleMethodValidation(HandlerMethodValidationException ex) {
+		return ResponseEntity.badRequest().body(new ApiResponse<>(false, "Request validation failed"));
+	}
+
+	@ExceptionHandler({MethodArgumentTypeMismatchException.class, HttpMessageNotReadableException.class,
+			MissingServletRequestParameterException.class})
+	public ResponseEntity<?> handleBadRequestPayload(Exception ex) {
+		return ResponseEntity.badRequest().body(new ApiResponse<>(false, "Invalid request parameters or payload"));
 	}
 
 	@ExceptionHandler(EntityNotFoundException.class)

@@ -24,6 +24,7 @@ public interface OnboardingMapper {
 	@Mapping(target = "name", source = "schoolName")
 	@Mapping(target = "email", source = "schoolEmail")
 	@Mapping(target = "phoneNumber", source = "schoolPhone")
+	@Mapping(target = "timezone", ignore = true)
 	@Mapping(target = "status", ignore = true)
 	@Mapping(target = "createdAt", ignore = true)
 	@Mapping(target = "updatedAt", ignore = true)

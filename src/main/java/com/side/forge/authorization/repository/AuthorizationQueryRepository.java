@@ -19,8 +19,11 @@ public class AuthorizationQueryRepository {
 
 	public boolean hasActiveMembership(Long userId, Long organizationId) {
 		Integer count = jdbc.queryForObject(
-				"SELECT COUNT(*) FROM organization_memberships "
-						+ "WHERE user_id = :userId AND organization_id = :organizationId AND status = :status",
+				"SELECT COUNT(*) FROM organization_memberships m "
+						+ "JOIN organizations o ON o.id = m.organization_id "
+						+ "JOIN users u ON u.id = m.user_id "
+						+ "WHERE m.user_id = :userId AND m.organization_id = :organizationId "
+						+ "AND m.status = :status AND o.status = 'ACTIVE' AND u.status = 'ACTIVE'",
 				Map.of("userId", userId, "organizationId", organizationId, "status", MembershipStatus.ACTIVE.name()),
 				Integer.class);
 		return count != null && count > 0;

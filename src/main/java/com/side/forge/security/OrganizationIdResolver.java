@@ -19,7 +19,7 @@ public class OrganizationIdResolver {
             Pattern.compile("^/api/organizations/([1-9][0-9]*)(?:/.*)?$");
 
     public Long resolve(HttpServletRequest request) {
-        Matcher matcher = ORGANIZATION_PATH.matcher(request.getServletPath());
+        Matcher matcher = ORGANIZATION_PATH.matcher(resolvePath(request));
         if (!matcher.matches()) {
             return null;
         }
@@ -29,5 +29,21 @@ public class OrganizationIdResolver {
         } catch (NumberFormatException exception) {
             throw new IllegalArgumentException("Invalid organization ID in request path", exception);
         }
+    }
+
+    public String resolvePath(HttpServletRequest request) {
+        String servletPath = request.getServletPath();
+        if (servletPath != null && !servletPath.isEmpty()) {
+            return servletPath;
+        }
+        String requestUri = request.getRequestURI();
+        if (requestUri == null) {
+            return "";
+        }
+        String contextPath = request.getContextPath();
+        if (contextPath != null && !contextPath.isEmpty() && requestUri.startsWith(contextPath)) {
+            return requestUri.substring(contextPath.length());
+        }
+        return requestUri;
     }
 }

@@ -51,7 +51,7 @@ public class AuthorizationContextFilter extends OncePerRequestFilter {
             return;
         }
 
-        String path = request.getServletPath();
+        String path = organizationIdResolver.resolvePath(request);
         AuthorizationContext context;
 
         if (isPlatformApi(path)) {

@@ -49,9 +49,25 @@ public enum PermissionCode {
 	STAFF_MANAGE("staff.manage"),
 
 	// Academics
+	ACADEMIC_SESSION_VIEW("academic_session.view"),
+
+	ACADEMIC_SESSION_MANAGE("academic_session.manage"),
+
 	CLASS_VIEW("class.view"),
 
 	CLASS_MANAGE("class.manage"),
+
+	SECTION_VIEW("section.view"),
+
+	SECTION_MANAGE("section.manage"),
+
+	SUBJECT_VIEW("subject.view"),
+
+	SUBJECT_MANAGE("subject.manage"),
+
+	CLASS_SUBJECT_VIEW("class_subject.view"),
+
+	CLASS_SUBJECT_MANAGE("class_subject.manage"),
 
 	TIMETABLE_VIEW("timetable.view"),
 

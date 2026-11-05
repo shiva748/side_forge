@@ -40,6 +40,9 @@ public class Organization extends AuditableEntity {
 	@Column(nullable = false, length = 6)
 	private String postalCode;
 
+	@Column(name = "timezone", nullable = false, length = 64, columnDefinition = "varchar(64) not null default 'Asia/Kolkata'")
+	private String timezone = "Asia/Kolkata";
+
 	@Enumerated(EnumType.STRING)
 	@Column(nullable = false, length = 20)
 	private OrganizationStatus status = OrganizationStatus.PENDING;
