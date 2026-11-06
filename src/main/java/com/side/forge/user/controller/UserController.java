@@ -12,8 +12,14 @@ import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
 import com.side.forge.common.dto.ApiResponse;
+import com.side.forge.common.dto.PagedResponse;
+import com.side.forge.common.utils.AuthenticationUtils;
 import com.side.forge.invitation.dto.InvitationDtos.InvitationResponse;
 import com.side.forge.invitation.service.InvitationService;
+import com.side.forge.notification.dto.NotificationDtos.*;
+import com.side.forge.notification.entity.NotificationCategory;
+import com.side.forge.notification.entity.NotificationType;
+import com.side.forge.notification.service.NotificationService;
 import com.side.forge.storage.dto.StorageDtos.DownloadedFilePayload;
 import com.side.forge.storage.dto.StorageDtos.StoredFileResponse;
 import com.side.forge.user.dto.ChangePasswordRequest;
@@ -24,18 +30,20 @@ import com.side.forge.user.service.UserService;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
+import jakarta.validation.constraints.Positive;
 import lombok.RequiredArgsConstructor;
 
 @RestController
 @Validated
 @RequiredArgsConstructor
-@Tag(name = "User", description = "Authenticated user account, profile, password, and profile photo operations")
+@Tag(name = "User", description = "Authenticated user account, profile, password, profile photo, and notifications operations")
 @SecurityRequirement(name = "jwtCookie")
 @RequestMapping("/api/me")
 public class UserController {
 
 	private final UserService userService;
 	private final InvitationService invitationService;
+	private final NotificationService notificationService;
 
 	@GetMapping
 	public ResponseEntity<ApiResponse<UserResponse>> myProfile(Authentication authentication) {
@@ -116,6 +124,67 @@ public class UserController {
 		return ResponseEntity.ok(new ApiResponse<>(
 				true, "Pending invitations retrieved successfully",
 				invitationService.getMyPendingInvitations(authentication)));
+	}
+
+	@GetMapping("/notifications")
+	public ResponseEntity<ApiResponse<PagedResponse<NotificationResponse>>> myNotifications(
+			Authentication authentication,
+			@RequestParam(required = false) NotificationCategory category,
+			@RequestParam(required = false) NotificationType type,
+			@RequestParam(required = false) Boolean unreadOnly,
+			@RequestParam(defaultValue = "0") int page,
+			@RequestParam(defaultValue = "20") int size) {
+		Long userId = AuthenticationUtils.getAuthenticatedUserId(authentication);
+		return ResponseEntity.ok(new ApiResponse<>(
+				true, "Notifications retrieved successfully",
+				notificationService.getUserNotifications(userId, null, category, type, unreadOnly, page, size)));
+	}
+
+	@GetMapping("/notifications/unread-count")
+	public ResponseEntity<ApiResponse<UnreadNotificationCountResponse>> myUnreadNotificationCount(
+			Authentication authentication) {
+		Long userId = AuthenticationUtils.getAuthenticatedUserId(authentication);
+		return ResponseEntity.ok(new ApiResponse<>(
+				true, "Unread notification count retrieved successfully",
+				notificationService.getUnreadCount(userId, null)));
+	}
+
+	@PatchMapping("/notifications/{notificationId}/read")
+	public ResponseEntity<ApiResponse<NotificationResponse>> markMyNotificationRead(
+			Authentication authentication,
+			@PathVariable @Positive Long notificationId) {
+		Long userId = AuthenticationUtils.getAuthenticatedUserId(authentication);
+		return ResponseEntity.ok(new ApiResponse<>(
+				true, "Notification marked as read",
+				notificationService.markAsRead(userId, null, notificationId)));
+	}
+
+	@PostMapping("/notifications/read-all")
+	public ResponseEntity<ApiResponse<MarkAllReadResponse>> markAllMyNotificationsRead(
+			Authentication authentication) {
+		Long userId = AuthenticationUtils.getAuthenticatedUserId(authentication);
+		return ResponseEntity.ok(new ApiResponse<>(
+				true, "All notifications marked as read",
+				notificationService.markAllAsRead(userId, null)));
+	}
+
+	@GetMapping("/notification-preferences")
+	public ResponseEntity<ApiResponse<NotificationPreferenceResponse>> myNotificationPreferences(
+			Authentication authentication) {
+		Long userId = AuthenticationUtils.getAuthenticatedUserId(authentication);
+		return ResponseEntity.ok(new ApiResponse<>(
+				true, "Notification preferences retrieved successfully",
+				notificationService.getUserPreferences(userId, null)));
+	}
+
+	@PutMapping("/notification-preferences")
+	public ResponseEntity<ApiResponse<NotificationPreferenceResponse>> updateMyNotificationPreferences(
+			Authentication authentication,
+			@Valid @RequestBody UpdateNotificationPreferencesRequest request) {
+		Long userId = AuthenticationUtils.getAuthenticatedUserId(authentication);
+		return ResponseEntity.ok(new ApiResponse<>(
+				true, "Notification preferences updated successfully",
+				notificationService.updateUserPreferences(userId, null, request)));
 	}
 }
 

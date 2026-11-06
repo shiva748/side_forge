@@ -42,6 +42,7 @@ import com.side.forge.storage.dto.StorageDtos.DownloadedFilePayload;
 import com.side.forge.storage.dto.StorageDtos.StoredFileResponse;
 import com.side.forge.storage.entity.FileResourceCategory;
 import com.side.forge.storage.service.FileManagementService;
+import com.side.forge.notification.service.NotificationService;
 
 import jakarta.persistence.EntityNotFoundException;
 import lombok.RequiredArgsConstructor;
@@ -71,6 +72,7 @@ public class HomeworkService {
 	private final StudentRepository studentRepository;
 	private final StudentEnrollmentRepository enrollmentRepository;
 	private final FileManagementService fileManagementService;
+	private final NotificationService notificationService;
 	@RequirePermission(PermissionCode.HOMEWORK_MANAGE)
 	@Transactional
 	public HomeworkAssignmentResponse createHomework(Long orgId, CreateHomeworkRequest request) {
@@ -140,6 +142,9 @@ public class HomeworkService {
 			}
 		}
 		List<StudentHomeworkSubmission> savedSubs = submissionRepository.saveAllAndFlush(toSave);
+		notificationService.notifyHomeworkAssigned(
+				hw, schoolClass.getName(), subject.getName(),
+				savedSubs.stream().map(StudentHomeworkSubmission::getStudentId).toList());
 		return toHomeworkResponse(orgId, hw, session, schoolClass, subject, teacher, savedSubs, hw.getAssignedDate());
 	}
 	@RequirePermission(PermissionCode.HOMEWORK_MANAGE)
@@ -370,6 +375,7 @@ public class HomeworkService {
 		sub.setStatus(HomeworkSubmissionStatus.SUBMITTED);
 
 		StudentHomeworkSubmission saved = submissionRepository.saveAndFlush(sub);
+		notificationService.notifyHomeworkSubmissionReceived(hw, saved, fullName(student));
 		return mapSubmissionResponses(orgId, Map.of(hw.getId(), hw), List.of(saved), subDate).getFirst();
 	}
 	@RequirePermission(PermissionCode.HOMEWORK_EVALUATE)
@@ -403,6 +409,7 @@ public class HomeworkService {
 		sub.setEvaluatedAt(Instant.now());
 
 		StudentHomeworkSubmission saved = submissionRepository.saveAndFlush(sub);
+		notificationService.notifyHomeworkEvaluated(hw, saved);
 		LocalDate ref = LocalDate.now(validator.resolveZoneId(org));
 		return mapSubmissionResponses(orgId, Map.of(hw.getId(), hw), List.of(saved), ref).getFirst();
 	}
@@ -602,7 +609,8 @@ public class HomeworkService {
 		sub.setSubmissionCount(sub.getSubmissionCount() + 1);
 		sub.setLateSubmission(afterDeadline);
 		sub.setStatus(HomeworkSubmissionStatus.SUBMITTED);
-		submissionRepository.saveAndFlush(sub);
+		StudentHomeworkSubmission savedSub = submissionRepository.saveAndFlush(sub);
+		notificationService.notifyHomeworkSubmissionReceived(hw, savedSub, fullName(student));
 
 		return stored;
 	}

@@ -172,7 +172,7 @@ public class AcademicDatabaseInitializer implements ApplicationRunner {
 					PermissionCode.TEACHER_VIEW, PermissionCode.TIMETABLE_VIEW,
 					PermissionCode.ATTENDANCE_VIEW, PermissionCode.ATTENDANCE_MARK, PermissionCode.ATTENDANCE_UPDATE,
 					PermissionCode.EXAM_VIEW, PermissionCode.EXAM_ENTER_MARKS,
-					PermissionCode.COMMUNICATION_VIEW, PermissionCode.DASHBOARD_VIEW,
+					PermissionCode.COMMUNICATION_VIEW, PermissionCode.COMMUNICATION_MANAGE, PermissionCode.DASHBOARD_VIEW,
 					PermissionCode.REPORT_VIEW, PermissionCode.REPORT_EXPORT,
 					PermissionCode.HOMEWORK_VIEW, PermissionCode.HOMEWORK_MANAGE, PermissionCode.HOMEWORK_EVALUATE),
 			"STUDENT", List.of(
@@ -446,6 +446,14 @@ public class AcademicDatabaseInitializer implements ApplicationRunner {
 				"ALTER TABLE organization_invitations ADD CONSTRAINT fk_org_invitations_org FOREIGN KEY (organization_id) REFERENCES organizations (id) ON DELETE CASCADE");
 		addForeignKeyIfAbsent("stored_file_references", "fk_stored_file_refs_file",
 				"ALTER TABLE stored_file_references ADD CONSTRAINT fk_stored_file_refs_file FOREIGN KEY (file_id) REFERENCES stored_files (id) ON DELETE CASCADE");
+		addForeignKeyIfAbsent("in_app_notifications", "fk_in_app_notif_org",
+				"ALTER TABLE in_app_notifications ADD CONSTRAINT fk_in_app_notif_org FOREIGN KEY (organization_id) REFERENCES organizations (id) ON DELETE CASCADE");
+		addForeignKeyIfAbsent("announcements", "fk_announcements_org",
+				"ALTER TABLE announcements ADD CONSTRAINT fk_announcements_org FOREIGN KEY (organization_id) REFERENCES organizations (id) ON DELETE CASCADE");
+		addForeignKeyIfAbsent("announcement_target_classes", "fk_ann_target_classes_ann",
+				"ALTER TABLE announcement_target_classes ADD CONSTRAINT fk_ann_target_classes_ann FOREIGN KEY (announcement_id, organization_id) REFERENCES announcements (id, organization_id) ON DELETE CASCADE");
+		addForeignKeyIfAbsent("announcement_target_students", "fk_ann_target_students_ann",
+				"ALTER TABLE announcement_target_students ADD CONSTRAINT fk_ann_target_students_ann FOREIGN KEY (announcement_id, organization_id) REFERENCES announcements (id, organization_id) ON DELETE CASCADE");
 	}
 
 	private void addForeignKeyIfAbsent(String tableName, String constraintName, String alterSql) {

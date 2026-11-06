@@ -14,6 +14,7 @@ import org.springframework.transaction.annotation.Transactional;
 import com.side.forge.authorization.annotation.RequirePermission;
 import com.side.forge.authorization.enums.PermissionCode;
 import com.side.forge.authorization.service.CurrentUserContext;
+import com.side.forge.notification.service.NotificationService;
 import com.side.forge.organization.academic.common.AcademicTenantAccessValidator;
 import com.side.forge.organization.academic.schoolclass.entity.SchoolClass;
 import com.side.forge.organization.academic.schoolclass.repository.SchoolClassRepository;
@@ -57,6 +58,7 @@ public class AttendanceService {
 	private final StaffRepository staffRepository;
 	private final AcademicTenantAccessValidator validator;
 	private final CurrentUserContext currentUser;
+	private final NotificationService notificationService;
 
 	@RequirePermission(PermissionCode.ATTENDANCE_MARK)
 	@Transactional
@@ -87,6 +89,7 @@ public class AttendanceService {
 		record.setRemarks(validator.normalizeOptionalText(request.remarks()));
 
 		StudentAttendance saved = studentAttendanceRepository.saveAndFlush(record);
+		notificationService.notifyStudentAttendanceMarked(saved, schoolClass.getName(), student);
 		return toStudentAttendanceResponse(saved, schoolClass, student);
 	}
 
@@ -132,6 +135,9 @@ public class AttendanceService {
 		}
 
 		List<StudentAttendance> saved = studentAttendanceRepository.saveAllAndFlush(toSave);
+		for (StudentAttendance r : saved) {
+			notificationService.notifyStudentAttendanceMarked(r, schoolClass.getName(), studentMap.get(r.getStudentId()));
+		}
 		return saved.stream()
 				.map(r -> toStudentAttendanceResponse(r, schoolClass, studentMap.get(r.getStudentId())))
 				.toList();
@@ -168,6 +174,7 @@ public class AttendanceService {
 		StudentAttendance saved = studentAttendanceRepository.save(record);
 		SchoolClass sc = classService.requireClass(orgId, saved.getClassId());
 		Student st = studentService.requireStudent(orgId, saved.getStudentId());
+		notificationService.notifyStudentAttendanceUpdated(saved, audit.getPreviousStatus(), sc.getName(), st);
 		return toStudentAttendanceResponse(saved, sc, st);
 	}
 

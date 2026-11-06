@@ -695,6 +695,8 @@ class InvitationProfileAndStorageIntegrationTest {
 
 	private void cleanTables() {
 		List<String> tables = List.of(
+				"user_notification_preferences", "in_app_notifications",
+				"announcement_target_students", "announcement_target_classes", "announcements",
 				"stored_file_references", "stored_files",
 				"organization_invitations", "organization_onboarding_requests",
 				"student_homework_submissions", "homework_assignments",
@@ -702,7 +704,7 @@ class InvitationProfileAndStorageIntegrationTest {
 				"fee_audit_logs", "fee_payment_allocations", "fee_payments",
 				"student_fee_demands", "student_fee_concessions", "student_fee_assignments",
 				"class_fee_structure_components", "class_fee_structures",
-				"student_exam_results", "exam_marks", "exam_schedules", "examinations",
+				"exam_results", "student_exam_results", "exam_marks", "exam_schedules", "examinations",
 				"grading_rules", "grading_scales",
 				"attendance_audit_logs", "student_attendance", "staff_attendance",
 				"timetable_slots", "class_timetables", "timetable_periods", "timetable_configs",

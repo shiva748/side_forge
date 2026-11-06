@@ -16,6 +16,7 @@ import org.springframework.transaction.annotation.Transactional;
 import com.side.forge.authorization.annotation.RequirePermission;
 import com.side.forge.authorization.enums.PermissionCode;
 import com.side.forge.authorization.service.CurrentUserContext;
+import com.side.forge.notification.service.NotificationService;
 import com.side.forge.organization.academic.common.AcademicTenantAccessValidator;
 import com.side.forge.organization.academic.schoolclass.entity.SchoolClass;
 import com.side.forge.organization.academic.schoolclass.repository.SchoolClassRepository;
@@ -63,6 +64,7 @@ public class FeeManagementService {
 	private final StudentEnrollmentRepository enrollmentRepository;
 	private final AcademicTenantAccessValidator validator;
 	private final CurrentUserContext currentUser;
+	private final NotificationService notificationService;
 
 	@RequirePermission(PermissionCode.FEES_MANAGE)
 	@Transactional
@@ -630,6 +632,7 @@ public class FeeManagementService {
 				"receipt=" + payment.getReceiptNumber() + ", total=" + totalPayment
 						+ ", allocated=" + totalAllocated + ", unappliedCredit=" + unappliedCredit,
 				payment.getRemarks());
+		notificationService.notifyFeePaymentRecordedAndReceiptAvailable(payment);
 
 		return toPaymentReceiptResponse(payment, session, student, savedAllocations, demandMap);
 	}
@@ -679,6 +682,7 @@ public class FeeManagementService {
 
 		recordAudit(orgId, session.getId(), student.getId(), "FEE_PAYMENT", saved.getId(),
 				"REVERSE_PAYMENT", "COMPLETED", "REVERSED (receipt=" + saved.getReceiptNumber() + ")", reason);
+		notificationService.notifyFeePaymentReversedOrRefunded(saved);
 
 		return toPaymentReceiptResponse(saved, session, student, allocations, demandMap);
 	}
@@ -754,6 +758,7 @@ public class FeeManagementService {
 		recordAudit(orgId, session.getId(), student.getId(), "FEE_PAYMENT", saved.getId(),
 				"REFUND_PAYMENT", "refunded=" + saved.getRefundedAmount().subtract(refundAmt),
 				"refunded=" + saved.getRefundedAmount() + ", status=" + saved.getStatus(), reason);
+		notificationService.notifyFeePaymentReversedOrRefunded(saved);
 
 		return toPaymentReceiptResponse(saved, session, student, allocations, demandMap);
 	}
@@ -1138,7 +1143,8 @@ public class FeeManagementService {
 		d.setPaidAmount(BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP));
 		d.setOutstandingAmount(base);
 		d.setStatus(FeeDemandStatus.PENDING);
-		demandRepository.saveAndFlush(d);
+		StudentFeeDemand savedDemand = demandRepository.saveAndFlush(d);
+		notificationService.notifyFeeDemandGenerated(savedDemand);
 	}
 
 	private void recalculateStudentConcessions(Long orgId, Long sessionId, Long studentId) {

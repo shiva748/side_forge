@@ -13,5 +13,7 @@ public interface OrganizationMembershipRepository extends JpaRepository<Organiza
 			MembershipStatus status);
 	Optional<OrganizationMembership> findByUserIdAndOrganizationId(Long userId, Long organizationId);
 	List<OrganizationMembership> findAllByUserIdOrderByIdAsc(Long userId);
+	List<OrganizationMembership> findAllByOrganizationIdAndStatusOrderByIdAsc(
+			Long organizationId, MembershipStatus status);
 }
 

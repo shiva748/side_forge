@@ -8,6 +8,7 @@ import com.side.forge.authorization.annotation.RequirePermission;
 import com.side.forge.authorization.entity.*;
 import com.side.forge.authorization.enums.PermissionCode;
 import com.side.forge.authorization.repository.*;
+import com.side.forge.notification.service.NotificationService;
 import com.side.forge.organization.repository.OrganizationRepository;
 import com.side.forge.user.repository.UserRepository;
 
@@ -26,6 +27,7 @@ public class RoleAssignmentService {
 	private final UserRepository userRepository;
 	private final OrganizationRepository organizationRepository;
 	private final CurrentUserContext currentUser;
+	private final NotificationService notificationService;
 
 	/**
 	 * Only an active SCHOOL_ADMIN in the same organization can assign an
@@ -55,6 +57,7 @@ public class RoleAssignmentService {
 					.save(new MembershipRole(membership.getId(), role.getId(), currentUser.getUserId()));
 			auditLogRepository.save(new AuthorizationAuditLog(currentUser.getUserId(), targetUserId, organizationId,
 					role.getCode(), AuthorizationAuditLog.Action.ORGANIZATION_ROLE_ASSIGNED));
+			notificationService.notifyOrganizationRoleChanged(organizationId, targetUserId, role.getCode(), true);
 		}
 
 	}
@@ -78,6 +81,7 @@ public class RoleAssignmentService {
 			membershipRoleRepository.deleteByMembershipIdAndRoleId(membership.getId(), role.getId());
 			auditLogRepository.save(new AuthorizationAuditLog(currentUser.getUserId(), targetUserId, organizationId,
 					role.getCode(), AuthorizationAuditLog.Action.ORGANIZATION_ROLE_REVOKED));
+			notificationService.notifyOrganizationRoleChanged(organizationId, targetUserId, role.getCode(), false);
 		}
 
 	}

@@ -14,6 +14,7 @@ import org.springframework.transaction.annotation.Transactional;
 import com.side.forge.authorization.annotation.RequirePermission;
 import com.side.forge.authorization.enums.PermissionCode;
 import com.side.forge.authorization.service.CurrentUserContext;
+import com.side.forge.notification.service.NotificationService;
 import com.side.forge.organization.academic.classsubject.repository.ClassSubjectRepository;
 import com.side.forge.organization.academic.common.AcademicTenantAccessValidator;
 import com.side.forge.organization.academic.schoolclass.entity.SchoolClass;
@@ -68,6 +69,7 @@ public class ExaminationService {
 	private final TeacherService teacherService;
 	private final AcademicTenantAccessValidator validator;
 	private final CurrentUserContext currentUser;
+	private final NotificationService notificationService;
 
 	@RequirePermission(PermissionCode.EXAM_MANAGE)
 	@Transactional
@@ -233,6 +235,7 @@ public class ExaminationService {
 		}
 
 		ExamSchedule saved = scheduleRepository.saveAndFlush(schedule);
+		notificationService.notifyExamSchedulePublished(exam, saved, subject.getName());
 		return toScheduleResponse(saved, subject);
 	}
 
@@ -418,6 +421,8 @@ public class ExaminationService {
 		exam.setPublishedAt(Instant.now());
 		exam.setPublishedBy(currentUser.getUserId());
 		Examination saved = examinationRepository.save(exam);
+		SchoolClass sc = classService.requireClass(orgId, saved.getClassId());
+		notificationService.notifyExamResultsPublished(saved, sc.getName());
 		return buildFullExaminationResponse(orgId, saved, session);
 	}
 

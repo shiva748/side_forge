@@ -13,6 +13,7 @@ import org.springframework.transaction.annotation.Transactional;
 import com.side.forge.authorization.annotation.RequirePermission;
 import com.side.forge.authorization.enums.PermissionCode;
 import com.side.forge.authorization.service.CurrentUserContext;
+import com.side.forge.notification.service.NotificationService;
 import com.side.forge.organization.academic.classsubject.repository.ClassSubjectRepository;
 import com.side.forge.organization.academic.common.AcademicTenantAccessValidator;
 import com.side.forge.organization.academic.schoolclass.entity.SchoolClass;
@@ -62,6 +63,7 @@ public class TimetableService {
 	private final TeacherSubjectAssignmentRepository teacherSubjectAssignmentRepository;
 	private final AcademicTenantAccessValidator validator;
 	private final CurrentUserContext currentUser;
+	private final NotificationService notificationService;
 
 	@RequirePermission(PermissionCode.TIMETABLE_MANAGE)
 	@Transactional
@@ -391,6 +393,9 @@ public class TimetableService {
 		timetable.setPublishedAt(Instant.now());
 		timetable.setPublishedBy(currentUser.getUserId());
 		ClassTimetable saved = timetableRepository.save(timetable);
+		notificationService.notifyTimetablePublished(
+				saved, schoolClass.getName(),
+				slots.stream().map(TimetableSlot::getTeacherId).collect(Collectors.toSet()));
 		return buildFullTimetableResponse(orgId, saved, session, null);
 	}
 

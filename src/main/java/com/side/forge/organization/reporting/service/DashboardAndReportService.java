@@ -19,6 +19,7 @@ import com.side.forge.authorization.annotation.RequirePermission;
 import com.side.forge.authorization.enums.PermissionCode;
 import com.side.forge.authorization.service.CurrentUserContext;
 import com.side.forge.common.dto.PagedResponse;
+import com.side.forge.notification.service.NotificationService;
 import com.side.forge.organization.academic.common.AcademicTenantAccessValidator;
 import com.side.forge.organization.academic.schoolclass.entity.SchoolClass;
 import com.side.forge.organization.academic.schoolclass.repository.SchoolClassRepository;
@@ -105,6 +106,7 @@ public class DashboardAndReportService {
 	private final SchoolNoticeRepository noticeRepository;
 	private final ReportExportGenerator exportGenerator;
 	private final List<DashboardModuleWidgetContributor> widgetContributors;
+	private final NotificationService notificationService;
 
 	@RequirePermission(PermissionCode.COMMUNICATION_MANAGE)
 	@Transactional
@@ -125,7 +127,9 @@ public class DashboardAndReportService {
 				: LocalDate.now(validator.resolveZoneId(org)));
 		notice.setActive(true);
 		notice.setCreatedBy(currentUser.getUserId());
-		return toNoticeResponse(noticeRepository.saveAndFlush(notice));
+		SchoolNotice saved = noticeRepository.saveAndFlush(notice);
+		notificationService.notifySchoolNoticePublished(saved);
+		return toNoticeResponse(saved);
 	}
 
 	@RequirePermission(PermissionCode.COMMUNICATION_VIEW)

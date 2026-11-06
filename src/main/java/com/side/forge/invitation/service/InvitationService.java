@@ -31,6 +31,7 @@ import com.side.forge.invitation.entity.*;
 import com.side.forge.invitation.notification.InvitationNotificationSender;
 import com.side.forge.invitation.notification.InvitationNotificationSender.InvitationNotificationPayload;
 import com.side.forge.invitation.repository.OrganizationInvitationRepository;
+import com.side.forge.notification.service.NotificationService;
 import com.side.forge.organization.academic.common.AcademicTenantAccessValidator;
 import com.side.forge.organization.entity.Organization;
 import com.side.forge.organization.onboarding.entity.OnboardingRequest;
@@ -81,6 +82,7 @@ public class InvitationService {
 	private final PasswordEncoder passwordEncoder;
 	private final JwtService jwtService;
 	private final InvitationNotificationSender notificationSender;
+	private final NotificationService notificationService;
 
 	@Value("${forge.invitation.default-expiry-hours:168}")
 	private int defaultExpiryHours;
@@ -332,6 +334,7 @@ public class InvitationService {
 		inv.setAcceptedByUserId(recipientUser.getId());
 		inv.setAcceptedAt(now);
 		OrganizationInvitation savedInv = invitationRepository.saveAndFlush(inv);
+		notificationService.notifyInvitationAccepted(savedInv, org.getName(), recipientUser.getId());
 
 		String jwt = jwtService.generateToken(recipientUser);
 		return new InvitationAcceptanceResponse(
@@ -448,6 +451,7 @@ public class InvitationService {
 				saved.getId(), org.getId(), org.getName(), saved.getEmail(),
 				saved.getRecipientFirstName(), saved.getRoleCode(), saved.getTargetType(),
 				rawToken, link, saved.getExpiresAt()));
+		notificationService.notifyInvitationReceived(saved, org.getName());
 
 		return new InvitationDispatchResponse(toResponse(saved, org.getName()), link, rawToken);
 	}
@@ -471,6 +475,7 @@ public class InvitationService {
 				saved.getId(), org.getId(), org.getName(), saved.getEmail(),
 				saved.getRecipientFirstName(), saved.getRoleCode(), saved.getTargetType(),
 				rawToken, link, saved.getExpiresAt()));
+		notificationService.notifyInvitationReceived(saved, org.getName());
 		return new InvitationDispatchResponse(toResponse(saved, org.getName()), link, rawToken);
 	}
 
@@ -484,6 +489,7 @@ public class InvitationService {
 		inv.setRevokedByUserId(currentUser.getUserId());
 		inv.setRevokedAt(now);
 		OrganizationInvitation saved = invitationRepository.saveAndFlush(inv);
+		notificationService.notifyInvitationRevoked(saved, org.getName());
 		return toResponse(saved, org.getName());
 	}
 
