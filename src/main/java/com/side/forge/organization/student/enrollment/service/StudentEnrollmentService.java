@@ -28,6 +28,7 @@ import com.side.forge.organization.academic.session.entity.AcademicSessionStatus
 import com.side.forge.organization.academic.session.repository.AcademicSessionRepository;
 import com.side.forge.organization.academic.session.service.AcademicSessionService;
 import com.side.forge.organization.entity.Organization;
+import com.side.forge.organization.fees.service.FeeManagementService;
 import com.side.forge.organization.student.enrollment.dto.*;
 import com.side.forge.organization.student.enrollment.entity.*;
 import com.side.forge.organization.student.enrollment.repository.StudentEnrollmentRepository;
@@ -58,6 +59,7 @@ public class StudentEnrollmentService {
 	private final AcademicSessionRepository sessionRepository;
 	private final SchoolClassService classService;
 	private final SchoolClassRepository classRepository;
+	private final FeeManagementService feeManagementService;
 	private final AcademicTenantAccessValidator validator;
 
 	@RequirePermission(PermissionCode.STUDENT_ENROLLMENT_MANAGE)
@@ -99,6 +101,7 @@ public class StudentEnrollmentService {
 		enrollment.setRemarks(validator.normalizeOptionalText(request.remarks()));
 
 		StudentEnrollment saved = enrollmentRepository.saveAndFlush(enrollment);
+		feeManagementService.applyPublishedFeeStructureOnEnrollment(orgId, session, saved);
 		return toResponse(saved, session, schoolClass, studentMapper.toResponse(student));
 	}
 
@@ -184,11 +187,16 @@ public class StudentEnrollmentService {
 			enrollment.setEnrollmentDate(request.enrollmentDate());
 		}
 
+		Long previousClassId = enrollment.getClassId();
 		enrollment.setClassId(schoolClass.getId());
 		enrollment.setRollNumber(validator.normalizeOptionalText(request.rollNumber()));
 		enrollment.setRemarks(validator.normalizeOptionalText(request.remarks()));
 
-		StudentEnrollment saved = enrollmentRepository.save(enrollment);
+		StudentEnrollment saved = enrollmentRepository.saveAndFlush(enrollment);
+		if (!previousClassId.equals(saved.getClassId())) {
+			feeManagementService.handleClassChangeFeeAdjustment(
+					orgId, session, saved, previousClassId, saved.getClassId(), saved.getEnrollmentDate());
+		}
 		return toResponse(saved, session, schoolClass, studentMapper.toResponse(student));
 	}
 

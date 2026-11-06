@@ -83,6 +83,16 @@ public class AcademicDatabaseInitializer implements ApplicationRunner {
 			new PermissionSeed(PermissionCode.EXAM_ENTER_MARKS, "Enter marks", "EXAM", "Enter student marks"),
 			new PermissionSeed(PermissionCode.EXAM_PUBLISH_RESULTS, "Publish results", "EXAM",
 					"Publish examination results"),
+			new PermissionSeed(PermissionCode.FEES_VIEW, "View fees", "FEES",
+					"View fee structures, student demands, receipts, and financial profiles"),
+			new PermissionSeed(PermissionCode.FEES_MANAGE, "Manage fees", "FEES",
+					"Configure, publish and revise fee structures, concessions, waivers and late fees"),
+			new PermissionSeed(PermissionCode.FEES_COLLECT, "Collect fees", "FEES",
+					"Record manual fee payments and generate receipts"),
+			new PermissionSeed(PermissionCode.FEES_REFUND, "Refund or reverse fees", "FEES",
+					"Reverse or refund recorded fee payments"),
+			new PermissionSeed(PermissionCode.FEES_REPORT_VIEW, "View fee reports", "FEES",
+					"View school financial and fee collection reports"),
 			new PermissionSeed(PermissionCode.REPORT_VIEW, "View reports", "REPORT", "View permitted school reports")
 	);
 
@@ -103,6 +113,8 @@ public class AcademicDatabaseInitializer implements ApplicationRunner {
 					PermissionCode.STAFF_ATTENDANCE_VIEW, PermissionCode.STAFF_ATTENDANCE_MANAGE,
 					PermissionCode.EXAM_VIEW, PermissionCode.EXAM_MANAGE,
 					PermissionCode.EXAM_ENTER_MARKS, PermissionCode.EXAM_PUBLISH_RESULTS,
+					PermissionCode.FEES_VIEW, PermissionCode.FEES_MANAGE,
+					PermissionCode.FEES_COLLECT, PermissionCode.FEES_REFUND, PermissionCode.FEES_REPORT_VIEW,
 					PermissionCode.REPORT_VIEW),
 			"PRINCIPAL", List.of(
 					PermissionCode.ACADEMIC_SESSION_VIEW, PermissionCode.ACADEMIC_SESSION_MANAGE,
@@ -120,12 +132,15 @@ public class AcademicDatabaseInitializer implements ApplicationRunner {
 					PermissionCode.STAFF_ATTENDANCE_VIEW, PermissionCode.STAFF_ATTENDANCE_MANAGE,
 					PermissionCode.EXAM_VIEW, PermissionCode.EXAM_MANAGE,
 					PermissionCode.EXAM_ENTER_MARKS, PermissionCode.EXAM_PUBLISH_RESULTS,
+					PermissionCode.FEES_VIEW, PermissionCode.FEES_MANAGE,
+					PermissionCode.FEES_COLLECT, PermissionCode.FEES_REFUND, PermissionCode.FEES_REPORT_VIEW,
 					PermissionCode.REPORT_VIEW),
 			"RECEPTIONIST", List.of(
 					PermissionCode.STUDENT_VIEW, PermissionCode.STUDENT_CREATE,
 					PermissionCode.STUDENT_GUARDIAN_MANAGE,
 					PermissionCode.STAFF_VIEW, PermissionCode.TEACHER_VIEW,
-					PermissionCode.TIMETABLE_VIEW, PermissionCode.STAFF_ATTENDANCE_VIEW),
+					PermissionCode.TIMETABLE_VIEW, PermissionCode.STAFF_ATTENDANCE_VIEW,
+					PermissionCode.FEES_VIEW),
 			"TEACHER", List.of(
 					PermissionCode.ACADEMIC_SESSION_VIEW, PermissionCode.CLASS_VIEW,
 					PermissionCode.SECTION_VIEW, PermissionCode.SUBJECT_VIEW,
@@ -143,7 +158,10 @@ public class AcademicDatabaseInitializer implements ApplicationRunner {
 					PermissionCode.ACADEMIC_SESSION_VIEW, PermissionCode.CLASS_VIEW,
 					PermissionCode.SECTION_VIEW, PermissionCode.STUDENT_VIEW,
 					PermissionCode.STAFF_VIEW, PermissionCode.TEACHER_VIEW,
-					PermissionCode.STAFF_ATTENDANCE_VIEW, PermissionCode.REPORT_VIEW)
+					PermissionCode.STAFF_ATTENDANCE_VIEW,
+					PermissionCode.FEES_VIEW, PermissionCode.FEES_COLLECT,
+					PermissionCode.FEES_REFUND, PermissionCode.FEES_REPORT_VIEW,
+					PermissionCode.REPORT_VIEW)
 	);
 
 	@Override
@@ -205,6 +223,14 @@ public class AcademicDatabaseInitializer implements ApplicationRunner {
 						"permissionCode", permissionCode.getValue()));
 			}
 		}
+		jdbc.update("""
+				DELETE rp FROM role_permissions rp
+				JOIN roles r ON r.id = rp.role_id
+				JOIN permissions p ON p.id = rp.permission_id
+				WHERE p.code = :permCode
+				  AND r.scope = 'ORGANIZATION'
+				  AND r.code NOT IN ('SCHOOL_ADMIN', 'PRINCIPAL')
+				""", Map.of("permCode", PermissionCode.FEES_MANAGE.getValue()));
 	}
 
 	private void ensureCompositeForeignKeys() {
@@ -324,6 +350,28 @@ public class AcademicDatabaseInitializer implements ApplicationRunner {
 				"ALTER TABLE exam_results ADD CONSTRAINT fk_exam_results_exam_org FOREIGN KEY (examination_id, organization_id) REFERENCES examinations (id, organization_id)");
 		addForeignKeyIfAbsent("exam_results", "fk_exam_results_student_org",
 				"ALTER TABLE exam_results ADD CONSTRAINT fk_exam_results_student_org FOREIGN KEY (student_id, organization_id) REFERENCES students (id, organization_id)");
+		addForeignKeyIfAbsent("class_fee_structures", "fk_cfs_session_org",
+				"ALTER TABLE class_fee_structures ADD CONSTRAINT fk_cfs_session_org FOREIGN KEY (academic_session_id, organization_id) REFERENCES academic_sessions (id, organization_id)");
+		addForeignKeyIfAbsent("class_fee_structures", "fk_cfs_class_org",
+				"ALTER TABLE class_fee_structures ADD CONSTRAINT fk_cfs_class_org FOREIGN KEY (class_id, organization_id) REFERENCES classes (id, organization_id)");
+		addForeignKeyIfAbsent("class_fee_structure_components", "fk_cfsc_structure_org",
+				"ALTER TABLE class_fee_structure_components ADD CONSTRAINT fk_cfsc_structure_org FOREIGN KEY (fee_structure_id, organization_id) REFERENCES class_fee_structures (id, organization_id)");
+		addForeignKeyIfAbsent("student_fee_assignments", "fk_sfa_structure_org",
+				"ALTER TABLE student_fee_assignments ADD CONSTRAINT fk_sfa_structure_org FOREIGN KEY (fee_structure_id, organization_id) REFERENCES class_fee_structures (id, organization_id)");
+		addForeignKeyIfAbsent("student_fee_assignments", "fk_sfa_student_org",
+				"ALTER TABLE student_fee_assignments ADD CONSTRAINT fk_sfa_student_org FOREIGN KEY (student_id, organization_id) REFERENCES students (id, organization_id)");
+		addForeignKeyIfAbsent("student_fee_concessions", "fk_sfc_student_org",
+				"ALTER TABLE student_fee_concessions ADD CONSTRAINT fk_sfc_student_org FOREIGN KEY (student_id, organization_id) REFERENCES students (id, organization_id)");
+		addForeignKeyIfAbsent("student_fee_demands", "fk_sfd_structure_org",
+				"ALTER TABLE student_fee_demands ADD CONSTRAINT fk_sfd_structure_org FOREIGN KEY (fee_structure_id, organization_id) REFERENCES class_fee_structures (id, organization_id)");
+		addForeignKeyIfAbsent("student_fee_demands", "fk_sfd_student_org",
+				"ALTER TABLE student_fee_demands ADD CONSTRAINT fk_sfd_student_org FOREIGN KEY (student_id, organization_id) REFERENCES students (id, organization_id)");
+		addForeignKeyIfAbsent("fee_payments", "fk_fp_student_org",
+				"ALTER TABLE fee_payments ADD CONSTRAINT fk_fp_student_org FOREIGN KEY (student_id, organization_id) REFERENCES students (id, organization_id)");
+		addForeignKeyIfAbsent("fee_payment_allocations", "fk_fpa_payment_org",
+				"ALTER TABLE fee_payment_allocations ADD CONSTRAINT fk_fpa_payment_org FOREIGN KEY (payment_id, organization_id) REFERENCES fee_payments (id, organization_id)");
+		addForeignKeyIfAbsent("fee_payment_allocations", "fk_fpa_demand_org",
+				"ALTER TABLE fee_payment_allocations ADD CONSTRAINT fk_fpa_demand_org FOREIGN KEY (demand_id, organization_id) REFERENCES student_fee_demands (id, organization_id)");
 	}
 
 	private void addForeignKeyIfAbsent(String tableName, String constraintName, String alterSql) {
