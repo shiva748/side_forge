@@ -22,6 +22,12 @@ public interface StudentEnrollmentRepository
 	List<StudentEnrollment> findAllByOrganizationIdAndAcademicSessionIdAndClassIdOrderByIdAsc(
 			Long organizationId, Long academicSessionId, Long classId);
 
+	List<StudentEnrollment> findAllByOrganizationIdAndAcademicSessionIdOrderByClassIdAscIdAsc(
+			Long organizationId, Long academicSessionId);
+
+	List<StudentEnrollment> findAllByOrganizationIdOrderByAcademicSessionIdDescClassIdAscIdAsc(
+			Long organizationId);
+
 	boolean existsByOrganizationIdAndAcademicSessionIdAndStudentId(
 			Long organizationId, Long academicSessionId, Long studentId);
 }

@@ -26,6 +26,8 @@ public interface StudentRepository extends JpaRepository<Student, Long>, JpaSpec
 	List<Student> findAllByOrganizationIdAndIdInOrderByFirstNameAscLastNameAsc(
 			Long organizationId, Collection<Long> ids);
 
+	List<Student> findAllByOrganizationIdOrderByIdAsc(Long organizationId);
+
 	boolean existsByOrganizationIdAndAdmissionNumberIgnoreCase(Long organizationId, String admissionNumber);
 
 	boolean existsByOrganizationIdAndAdmissionNumberIgnoreCaseAndIdNot(

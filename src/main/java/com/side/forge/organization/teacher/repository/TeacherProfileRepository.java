@@ -28,5 +28,7 @@ public interface TeacherProfileRepository
 
 	List<TeacherProfile> findAllByOrganizationIdAndIdIn(Long organizationId, Collection<Long> ids);
 
+	List<TeacherProfile> findAllByOrganizationIdOrderByIdAsc(Long organizationId);
+
 	boolean existsByOrganizationIdAndStaffId(Long organizationId, Long staffId);
 }

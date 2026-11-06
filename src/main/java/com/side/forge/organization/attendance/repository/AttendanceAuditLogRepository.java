@@ -11,4 +11,6 @@ public interface AttendanceAuditLogRepository extends JpaRepository<AttendanceAu
 
 	List<AttendanceAuditLog> findAllByOrganizationIdAndTargetTypeAndAttendanceRecordIdOrderByChangedAtDesc(
 			Long organizationId, TargetType targetType, Long attendanceRecordId);
+
+	List<AttendanceAuditLog> findTop20ByOrganizationIdOrderByChangedAtDesc(Long organizationId);
 }

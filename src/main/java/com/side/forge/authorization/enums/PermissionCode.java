@@ -128,8 +128,12 @@ public enum PermissionCode {
 
 	COMMUNICATION_MANAGE("communication.manage"),
 
-	// Reports
+	// Reports & Dashboards
+	DASHBOARD_VIEW("dashboard.view"),
+
 	REPORT_VIEW("report.view"),
+
+	REPORT_EXPORT("report.export"),
 
 	// Parent
 	PARENT_CHILD_VIEW("parent.child.view"),

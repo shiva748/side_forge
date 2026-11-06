@@ -93,7 +93,15 @@ public class AcademicDatabaseInitializer implements ApplicationRunner {
 					"Reverse or refund recorded fee payments"),
 			new PermissionSeed(PermissionCode.FEES_REPORT_VIEW, "View fee reports", "FEES",
 					"View school financial and fee collection reports"),
-			new PermissionSeed(PermissionCode.REPORT_VIEW, "View reports", "REPORT", "View permitted school reports")
+			new PermissionSeed(PermissionCode.COMMUNICATION_VIEW, "View notices and communications", "COMMUNICATION",
+					"View school notices and announcements"),
+			new PermissionSeed(PermissionCode.COMMUNICATION_MANAGE, "Manage notices and communications", "COMMUNICATION",
+					"Create and manage school notices and announcements"),
+			new PermissionSeed(PermissionCode.DASHBOARD_VIEW, "View dashboards", "REPORT",
+					"View role-based school dashboards"),
+			new PermissionSeed(PermissionCode.REPORT_VIEW, "View reports", "REPORT", "View permitted school reports"),
+			new PermissionSeed(PermissionCode.REPORT_EXPORT, "Export reports", "REPORT",
+					"Export and download permitted school reports in CSV, Excel and PDF formats")
 	);
 
 	private static final Map<String, List<PermissionCode>> ROLE_PERMISSION_MAPPINGS = Map.of(
@@ -115,7 +123,8 @@ public class AcademicDatabaseInitializer implements ApplicationRunner {
 					PermissionCode.EXAM_ENTER_MARKS, PermissionCode.EXAM_PUBLISH_RESULTS,
 					PermissionCode.FEES_VIEW, PermissionCode.FEES_MANAGE,
 					PermissionCode.FEES_COLLECT, PermissionCode.FEES_REFUND, PermissionCode.FEES_REPORT_VIEW,
-					PermissionCode.REPORT_VIEW),
+					PermissionCode.COMMUNICATION_VIEW, PermissionCode.COMMUNICATION_MANAGE,
+					PermissionCode.DASHBOARD_VIEW, PermissionCode.REPORT_VIEW, PermissionCode.REPORT_EXPORT),
 			"PRINCIPAL", List.of(
 					PermissionCode.ACADEMIC_SESSION_VIEW, PermissionCode.ACADEMIC_SESSION_MANAGE,
 					PermissionCode.CLASS_VIEW, PermissionCode.CLASS_MANAGE,
@@ -134,26 +143,29 @@ public class AcademicDatabaseInitializer implements ApplicationRunner {
 					PermissionCode.EXAM_ENTER_MARKS, PermissionCode.EXAM_PUBLISH_RESULTS,
 					PermissionCode.FEES_VIEW, PermissionCode.FEES_MANAGE,
 					PermissionCode.FEES_COLLECT, PermissionCode.FEES_REFUND, PermissionCode.FEES_REPORT_VIEW,
-					PermissionCode.REPORT_VIEW),
+					PermissionCode.COMMUNICATION_VIEW, PermissionCode.COMMUNICATION_MANAGE,
+					PermissionCode.DASHBOARD_VIEW, PermissionCode.REPORT_VIEW, PermissionCode.REPORT_EXPORT),
 			"RECEPTIONIST", List.of(
 					PermissionCode.STUDENT_VIEW, PermissionCode.STUDENT_CREATE,
 					PermissionCode.STUDENT_GUARDIAN_MANAGE,
 					PermissionCode.STAFF_VIEW, PermissionCode.TEACHER_VIEW,
 					PermissionCode.TIMETABLE_VIEW, PermissionCode.STAFF_ATTENDANCE_VIEW,
-					PermissionCode.FEES_VIEW),
+					PermissionCode.FEES_VIEW, PermissionCode.COMMUNICATION_VIEW, PermissionCode.DASHBOARD_VIEW),
 			"TEACHER", List.of(
 					PermissionCode.ACADEMIC_SESSION_VIEW, PermissionCode.CLASS_VIEW,
 					PermissionCode.SECTION_VIEW, PermissionCode.SUBJECT_VIEW,
 					PermissionCode.CLASS_SUBJECT_VIEW, PermissionCode.STUDENT_VIEW,
 					PermissionCode.TEACHER_VIEW, PermissionCode.TIMETABLE_VIEW,
 					PermissionCode.ATTENDANCE_VIEW, PermissionCode.ATTENDANCE_MARK, PermissionCode.ATTENDANCE_UPDATE,
-					PermissionCode.EXAM_VIEW, PermissionCode.EXAM_ENTER_MARKS, PermissionCode.REPORT_VIEW),
+					PermissionCode.EXAM_VIEW, PermissionCode.EXAM_ENTER_MARKS,
+					PermissionCode.COMMUNICATION_VIEW, PermissionCode.DASHBOARD_VIEW,
+					PermissionCode.REPORT_VIEW, PermissionCode.REPORT_EXPORT),
 			"SCHOOL_STAFF", List.of(
 					PermissionCode.ACADEMIC_SESSION_VIEW, PermissionCode.CLASS_VIEW,
 					PermissionCode.SECTION_VIEW, PermissionCode.SUBJECT_VIEW,
 					PermissionCode.CLASS_SUBJECT_VIEW, PermissionCode.STUDENT_VIEW,
 					PermissionCode.STAFF_VIEW, PermissionCode.TEACHER_VIEW,
-					PermissionCode.TIMETABLE_VIEW),
+					PermissionCode.TIMETABLE_VIEW, PermissionCode.COMMUNICATION_VIEW, PermissionCode.DASHBOARD_VIEW),
 			"ACCOUNTANT", List.of(
 					PermissionCode.ACADEMIC_SESSION_VIEW, PermissionCode.CLASS_VIEW,
 					PermissionCode.SECTION_VIEW, PermissionCode.STUDENT_VIEW,
@@ -161,7 +173,8 @@ public class AcademicDatabaseInitializer implements ApplicationRunner {
 					PermissionCode.STAFF_ATTENDANCE_VIEW,
 					PermissionCode.FEES_VIEW, PermissionCode.FEES_COLLECT,
 					PermissionCode.FEES_REFUND, PermissionCode.FEES_REPORT_VIEW,
-					PermissionCode.REPORT_VIEW)
+					PermissionCode.COMMUNICATION_VIEW, PermissionCode.DASHBOARD_VIEW,
+					PermissionCode.REPORT_VIEW, PermissionCode.REPORT_EXPORT)
 	);
 
 	@Override
@@ -372,6 +385,10 @@ public class AcademicDatabaseInitializer implements ApplicationRunner {
 				"ALTER TABLE fee_payment_allocations ADD CONSTRAINT fk_fpa_payment_org FOREIGN KEY (payment_id, organization_id) REFERENCES fee_payments (id, organization_id)");
 		addForeignKeyIfAbsent("fee_payment_allocations", "fk_fpa_demand_org",
 				"ALTER TABLE fee_payment_allocations ADD CONSTRAINT fk_fpa_demand_org FOREIGN KEY (demand_id, organization_id) REFERENCES student_fee_demands (id, organization_id)");
+		addForeignKeyIfAbsent("school_notices", "fk_school_notices_org",
+				"ALTER TABLE school_notices ADD CONSTRAINT fk_school_notices_org FOREIGN KEY (organization_id) REFERENCES organizations (id)");
+		addForeignKeyIfAbsent("school_notices", "fk_school_notices_session_org",
+				"ALTER TABLE school_notices ADD CONSTRAINT fk_school_notices_session_org FOREIGN KEY (academic_session_id, organization_id) REFERENCES academic_sessions (id, organization_id)");
 	}
 
 	private void addForeignKeyIfAbsent(String tableName, String constraintName, String alterSql) {

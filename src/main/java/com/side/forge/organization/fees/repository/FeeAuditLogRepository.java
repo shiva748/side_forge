@@ -13,4 +13,6 @@ public interface FeeAuditLogRepository extends JpaRepository<FeeAuditLog, Long> 
 
 	List<FeeAuditLog> findAllByOrganizationIdAndEntityTypeAndEntityIdOrderByPerformedAtDescIdDesc(
 			Long organizationId, String entityType, Long entityId);
+
+	List<FeeAuditLog> findTop20ByOrganizationIdOrderByPerformedAtDescIdDesc(Long organizationId);
 }

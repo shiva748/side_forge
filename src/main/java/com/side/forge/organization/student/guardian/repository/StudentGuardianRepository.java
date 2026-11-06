@@ -18,6 +18,8 @@ public interface StudentGuardianRepository extends JpaRepository<StudentGuardian
 	List<StudentGuardian> findAllByOrganizationIdAndGuardianIdOrderByIdAsc(
 			Long organizationId, Long guardianId);
 
+	List<StudentGuardian> findAllByOrganizationIdOrderByStudentIdAscIdAsc(Long organizationId);
+
 	List<StudentGuardian> findAllByOrganizationIdAndStudentIdAndPrimaryContactTrue(
 			Long organizationId, Long studentId);
 
