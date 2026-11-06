@@ -40,7 +40,7 @@ public class SecurityConfig {
 				.exceptionHandling(exceptions -> exceptions
 						.authenticationEntryPoint(new HttpStatusEntryPoint(HttpStatus.UNAUTHORIZED)))
 				.authorizeHttpRequests(auth -> auth
-						.requestMatchers("/api/auth/**", "/api/public/**").permitAll()
+						.requestMatchers("/api/auth/**", "/api/public/**", "/api/invitations/**").permitAll()
 						.requestMatchers(HttpMethod.POST, "/api/organizations/onboarding").permitAll()
 						.requestMatchers(
                                 "/", "/index.html", "/favicon.ico", "/assets/**",

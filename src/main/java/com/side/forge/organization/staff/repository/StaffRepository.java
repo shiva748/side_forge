@@ -29,6 +29,8 @@ public interface StaffRepository extends JpaRepository<Staff, Long>, JpaSpecific
 
 	Optional<Staff> findByOrganizationIdAndUserId(Long organizationId, Long userId);
 
+	List<Staff> findAllByOrganizationIdAndEmailIgnoreCase(Long organizationId, String email);
+
 	boolean existsByOrganizationIdAndEmployeeIdIgnoreCase(Long organizationId, String employeeId);
 
 	boolean existsByOrganizationIdAndEmployeeIdIgnoreCaseAndIdNot(Long organizationId, String employeeId, Long id);

@@ -1,0 +1,11 @@
+package com.side.forge.storage.entity;
+
+public enum FileResourceCategory {
+	PROFILE_PHOTO,
+	HOMEWORK_ATTACHMENT,
+	HOMEWORK_SUBMISSION,
+	STUDENT_DOCUMENT,
+	STAFF_DOCUMENT,
+	NOTICE_ATTACHMENT,
+	GENERAL_ORGANIZATION_FILE
+}

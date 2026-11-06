@@ -109,7 +109,11 @@ public class AcademicDatabaseInitializer implements ApplicationRunner {
 			new PermissionSeed(PermissionCode.HOMEWORK_SUBMIT, "Submit homework", "HOMEWORK",
 					"Submit and resubmit assigned student homework"),
 			new PermissionSeed(PermissionCode.HOMEWORK_EVALUATE, "Evaluate homework", "HOMEWORK",
-					"Review and evaluate student homework submissions")
+					"Review and evaluate student homework submissions"),
+			new PermissionSeed(PermissionCode.PARENT_CHILD_VIEW, "View child records", "PARENT",
+					"View linked child academic, attendance, fee, and homework records"),
+			new PermissionSeed(PermissionCode.PARENT_CHILD_COMMUNICATION, "Parent communication", "PARENT",
+					"Communicate regarding linked student records")
 	);
 
 	private static final Map<String, List<PermissionCode>> ROLE_PERMISSION_MAPPINGS = Map.of(
@@ -190,7 +194,14 @@ public class AcademicDatabaseInitializer implements ApplicationRunner {
 					PermissionCode.FEES_VIEW, PermissionCode.FEES_COLLECT,
 					PermissionCode.FEES_REFUND, PermissionCode.FEES_REPORT_VIEW,
 					PermissionCode.COMMUNICATION_VIEW, PermissionCode.DASHBOARD_VIEW,
-					PermissionCode.REPORT_VIEW, PermissionCode.REPORT_EXPORT)
+					PermissionCode.REPORT_VIEW, PermissionCode.REPORT_EXPORT),
+			"PARENT", List.of(
+					PermissionCode.PARENT_CHILD_VIEW, PermissionCode.PARENT_CHILD_COMMUNICATION,
+					PermissionCode.ACADEMIC_SESSION_VIEW, PermissionCode.CLASS_VIEW,
+					PermissionCode.SUBJECT_VIEW, PermissionCode.TIMETABLE_VIEW,
+					PermissionCode.ATTENDANCE_VIEW, PermissionCode.EXAM_VIEW,
+					PermissionCode.FEES_VIEW, PermissionCode.COMMUNICATION_VIEW,
+					PermissionCode.DASHBOARD_VIEW, PermissionCode.HOMEWORK_VIEW)
 	);
 
 	@Override
@@ -236,6 +247,13 @@ public class AcademicDatabaseInitializer implements ApplicationRunner {
 				SELECT 'STUDENT', 'Student', 'ORGANIZATION', NULL, 'Enrolled school student', 1, CURRENT_TIMESTAMP(6), CURRENT_TIMESTAMP(6)
 				WHERE NOT EXISTS (
 				    SELECT 1 FROM roles WHERE code = 'STUDENT' AND scope = 'ORGANIZATION' AND organization_id IS NULL
+				)
+				""");
+		jdbc.getJdbcTemplate().execute("""
+				INSERT INTO roles (code, name, scope, organization_id, description, is_system_defined, created_at, updated_at)
+				SELECT 'PARENT', 'Parent / Guardian', 'ORGANIZATION', NULL, 'Parent or guardian of enrolled student', 1, CURRENT_TIMESTAMP(6), CURRENT_TIMESTAMP(6)
+				WHERE NOT EXISTS (
+				    SELECT 1 FROM roles WHERE code = 'PARENT' AND scope = 'ORGANIZATION' AND organization_id IS NULL
 				)
 				""");
 		String sql = """
@@ -424,6 +442,10 @@ public class AcademicDatabaseInitializer implements ApplicationRunner {
 				"ALTER TABLE student_homework_submissions ADD CONSTRAINT fk_shs_homework_org FOREIGN KEY (homework_id, organization_id) REFERENCES homework_assignments (id, organization_id)");
 		addForeignKeyIfAbsent("student_homework_submissions", "fk_shs_student_org",
 				"ALTER TABLE student_homework_submissions ADD CONSTRAINT fk_shs_student_org FOREIGN KEY (student_id, organization_id) REFERENCES students (id, organization_id)");
+		addForeignKeyIfAbsent("organization_invitations", "fk_org_invitations_org",
+				"ALTER TABLE organization_invitations ADD CONSTRAINT fk_org_invitations_org FOREIGN KEY (organization_id) REFERENCES organizations (id) ON DELETE CASCADE");
+		addForeignKeyIfAbsent("stored_file_references", "fk_stored_file_refs_file",
+				"ALTER TABLE stored_file_references ADD CONSTRAINT fk_stored_file_refs_file FOREIGN KEY (file_id) REFERENCES stored_files (id) ON DELETE CASCADE");
 	}
 
 	private void addForeignKeyIfAbsent(String tableName, String constraintName, String alterSql) {

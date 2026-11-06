@@ -1,5 +1,6 @@
 package com.side.forge.authorization.repository;
 
+import java.util.List;
 import java.util.Optional;
 
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -11,4 +12,6 @@ public interface OrganizationMembershipRepository extends JpaRepository<Organiza
 	Optional<OrganizationMembership> findByUserIdAndOrganizationIdAndStatus(Long userId, Long organizationId,
 			MembershipStatus status);
 	Optional<OrganizationMembership> findByUserIdAndOrganizationId(Long userId, Long organizationId);
+	List<OrganizationMembership> findAllByUserIdOrderByIdAsc(Long userId);
 }
+

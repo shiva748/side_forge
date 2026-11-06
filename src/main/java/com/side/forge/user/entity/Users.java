@@ -40,4 +40,7 @@ public class Users extends AuditableEntity {
 
 	@Column(nullable = false)
 	private boolean phoneVerified = false;
+
+	@Column(name = "profile_photo_file_id")
+	private Long profilePhotoFileId;
 }

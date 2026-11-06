@@ -30,6 +30,8 @@ public interface StudentRepository extends JpaRepository<Student, Long>, JpaSpec
 
 	Optional<Student> findByOrganizationIdAndUserId(Long organizationId, Long userId);
 
+	List<Student> findAllByOrganizationIdAndEmailIgnoreCase(Long organizationId, String email);
+
 	boolean existsByOrganizationIdAndAdmissionNumberIgnoreCase(Long organizationId, String admissionNumber);
 
 	boolean existsByOrganizationIdAndAdmissionNumberIgnoreCaseAndIdNot(

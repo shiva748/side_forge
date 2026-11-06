@@ -72,6 +72,13 @@ public class AuthorizationQueryRepository {
 		return count == null ? 0L : count;
 	}
 
+	public Set<String> findPermissionsForRole(Long roleId) {
+		String sql = "SELECT DISTINCT p.code FROM role_permissions rp "
+				+ "JOIN permissions p ON p.id = rp.permission_id "
+				+ "WHERE rp.role_id = :roleId";
+		return Set.copyOf(jdbc.queryForList(sql, Map.of("roleId", roleId), String.class));
+	}
+
 	private Map<String, Object> organizationParameters(Long userId, Long organizationId) {
 		return Map.of("userId", userId, "organizationId", organizationId, "status", MembershipStatus.ACTIVE.name(),
 				"scope", RoleScope.ORGANIZATION.name());

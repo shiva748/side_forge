@@ -10,6 +10,7 @@ import java.util.stream.Collectors;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.multipart.MultipartFile;
 
 import com.side.forge.authorization.annotation.RequirePermission;
 import com.side.forge.authorization.enums.PermissionCode;
@@ -37,6 +38,10 @@ import com.side.forge.organization.student.profile.entity.*;
 import com.side.forge.organization.student.profile.repository.StudentRepository;
 import com.side.forge.organization.teacher.entity.TeacherProfile;
 import com.side.forge.organization.teacher.repository.*;
+import com.side.forge.storage.dto.StorageDtos.DownloadedFilePayload;
+import com.side.forge.storage.dto.StorageDtos.StoredFileResponse;
+import com.side.forge.storage.entity.FileResourceCategory;
+import com.side.forge.storage.service.FileManagementService;
 
 import jakarta.persistence.EntityNotFoundException;
 import lombok.RequiredArgsConstructor;
@@ -44,6 +49,9 @@ import lombok.RequiredArgsConstructor;
 @Service
 @RequiredArgsConstructor
 public class HomeworkService {
+
+	public static final String RESOURCE_HOMEWORK_ATTACHMENT = "HOMEWORK_ATTACHMENT";
+	public static final String RESOURCE_HOMEWORK_SUBMISSION = "HOMEWORK_SUBMISSION";
 
 	private final HomeworkAssignmentRepository homeworkRepository;
 	private final StudentHomeworkSubmissionRepository submissionRepository;
@@ -62,6 +70,7 @@ public class HomeworkService {
 	private final TeacherSubjectAssignmentRepository teacherSubjectAssignmentRepository;
 	private final StudentRepository studentRepository;
 	private final StudentEnrollmentRepository enrollmentRepository;
+	private final FileManagementService fileManagementService;
 	@RequirePermission(PermissionCode.HOMEWORK_MANAGE)
 	@Transactional
 	public HomeworkAssignmentResponse createHomework(Long orgId, CreateHomeworkRequest request) {
@@ -193,6 +202,12 @@ public class HomeworkService {
 		if (hasSubmissions) {
 			throw new IllegalStateException("Cannot delete homework after students have submitted work");
 		}
+		for (StudentHomeworkSubmission sub : subs) {
+			fileManagementService.detachAllReferencesForResource(
+					orgId, RESOURCE_HOMEWORK_SUBMISSION, sub.getId());
+		}
+		fileManagementService.detachAllReferencesForResource(
+				orgId, RESOURCE_HOMEWORK_ATTACHMENT, hw.getId());
 		submissionRepository.deleteAll(subs);
 		homeworkRepository.delete(hw);
 	}
@@ -444,6 +459,191 @@ public class HomeworkService {
 		return new StudentHomeworkDashboardResponse(
 				orgId, session.getId(), student.getId(), student.getAdmissionNumber(), fullName(student),
 				ref, items.size(), pending, overdue, submitted, evaluated, items);
+	}
+
+	@RequirePermission(PermissionCode.HOMEWORK_MANAGE)
+	@Transactional
+	public StoredFileResponse uploadHomeworkAttachment(Long orgId, Long homeworkId, MultipartFile file) {
+		validator.requireOrganization(orgId);
+		HomeworkAssignment hw = homeworkRepository.findByIdAndOrganizationIdForUpdate(homeworkId, orgId)
+				.orElseThrow(() -> new EntityNotFoundException("Homework assignment not found"));
+		requireModifiableSession(orgId, hw.getAcademicSessionId());
+		verifyTeacherCanManageHomework(orgId, hw);
+
+		StoredFileResponse stored = fileManagementService.storeOrganizationFile(
+				orgId, FileResourceCategory.HOMEWORK_ATTACHMENT, file, RESOURCE_HOMEWORK_ATTACHMENT, hw.getId());
+		List<String> attachments = new ArrayList<>(deserializeAttachments(hw.getReferenceAttachments()));
+		String refToken = "/api/organizations/" + orgId + "/homework/" + hw.getId() + "/attachments/" + stored.id();
+		if (!attachments.contains(refToken)) {
+			attachments.add(refToken);
+			hw.setReferenceAttachments(serializeAttachments(attachments));
+			homeworkRepository.saveAndFlush(hw);
+		}
+		return stored;
+	}
+
+	@RequirePermission(PermissionCode.HOMEWORK_MANAGE)
+	@Transactional
+	public StoredFileResponse attachExistingFileToHomework(Long orgId, Long homeworkId, Long fileId) {
+		validator.requireOrganization(orgId);
+		HomeworkAssignment hw = homeworkRepository.findByIdAndOrganizationIdForUpdate(homeworkId, orgId)
+				.orElseThrow(() -> new EntityNotFoundException("Homework assignment not found"));
+		requireModifiableSession(orgId, hw.getAcademicSessionId());
+		verifyTeacherCanManageHomework(orgId, hw);
+
+		fileManagementService.attachReference(orgId, fileId, RESOURCE_HOMEWORK_ATTACHMENT, hw.getId());
+		StoredFileResponse meta = fileManagementService.getOrganizationFileMetadata(orgId, fileId);
+		List<String> attachments = new ArrayList<>(deserializeAttachments(hw.getReferenceAttachments()));
+		String refToken = "/api/organizations/" + orgId + "/homework/" + hw.getId() + "/attachments/" + meta.id();
+		if (!attachments.contains(refToken)) {
+			attachments.add(refToken);
+			hw.setReferenceAttachments(serializeAttachments(attachments));
+			homeworkRepository.saveAndFlush(hw);
+		}
+		return meta;
+	}
+
+	@RequirePermission(PermissionCode.HOMEWORK_VIEW)
+	@Transactional(readOnly = true)
+	public List<StoredFileResponse> getHomeworkAttachments(Long orgId, Long homeworkId) {
+		validator.requireOrganization(orgId);
+		HomeworkAssignment hw = requireHomework(orgId, homeworkId);
+		if (!isSchoolAdminOrPrincipal() && !currentUser.hasPermission(PermissionCode.HOMEWORK_SUBMIT.getValue())) {
+			verifyTeacherCanManageHomework(orgId, hw);
+		}
+		return fileManagementService.getFilesForResource(orgId, RESOURCE_HOMEWORK_ATTACHMENT, hw.getId());
+	}
+
+	@RequirePermission(PermissionCode.HOMEWORK_VIEW)
+	@Transactional(readOnly = true)
+	public DownloadedFilePayload downloadHomeworkAttachment(Long orgId, Long homeworkId, Long fileId) {
+		validator.requireOrganization(orgId);
+		HomeworkAssignment hw = requireHomework(orgId, homeworkId);
+		if (!isSchoolAdminOrPrincipal() && !currentUser.hasPermission(PermissionCode.HOMEWORK_SUBMIT.getValue())) {
+			verifyTeacherCanManageHomework(orgId, hw);
+		}
+		return fileManagementService.downloadOrganizationFileForAuthorizedResource(
+				orgId, fileId, RESOURCE_HOMEWORK_ATTACHMENT, hw.getId());
+	}
+
+	@RequirePermission(PermissionCode.HOMEWORK_MANAGE)
+	@Transactional
+	public void deleteHomeworkAttachment(Long orgId, Long homeworkId, Long fileId) {
+		validator.requireOrganization(orgId);
+		HomeworkAssignment hw = homeworkRepository.findByIdAndOrganizationIdForUpdate(homeworkId, orgId)
+				.orElseThrow(() -> new EntityNotFoundException("Homework assignment not found"));
+		requireModifiableSession(orgId, hw.getAcademicSessionId());
+		verifyTeacherCanManageHomework(orgId, hw);
+
+		fileManagementService.detachReference(fileId, RESOURCE_HOMEWORK_ATTACHMENT, hw.getId());
+		String refToken = "/api/organizations/" + orgId + "/homework/" + hw.getId() + "/attachments/" + fileId;
+		List<String> attachments = deserializeAttachments(hw.getReferenceAttachments()).stream()
+				.filter(a -> !a.equals(refToken))
+				.toList();
+		hw.setReferenceAttachments(serializeAttachments(attachments));
+		homeworkRepository.saveAndFlush(hw);
+	}
+
+	@RequirePermission(PermissionCode.HOMEWORK_SUBMIT)
+	@Transactional
+	public StoredFileResponse uploadStudentSubmissionAttachment(
+			Long orgId, Long homeworkId, Long requestedStudentId,
+			String submissionText, LocalDate submissionDate, MultipartFile file) {
+		Organization org = validator.requireOrganization(orgId);
+		HomeworkAssignment hw = requireHomework(orgId, homeworkId);
+		if (hw.getStatus() != HomeworkStatus.ACTIVE) {
+			throw new IllegalStateException("Cannot submit work for a closed homework assignment");
+		}
+		requireModifiableSession(orgId, hw.getAcademicSessionId());
+
+		Student student = resolveAndAuthorizeTargetStudent(orgId, requestedStudentId);
+		StudentHomeworkSubmission sub = submissionRepository
+				.findByOrganizationIdAndHomeworkIdAndStudentIdForUpdate(orgId, hw.getId(), student.getId())
+				.orElseThrow(() -> new AccessDeniedException(
+						"Student is not assigned to this homework or is not enrolled in the target class"));
+
+		LocalDate subDate = submissionDate != null
+				? submissionDate
+				: LocalDate.now(validator.resolveZoneId(org));
+		boolean afterDeadline = subDate.isAfter(hw.getDueDate());
+
+		if (sub.getStatus() == HomeworkSubmissionStatus.EVALUATED) {
+			throw new IllegalStateException("Cannot modify a homework submission that has already been evaluated");
+		}
+		if (sub.getSubmissionCount() > 0) {
+			if (!hw.isAllowResubmission()) {
+				throw new IllegalStateException("Resubmission is not permitted for this homework assignment");
+			}
+			if (afterDeadline) {
+				throw new IllegalStateException("Resubmission is only permitted before the submission deadline");
+			}
+			sub.setLastResubmittedAt(Instant.now());
+		} else {
+			if (afterDeadline && hw.getLateSubmissionPolicy() == LateSubmissionPolicy.REJECT_LATE) {
+				throw new IllegalStateException("Submission deadline has passed and late submissions are not accepted");
+			}
+			sub.setSubmittedAt(Instant.now());
+		}
+
+		StoredFileResponse stored = fileManagementService.storeOrganizationFile(
+				orgId, FileResourceCategory.HOMEWORK_SUBMISSION, file, RESOURCE_HOMEWORK_SUBMISSION, sub.getId());
+
+		if (submissionText != null && !submissionText.isBlank()) {
+			sub.setSubmissionText(validator.normalizeOptionalText(submissionText));
+		}
+		List<String> attachments = new ArrayList<>(deserializeAttachments(sub.getSubmissionAttachments()));
+		String refToken = "/api/organizations/" + orgId + "/homework/" + hw.getId()
+				+ "/submissions/" + sub.getId() + "/attachments/" + stored.id();
+		if (!attachments.contains(refToken)) {
+			attachments.add(refToken);
+		}
+		sub.setSubmissionAttachments(serializeAttachments(attachments));
+		sub.setSubmissionDate(subDate);
+		sub.setSubmissionCount(sub.getSubmissionCount() + 1);
+		sub.setLateSubmission(afterDeadline);
+		sub.setStatus(HomeworkSubmissionStatus.SUBMITTED);
+		submissionRepository.saveAndFlush(sub);
+
+		return stored;
+	}
+
+	@RequirePermission(PermissionCode.HOMEWORK_VIEW)
+	@Transactional(readOnly = true)
+	public List<StoredFileResponse> getSubmissionAttachments(Long orgId, Long homeworkId, Long submissionId) {
+		validator.requireOrganization(orgId);
+		HomeworkAssignment hw = requireHomework(orgId, homeworkId);
+		StudentHomeworkSubmission sub = requireAndAuthorizeSubmissionView(orgId, hw, submissionId);
+		return fileManagementService.getFilesForResource(orgId, RESOURCE_HOMEWORK_SUBMISSION, sub.getId());
+	}
+
+	@RequirePermission(PermissionCode.HOMEWORK_VIEW)
+	@Transactional(readOnly = true)
+	public DownloadedFilePayload downloadSubmissionAttachment(
+			Long orgId, Long homeworkId, Long submissionId, Long fileId) {
+		validator.requireOrganization(orgId);
+		HomeworkAssignment hw = requireHomework(orgId, homeworkId);
+		StudentHomeworkSubmission sub = requireAndAuthorizeSubmissionView(orgId, hw, submissionId);
+		return fileManagementService.downloadOrganizationFileForAuthorizedResource(
+				orgId, fileId, RESOURCE_HOMEWORK_SUBMISSION, sub.getId());
+	}
+
+	private StudentHomeworkSubmission requireAndAuthorizeSubmissionView(
+			Long orgId, HomeworkAssignment hw, Long submissionId) {
+		StudentHomeworkSubmission sub = submissionRepository.findByIdAndOrganizationId(submissionId, orgId)
+				.orElseThrow(() -> new EntityNotFoundException("Homework submission record not found"));
+		if (!sub.getHomeworkId().equals(hw.getId())) {
+			throw new IllegalArgumentException("Submission record does not belong to the specified homework assignment");
+		}
+		Optional<Student> ownStudent = currentUser.getUserId() == null ? Optional.empty()
+				: studentRepository.findByOrganizationIdAndUserId(orgId, currentUser.getUserId());
+		if (ownStudent.isPresent() && ownStudent.get().getId().equals(sub.getStudentId())) {
+			return sub;
+		}
+		if (isSchoolAdminOrPrincipal() || currentUser.hasPermission(PermissionCode.HOMEWORK_EVALUATE.getValue())) {
+			verifyTeacherCanManageHomework(orgId, hw);
+			return sub;
+		}
+		throw new AccessDeniedException("You are not authorized to view this student's homework submission files");
 	}
 	private AcademicSession requireModifiableSession(Long orgId, Long sessionId) {
 		AcademicSession session = sessionService.requireSession(orgId, sessionId);

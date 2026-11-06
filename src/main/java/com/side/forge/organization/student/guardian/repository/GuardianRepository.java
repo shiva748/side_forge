@@ -15,4 +15,8 @@ public interface GuardianRepository extends JpaRepository<Guardian, Long> {
 	List<Guardian> findAllByOrganizationIdOrderByFirstNameAscLastNameAsc(Long organizationId);
 
 	List<Guardian> findAllByOrganizationIdAndIdIn(Long organizationId, Collection<Long> ids);
+
+	List<Guardian> findAllByOrganizationIdAndEmailIgnoreCase(Long organizationId, String email);
+
+	Optional<Guardian> findByOrganizationIdAndUserId(Long organizationId, Long userId);
 }

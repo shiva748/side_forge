@@ -6,6 +6,7 @@ import org.springframework.transaction.annotation.Transactional;
 import com.side.forge.authorization.annotation.RequirePermission;
 import com.side.forge.authorization.enums.PermissionCode;
 import com.side.forge.authorization.service.OrganizationAdminProvisioningService;
+import com.side.forge.invitation.service.InvitationService;
 import com.side.forge.organization.onboarding.dto.OnboardingRequestDto;
 import com.side.forge.organization.onboarding.entity.OnboardingRequest;
 import com.side.forge.organization.onboarding.entity.OnboardingStatus;
@@ -26,6 +27,7 @@ public class OrganizationOnboardingService {
 	private final OrganizationRepository organizationRepository;
 	private final OnboardingMapper onboardingMapper;
 	private final OrganizationAdminProvisioningService adminProvisioningService;
+	private final InvitationService invitationService;
 
 	@Transactional
 	public OnboardingRequest submitOnboardingRequest(OnboardingRequestDto dto, Long requestedBy) {
@@ -46,9 +48,11 @@ public class OrganizationOnboardingService {
 		organization = organizationRepository.save(organization);
 
 		// Authenticated applicants become the initial school administrator.
-		// Anonymous onboarding requests need a later invitation/provisioning flow.
+		// Anonymous onboarding requests automatically receive an initial SCHOOL_ADMIN invitation.
 		if (request.getRequestedBy() != null) {
 			adminProvisioningService.provisionInitialSchoolAdmin(request.getRequestedBy(), organization.getId());
+		} else if (request.getContactEmail() != null && !request.getContactEmail().isBlank()) {
+			invitationService.createInitialSchoolAdminInvitationOnApproval(organization, request, reviewedBy);
 		}
 
 		request.setStatus(OnboardingStatus.APPROVED);
