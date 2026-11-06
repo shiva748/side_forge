@@ -1,6 +1,7 @@
 package com.side.forge.organization.student.profile.controller;
 
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -12,6 +13,7 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.multipart.MultipartFile;
 
 import com.side.forge.authorization.annotation.RequirePermission;
 import com.side.forge.authorization.enums.PermissionCode;
@@ -24,6 +26,7 @@ import com.side.forge.organization.student.profile.dto.UpdateStudentRequest;
 import com.side.forge.organization.student.profile.entity.Gender;
 import com.side.forge.organization.student.profile.entity.StudentStatus;
 import com.side.forge.organization.student.profile.service.StudentService;
+import com.side.forge.storage.dto.StorageDtos.StoredFileResponse;
 
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -98,5 +101,27 @@ public class StudentController {
 			@Valid @RequestBody ChangeStudentStatusRequest request) {
 		StudentResponse updated = studentService.changeStudentStatus(organizationId, studentId, request);
 		return ResponseEntity.ok(new ApiResponse<>(true, "Student status updated successfully", updated));
+	}
+
+	@RequirePermission(PermissionCode.STUDENT_UPDATE)
+	@PostMapping(value = "/{studentId}/photo", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+	public ResponseEntity<ApiResponse<StoredFileResponse>> uploadStudentPhoto(
+			@PathVariable @Positive Long organizationId,
+			@PathVariable @Positive Long studentId,
+			@RequestParam("file") MultipartFile file) {
+		return ResponseEntity.status(HttpStatus.CREATED)
+				.body(new ApiResponse<>(true, "Student photo uploaded successfully",
+						studentService.uploadStudentPhoto(organizationId, studentId, file)));
+	}
+
+	@RequirePermission(PermissionCode.STUDENT_UPDATE)
+	@PostMapping(value = "/{studentId}/documents", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+	public ResponseEntity<ApiResponse<StoredFileResponse>> uploadStudentDocument(
+			@PathVariable @Positive Long organizationId,
+			@PathVariable @Positive Long studentId,
+			@RequestParam("file") MultipartFile file) {
+		return ResponseEntity.status(HttpStatus.CREATED)
+				.body(new ApiResponse<>(true, "Student document uploaded successfully",
+						studentService.uploadStudentDocument(organizationId, studentId, file)));
 	}
 }

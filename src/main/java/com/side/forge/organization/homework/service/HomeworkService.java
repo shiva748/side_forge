@@ -34,6 +34,10 @@ import com.side.forge.organization.staff.entity.Staff;
 import com.side.forge.organization.staff.repository.StaffRepository;
 import com.side.forge.organization.student.enrollment.entity.*;
 import com.side.forge.organization.student.enrollment.repository.StudentEnrollmentRepository;
+import com.side.forge.organization.student.guardian.entity.Guardian;
+import com.side.forge.organization.student.guardian.entity.StudentGuardian;
+import com.side.forge.organization.student.guardian.repository.GuardianRepository;
+import com.side.forge.organization.student.guardian.repository.StudentGuardianRepository;
 import com.side.forge.organization.student.profile.entity.*;
 import com.side.forge.organization.student.profile.repository.StudentRepository;
 import com.side.forge.organization.teacher.entity.TeacherProfile;
@@ -71,6 +75,8 @@ public class HomeworkService {
 	private final TeacherSubjectAssignmentRepository teacherSubjectAssignmentRepository;
 	private final StudentRepository studentRepository;
 	private final StudentEnrollmentRepository enrollmentRepository;
+	private final GuardianRepository guardianRepository;
+	private final StudentGuardianRepository studentGuardianRepository;
 	private final FileManagementService fileManagementService;
 	private final NotificationService notificationService;
 	@RequirePermission(PermissionCode.HOMEWORK_MANAGE)
@@ -647,6 +653,9 @@ public class HomeworkService {
 		if (ownStudent.isPresent() && ownStudent.get().getId().equals(sub.getStudentId())) {
 			return sub;
 		}
+		if (isGuardianLinkedToStudent(orgId, sub.getStudentId())) {
+			return sub;
+		}
 		if (isSchoolAdminOrPrincipal() || currentUser.hasPermission(PermissionCode.HOMEWORK_EVALUATE.getValue())) {
 			verifyTeacherCanManageHomework(orgId, hw);
 			return sub;
@@ -775,10 +784,33 @@ public class HomeworkService {
 				|| currentUser.hasPermission(PermissionCode.STUDENT_VIEW.getValue());
 		Optional<Student> ownStudent = currentUser.getUserId() == null ? Optional.empty()
 				: studentRepository.findByOrganizationIdAndUserId(orgId, currentUser.getUserId());
+		Optional<Guardian> ownGuardian = currentUser.getUserId() == null ? Optional.empty()
+				: guardianRepository.findByOrganizationIdAndUserId(orgId, currentUser.getUserId())
+						.filter(Guardian::isActive);
+
+		if (ownGuardian.isPresent() && !canViewAnyStudent) {
+			Guardian g = ownGuardian.get();
+			if (requestedStudentId != null) {
+				if (!studentGuardianRepository.existsByOrganizationIdAndStudentIdAndGuardianId(
+						orgId, requestedStudentId, g.getId())) {
+					throw new AccessDeniedException(
+							"Access denied: you do not have a verified guardian relationship with this student");
+				}
+				return studentRepository.findByIdAndOrganizationId(requestedStudentId, orgId)
+						.orElseThrow(() -> new EntityNotFoundException("Student not found"));
+			}
+			List<StudentGuardian> links = studentGuardianRepository
+					.findAllByOrganizationIdAndGuardianIdOrderByIdAsc(orgId, g.getId());
+			if (links.size() == 1) {
+				return studentRepository.findByIdAndOrganizationId(links.getFirst().getStudentId(), orgId)
+						.orElseThrow(() -> new EntityNotFoundException("Student not found"));
+			}
+			throw new IllegalArgumentException("studentId is required when accessing homework as a parent");
+		}
 
 		if (!canViewAnyStudent || ownStudent.isPresent()) {
 			if (ownStudent.isEmpty()) {
-				throw new AccessDeniedException("Current user is not linked to a student profile in this organization");
+				throw new AccessDeniedException("Current user is not linked to a student or guardian profile in this organization");
 			}
 			if (requestedStudentId != null && !ownStudent.get().getId().equals(requestedStudentId)) {
 				throw new AccessDeniedException("Students cannot access or submit homework for another student");
@@ -790,6 +822,17 @@ public class HomeworkService {
 					.orElseThrow(() -> new EntityNotFoundException("Student not found"));
 		}
 		throw new IllegalArgumentException("studentId is required");
+	}
+
+	private boolean isGuardianLinkedToStudent(Long orgId, Long studentId) {
+		if (currentUser.getUserId() == null || studentId == null) {
+			return false;
+		}
+		return guardianRepository.findByOrganizationIdAndUserId(orgId, currentUser.getUserId())
+				.filter(Guardian::isActive)
+				.map(g -> studentGuardianRepository.existsByOrganizationIdAndStudentIdAndGuardianId(
+						orgId, studentId, g.getId()))
+				.orElse(false);
 	}
 
 	private HomeworkAssignmentResponse toHomeworkResponse(

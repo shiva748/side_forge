@@ -32,6 +32,7 @@ import com.side.forge.organization.fees.dto.RecordFeePaymentRequest.*;
 import com.side.forge.organization.fees.dto.StudentFinancialProfileResponse.*;
 import com.side.forge.organization.fees.entity.*;
 import com.side.forge.organization.fees.repository.*;
+import com.side.forge.organization.parentportal.security.ParentChildAccessValidator;
 import com.side.forge.organization.student.enrollment.entity.EnrollmentStatus;
 import com.side.forge.organization.student.enrollment.entity.StudentEnrollment;
 import com.side.forge.organization.student.enrollment.repository.StudentEnrollmentRepository;
@@ -65,6 +66,7 @@ public class FeeManagementService {
 	private final AcademicTenantAccessValidator validator;
 	private final CurrentUserContext currentUser;
 	private final NotificationService notificationService;
+	private final ParentChildAccessValidator parentChildValidator;
 
 	@RequirePermission(PermissionCode.FEES_MANAGE)
 	@Transactional
@@ -769,6 +771,7 @@ public class FeeManagementService {
 		validator.requireOrganization(orgId);
 		FeePayment payment = paymentRepository.findByIdAndOrganizationId(paymentId, orgId)
 				.orElseThrow(() -> new EntityNotFoundException("Fee payment receipt not found"));
+		parentChildValidator.verifyStudentAccessForCurrentUser(orgId, payment.getStudentId());
 		AcademicSession session = sessionService.requireSession(orgId, payment.getAcademicSessionId());
 		Student student = studentService.requireStudent(orgId, payment.getStudentId());
 		List<FeePaymentAllocation> allocations = allocationRepository
@@ -785,6 +788,7 @@ public class FeeManagementService {
 	public StudentFinancialProfileResponse getStudentFinancialProfile(
 			Long orgId, Long studentId, Long sessionId) {
 		validator.requireOrganization(orgId);
+		parentChildValidator.verifyStudentAccessForCurrentUser(orgId, studentId);
 		Student student = studentService.requireStudent(orgId, studentId);
 		AcademicSession session = sessionService.requireSession(orgId, sessionId);
 		StudentEnrollment enrollment = enrollmentRepository
@@ -958,6 +962,7 @@ public class FeeManagementService {
 	@Transactional(readOnly = true)
 	public List<FeeAuditLogResponse> getStudentAuditLogs(Long orgId, Long sessionId, Long studentId) {
 		validator.requireOrganization(orgId);
+		parentChildValidator.verifyStudentAccessForCurrentUser(orgId, studentId);
 		sessionService.requireSession(orgId, sessionId);
 		studentService.requireStudent(orgId, studentId);
 		return auditLogRepository

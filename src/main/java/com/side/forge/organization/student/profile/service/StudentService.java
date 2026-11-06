@@ -10,6 +10,7 @@ import org.springframework.data.domain.Sort;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.multipart.MultipartFile;
 
 import com.side.forge.authorization.annotation.RequirePermission;
 import com.side.forge.authorization.enums.PermissionCode;
@@ -18,11 +19,19 @@ import com.side.forge.organization.academic.common.AcademicTenantAccessValidator
 import com.side.forge.organization.academic.schoolclass.service.SchoolClassService;
 import com.side.forge.organization.academic.session.service.AcademicSessionService;
 import com.side.forge.organization.entity.Organization;
-import com.side.forge.organization.student.profile.dto.*;
-import com.side.forge.organization.student.profile.entity.*;
+import com.side.forge.organization.student.profile.dto.ChangeStudentStatusRequest;
+import com.side.forge.organization.student.profile.dto.CreateStudentRequest;
+import com.side.forge.organization.student.profile.dto.StudentResponse;
+import com.side.forge.organization.student.profile.dto.UpdateStudentRequest;
+import com.side.forge.organization.student.profile.entity.Gender;
+import com.side.forge.organization.student.profile.entity.Student;
+import com.side.forge.organization.student.profile.entity.StudentStatus;
 import com.side.forge.organization.student.profile.mapper.StudentMapper;
 import com.side.forge.organization.student.profile.repository.StudentRepository;
 import com.side.forge.organization.student.profile.repository.StudentSpecifications;
+import com.side.forge.storage.dto.StorageDtos.StoredFileResponse;
+import com.side.forge.storage.entity.FileResourceCategory;
+import com.side.forge.storage.service.FileManagementService;
 import com.side.forge.user.repository.UserRepository;
 
 import jakarta.persistence.EntityNotFoundException;
@@ -31,6 +40,9 @@ import lombok.RequiredArgsConstructor;
 @Service
 @RequiredArgsConstructor
 public class StudentService {
+
+	public static final String RESOURCE_STUDENT_PHOTO = "STUDENT_PROFILE_PHOTO";
+	public static final String RESOURCE_STUDENT_DOCUMENT = "STUDENT_DOCUMENT";
 
 	private static final Set<String> ALLOWED_SORT_FIELDS = Set.of(
 			"id", "admissionNumber", "firstName", "lastName", "dateOfBirth", "admissionDate", "status", "createdAt"
@@ -42,6 +54,7 @@ public class StudentService {
 	private final AcademicSessionService sessionService;
 	private final SchoolClassService classService;
 	private final UserRepository userRepository;
+	private final FileManagementService fileManagementService;
 
 	@RequirePermission(PermissionCode.STUDENT_CREATE)
 	@Transactional
@@ -124,6 +137,25 @@ public class StudentService {
 		Student student = requireStudent(orgId, studentId);
 		student.setStatus(request.status());
 		return studentMapper.toResponse(studentRepository.save(student));
+	}
+
+	@RequirePermission(PermissionCode.STUDENT_UPDATE)
+	@Transactional
+	public StoredFileResponse uploadStudentPhoto(Long orgId, Long studentId, MultipartFile file) {
+		validator.requireOrganization(orgId);
+		Student student = requireStudentForUpdate(orgId, studentId);
+		fileManagementService.detachAllReferencesForResource(orgId, RESOURCE_STUDENT_PHOTO, student.getId());
+		return fileManagementService.storeOrganizationFile(
+				orgId, FileResourceCategory.STUDENT_DOCUMENT, file, RESOURCE_STUDENT_PHOTO, student.getId());
+	}
+
+	@RequirePermission(PermissionCode.STUDENT_UPDATE)
+	@Transactional
+	public StoredFileResponse uploadStudentDocument(Long orgId, Long studentId, MultipartFile file) {
+		validator.requireOrganization(orgId);
+		Student student = requireStudentForUpdate(orgId, studentId);
+		return fileManagementService.storeOrganizationFile(
+				orgId, FileResourceCategory.STUDENT_DOCUMENT, file, RESOURCE_STUDENT_DOCUMENT, student.getId());
 	}
 
 	public Student requireStudent(Long orgId, Long studentId) {

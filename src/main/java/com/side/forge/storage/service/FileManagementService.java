@@ -344,7 +344,9 @@ public class FileManagementService {
 			case HOMEWORK_SUBMISSION -> isOwner
 					|| currentUser.hasPermission(PermissionCode.HOMEWORK_EVALUATE.getValue())
 					|| currentUser.hasPermission(PermissionCode.HOMEWORK_MANAGE.getValue());
-			case STUDENT_DOCUMENT -> isOwner || currentUser.hasPermission(PermissionCode.STUDENT_VIEW.getValue());
+			case STUDENT_DOCUMENT -> isOwner
+					|| currentUser.hasPermission(PermissionCode.STUDENT_VIEW.getValue())
+					|| currentUser.hasPermission(PermissionCode.PARENT_CHILD_VIEW.getValue());
 			case STAFF_DOCUMENT -> isOwner
 					|| currentUser.hasPermission(PermissionCode.STAFF_VIEW.getValue())
 					|| currentUser.hasPermission(PermissionCode.TEACHER_VIEW.getValue());

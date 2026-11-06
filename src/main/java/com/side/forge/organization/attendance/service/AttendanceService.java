@@ -27,6 +27,7 @@ import com.side.forge.organization.attendance.entity.*;
 import com.side.forge.organization.attendance.entity.AttendanceAuditLog.TargetType;
 import com.side.forge.organization.attendance.repository.*;
 import com.side.forge.organization.entity.Organization;
+import com.side.forge.organization.parentportal.security.ParentChildAccessValidator;
 import com.side.forge.organization.staff.entity.EmploymentStatus;
 import com.side.forge.organization.staff.entity.Staff;
 import com.side.forge.organization.staff.repository.StaffRepository;
@@ -59,6 +60,7 @@ public class AttendanceService {
 	private final AcademicTenantAccessValidator validator;
 	private final CurrentUserContext currentUser;
 	private final NotificationService notificationService;
+	private final ParentChildAccessValidator parentChildValidator;
 
 	@RequirePermission(PermissionCode.ATTENDANCE_MARK)
 	@Transactional
@@ -199,6 +201,7 @@ public class AttendanceService {
 	public List<StudentAttendanceResponse> getStudentAttendanceHistory(
 			Long orgId, Long studentId, Long academicSessionId) {
 		validator.requireOrganization(orgId);
+		parentChildValidator.verifyStudentAccessForCurrentUser(orgId, studentId);
 		studentService.requireStudent(orgId, studentId);
 		if (academicSessionId != null) {
 			sessionService.requireSession(orgId, academicSessionId);
@@ -216,6 +219,7 @@ public class AttendanceService {
 	public StudentAttendanceSummaryResponse getStudentAttendanceSummary(
 			Long orgId, Long studentId, Long academicSessionId) {
 		validator.requireOrganization(orgId);
+		parentChildValidator.verifyStudentAccessForCurrentUser(orgId, studentId);
 		Student student = studentService.requireStudent(orgId, studentId);
 		if (academicSessionId != null) {
 			sessionService.requireSession(orgId, academicSessionId);

@@ -33,6 +33,7 @@ import com.side.forge.organization.examination.dto.ExaminationResponse.*;
 import com.side.forge.organization.examination.dto.ScheduleExamSubjectRequest.ExamScheduleResponse;
 import com.side.forge.organization.examination.entity.*;
 import com.side.forge.organization.examination.repository.*;
+import com.side.forge.organization.parentportal.security.ParentChildAccessValidator;
 import com.side.forge.organization.student.enrollment.entity.EnrollmentStatus;
 import com.side.forge.organization.student.enrollment.entity.StudentEnrollment;
 import com.side.forge.organization.student.enrollment.repository.StudentEnrollmentRepository;
@@ -70,6 +71,7 @@ public class ExaminationService {
 	private final AcademicTenantAccessValidator validator;
 	private final CurrentUserContext currentUser;
 	private final NotificationService notificationService;
+	private final ParentChildAccessValidator parentChildValidator;
 
 	@RequirePermission(PermissionCode.EXAM_MANAGE)
 	@Transactional
@@ -430,6 +432,7 @@ public class ExaminationService {
 	@Transactional(readOnly = true)
 	public ReportCardResponse getStudentReportCard(Long orgId, Long examinationId, Long studentId) {
 		validator.requireOrganization(orgId);
+		parentChildValidator.verifyStudentAccessForCurrentUser(orgId, studentId);
 		Examination exam = requireExamination(orgId, examinationId);
 		if (exam.getStatus() != ExaminationStatus.PUBLISHED
 				&& !currentUser.hasPermission(PermissionCode.EXAM_MANAGE.getValue())

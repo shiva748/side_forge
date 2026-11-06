@@ -201,7 +201,8 @@ public class AcademicDatabaseInitializer implements ApplicationRunner {
 					PermissionCode.SUBJECT_VIEW, PermissionCode.TIMETABLE_VIEW,
 					PermissionCode.ATTENDANCE_VIEW, PermissionCode.EXAM_VIEW,
 					PermissionCode.FEES_VIEW, PermissionCode.COMMUNICATION_VIEW,
-					PermissionCode.DASHBOARD_VIEW, PermissionCode.HOMEWORK_VIEW)
+					PermissionCode.DASHBOARD_VIEW, PermissionCode.HOMEWORK_VIEW,
+					PermissionCode.HOMEWORK_SUBMIT)
 	);
 
 	@Override
