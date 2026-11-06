@@ -57,7 +57,12 @@ public class AcademicDatabaseInitializer implements ApplicationRunner {
 			new PermissionSeed(PermissionCode.STUDENT_ENROLLMENT_MANAGE, "Manage student enrollment", "STUDENT",
 					"Enroll and transfer students"),
 			new PermissionSeed(PermissionCode.STUDENT_GUARDIAN_MANAGE, "Manage student guardians", "STUDENT",
-					"Create and manage parent/guardian records and student associations")
+					"Create and manage parent/guardian records and student associations"),
+			new PermissionSeed(PermissionCode.TEACHER_VIEW, "View teachers", "STAFF", "View teacher profiles"),
+			new PermissionSeed(PermissionCode.TEACHER_MANAGE, "Manage teachers", "STAFF",
+					"Create and update teacher profiles"),
+			new PermissionSeed(PermissionCode.STAFF_VIEW, "View staff", "STAFF", "View non-teaching staff"),
+			new PermissionSeed(PermissionCode.STAFF_MANAGE, "Manage staff", "STAFF", "Manage non-teaching staff")
 	);
 
 	private static final Map<String, List<PermissionCode>> ROLE_PERMISSION_MAPPINGS = Map.of(
@@ -69,7 +74,9 @@ public class AcademicDatabaseInitializer implements ApplicationRunner {
 					PermissionCode.CLASS_SUBJECT_VIEW, PermissionCode.CLASS_SUBJECT_MANAGE,
 					PermissionCode.STUDENT_VIEW, PermissionCode.STUDENT_CREATE,
 					PermissionCode.STUDENT_UPDATE, PermissionCode.STUDENT_DELETE,
-					PermissionCode.STUDENT_ENROLLMENT_MANAGE, PermissionCode.STUDENT_GUARDIAN_MANAGE),
+					PermissionCode.STUDENT_ENROLLMENT_MANAGE, PermissionCode.STUDENT_GUARDIAN_MANAGE,
+					PermissionCode.STAFF_VIEW, PermissionCode.STAFF_MANAGE,
+					PermissionCode.TEACHER_VIEW, PermissionCode.TEACHER_MANAGE),
 			"PRINCIPAL", List.of(
 					PermissionCode.ACADEMIC_SESSION_VIEW, PermissionCode.ACADEMIC_SESSION_MANAGE,
 					PermissionCode.CLASS_VIEW, PermissionCode.CLASS_MANAGE,
@@ -78,21 +85,27 @@ public class AcademicDatabaseInitializer implements ApplicationRunner {
 					PermissionCode.CLASS_SUBJECT_VIEW, PermissionCode.CLASS_SUBJECT_MANAGE,
 					PermissionCode.STUDENT_VIEW, PermissionCode.STUDENT_CREATE,
 					PermissionCode.STUDENT_UPDATE, PermissionCode.STUDENT_ENROLLMENT_MANAGE,
-					PermissionCode.STUDENT_GUARDIAN_MANAGE),
+					PermissionCode.STUDENT_GUARDIAN_MANAGE,
+					PermissionCode.STAFF_VIEW, PermissionCode.STAFF_MANAGE,
+					PermissionCode.TEACHER_VIEW, PermissionCode.TEACHER_MANAGE),
 			"RECEPTIONIST", List.of(
 					PermissionCode.STUDENT_VIEW, PermissionCode.STUDENT_CREATE,
-					PermissionCode.STUDENT_GUARDIAN_MANAGE),
+					PermissionCode.STUDENT_GUARDIAN_MANAGE,
+					PermissionCode.STAFF_VIEW, PermissionCode.TEACHER_VIEW),
 			"TEACHER", List.of(
 					PermissionCode.ACADEMIC_SESSION_VIEW, PermissionCode.CLASS_VIEW,
 					PermissionCode.SECTION_VIEW, PermissionCode.SUBJECT_VIEW,
-					PermissionCode.CLASS_SUBJECT_VIEW, PermissionCode.STUDENT_VIEW),
+					PermissionCode.CLASS_SUBJECT_VIEW, PermissionCode.STUDENT_VIEW,
+					PermissionCode.TEACHER_VIEW),
 			"SCHOOL_STAFF", List.of(
 					PermissionCode.ACADEMIC_SESSION_VIEW, PermissionCode.CLASS_VIEW,
 					PermissionCode.SECTION_VIEW, PermissionCode.SUBJECT_VIEW,
-					PermissionCode.CLASS_SUBJECT_VIEW, PermissionCode.STUDENT_VIEW),
+					PermissionCode.CLASS_SUBJECT_VIEW, PermissionCode.STUDENT_VIEW,
+					PermissionCode.STAFF_VIEW, PermissionCode.TEACHER_VIEW),
 			"ACCOUNTANT", List.of(
 					PermissionCode.ACADEMIC_SESSION_VIEW, PermissionCode.CLASS_VIEW,
-					PermissionCode.SECTION_VIEW, PermissionCode.STUDENT_VIEW)
+					PermissionCode.SECTION_VIEW, PermissionCode.STUDENT_VIEW,
+					PermissionCode.STAFF_VIEW, PermissionCode.TEACHER_VIEW)
 	);
 
 	@Override
@@ -199,6 +212,32 @@ public class AcademicDatabaseInitializer implements ApplicationRunner {
 				"ALTER TABLE student_enrollments ADD CONSTRAINT fk_student_enrollments_session_org FOREIGN KEY (academic_session_id, organization_id) REFERENCES academic_sessions (id, organization_id)");
 		addForeignKeyIfAbsent("student_enrollments", "fk_student_enrollments_class_org",
 				"ALTER TABLE student_enrollments ADD CONSTRAINT fk_student_enrollments_class_org FOREIGN KEY (class_id, organization_id) REFERENCES classes (id, organization_id)");
+		addForeignKeyIfAbsent("staff", "fk_staff_org",
+				"ALTER TABLE staff ADD CONSTRAINT fk_staff_org FOREIGN KEY (organization_id) REFERENCES organizations (id)");
+		addForeignKeyIfAbsent("staff", "fk_staff_user",
+				"ALTER TABLE staff ADD CONSTRAINT fk_staff_user FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE SET NULL");
+		addForeignKeyIfAbsent("teachers", "fk_teachers_org",
+				"ALTER TABLE teachers ADD CONSTRAINT fk_teachers_org FOREIGN KEY (organization_id) REFERENCES organizations (id)");
+		addForeignKeyIfAbsent("teachers", "fk_teachers_staff_org",
+				"ALTER TABLE teachers ADD CONSTRAINT fk_teachers_staff_org FOREIGN KEY (staff_id, organization_id) REFERENCES staff (id, organization_id)");
+		addForeignKeyIfAbsent("teacher_class_assignments", "fk_tca_org",
+				"ALTER TABLE teacher_class_assignments ADD CONSTRAINT fk_tca_org FOREIGN KEY (organization_id) REFERENCES organizations (id)");
+		addForeignKeyIfAbsent("teacher_class_assignments", "fk_tca_session_org",
+				"ALTER TABLE teacher_class_assignments ADD CONSTRAINT fk_tca_session_org FOREIGN KEY (academic_session_id, organization_id) REFERENCES academic_sessions (id, organization_id)");
+		addForeignKeyIfAbsent("teacher_class_assignments", "fk_tca_class_org",
+				"ALTER TABLE teacher_class_assignments ADD CONSTRAINT fk_tca_class_org FOREIGN KEY (class_id, organization_id) REFERENCES classes (id, organization_id)");
+		addForeignKeyIfAbsent("teacher_class_assignments", "fk_tca_teacher_org",
+				"ALTER TABLE teacher_class_assignments ADD CONSTRAINT fk_tca_teacher_org FOREIGN KEY (teacher_id, organization_id) REFERENCES teachers (id, organization_id)");
+		addForeignKeyIfAbsent("teacher_subject_assignments", "fk_tsa_org",
+				"ALTER TABLE teacher_subject_assignments ADD CONSTRAINT fk_tsa_org FOREIGN KEY (organization_id) REFERENCES organizations (id)");
+		addForeignKeyIfAbsent("teacher_subject_assignments", "fk_tsa_session_org",
+				"ALTER TABLE teacher_subject_assignments ADD CONSTRAINT fk_tsa_session_org FOREIGN KEY (academic_session_id, organization_id) REFERENCES academic_sessions (id, organization_id)");
+		addForeignKeyIfAbsent("teacher_subject_assignments", "fk_tsa_class_org",
+				"ALTER TABLE teacher_subject_assignments ADD CONSTRAINT fk_tsa_class_org FOREIGN KEY (class_id, organization_id) REFERENCES classes (id, organization_id)");
+		addForeignKeyIfAbsent("teacher_subject_assignments", "fk_tsa_subject_org",
+				"ALTER TABLE teacher_subject_assignments ADD CONSTRAINT fk_tsa_subject_org FOREIGN KEY (subject_id, organization_id) REFERENCES subjects (id, organization_id)");
+		addForeignKeyIfAbsent("teacher_subject_assignments", "fk_tsa_teacher_org",
+				"ALTER TABLE teacher_subject_assignments ADD CONSTRAINT fk_tsa_teacher_org FOREIGN KEY (teacher_id, organization_id) REFERENCES teachers (id, organization_id)");
 	}
 
 	private void addForeignKeyIfAbsent(String tableName, String constraintName, String alterSql) {
