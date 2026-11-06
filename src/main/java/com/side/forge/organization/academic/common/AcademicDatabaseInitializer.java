@@ -101,7 +101,15 @@ public class AcademicDatabaseInitializer implements ApplicationRunner {
 					"View role-based school dashboards"),
 			new PermissionSeed(PermissionCode.REPORT_VIEW, "View reports", "REPORT", "View permitted school reports"),
 			new PermissionSeed(PermissionCode.REPORT_EXPORT, "Export reports", "REPORT",
-					"Export and download permitted school reports in CSV, Excel and PDF formats")
+					"Export and download permitted school reports in CSV, Excel and PDF formats"),
+			new PermissionSeed(PermissionCode.HOMEWORK_VIEW, "View homework", "HOMEWORK",
+					"View assigned homework and submissions"),
+			new PermissionSeed(PermissionCode.HOMEWORK_MANAGE, "Manage homework", "HOMEWORK",
+					"Create, update and delete class homework assignments"),
+			new PermissionSeed(PermissionCode.HOMEWORK_SUBMIT, "Submit homework", "HOMEWORK",
+					"Submit and resubmit assigned student homework"),
+			new PermissionSeed(PermissionCode.HOMEWORK_EVALUATE, "Evaluate homework", "HOMEWORK",
+					"Review and evaluate student homework submissions")
 	);
 
 	private static final Map<String, List<PermissionCode>> ROLE_PERMISSION_MAPPINGS = Map.of(
@@ -124,7 +132,8 @@ public class AcademicDatabaseInitializer implements ApplicationRunner {
 					PermissionCode.FEES_VIEW, PermissionCode.FEES_MANAGE,
 					PermissionCode.FEES_COLLECT, PermissionCode.FEES_REFUND, PermissionCode.FEES_REPORT_VIEW,
 					PermissionCode.COMMUNICATION_VIEW, PermissionCode.COMMUNICATION_MANAGE,
-					PermissionCode.DASHBOARD_VIEW, PermissionCode.REPORT_VIEW, PermissionCode.REPORT_EXPORT),
+					PermissionCode.DASHBOARD_VIEW, PermissionCode.REPORT_VIEW, PermissionCode.REPORT_EXPORT,
+					PermissionCode.HOMEWORK_VIEW, PermissionCode.HOMEWORK_MANAGE, PermissionCode.HOMEWORK_EVALUATE),
 			"PRINCIPAL", List.of(
 					PermissionCode.ACADEMIC_SESSION_VIEW, PermissionCode.ACADEMIC_SESSION_MANAGE,
 					PermissionCode.CLASS_VIEW, PermissionCode.CLASS_MANAGE,
@@ -144,7 +153,8 @@ public class AcademicDatabaseInitializer implements ApplicationRunner {
 					PermissionCode.FEES_VIEW, PermissionCode.FEES_MANAGE,
 					PermissionCode.FEES_COLLECT, PermissionCode.FEES_REFUND, PermissionCode.FEES_REPORT_VIEW,
 					PermissionCode.COMMUNICATION_VIEW, PermissionCode.COMMUNICATION_MANAGE,
-					PermissionCode.DASHBOARD_VIEW, PermissionCode.REPORT_VIEW, PermissionCode.REPORT_EXPORT),
+					PermissionCode.DASHBOARD_VIEW, PermissionCode.REPORT_VIEW, PermissionCode.REPORT_EXPORT,
+					PermissionCode.HOMEWORK_VIEW, PermissionCode.HOMEWORK_MANAGE, PermissionCode.HOMEWORK_EVALUATE),
 			"RECEPTIONIST", List.of(
 					PermissionCode.STUDENT_VIEW, PermissionCode.STUDENT_CREATE,
 					PermissionCode.STUDENT_GUARDIAN_MANAGE,
@@ -159,7 +169,13 @@ public class AcademicDatabaseInitializer implements ApplicationRunner {
 					PermissionCode.ATTENDANCE_VIEW, PermissionCode.ATTENDANCE_MARK, PermissionCode.ATTENDANCE_UPDATE,
 					PermissionCode.EXAM_VIEW, PermissionCode.EXAM_ENTER_MARKS,
 					PermissionCode.COMMUNICATION_VIEW, PermissionCode.DASHBOARD_VIEW,
-					PermissionCode.REPORT_VIEW, PermissionCode.REPORT_EXPORT),
+					PermissionCode.REPORT_VIEW, PermissionCode.REPORT_EXPORT,
+					PermissionCode.HOMEWORK_VIEW, PermissionCode.HOMEWORK_MANAGE, PermissionCode.HOMEWORK_EVALUATE),
+			"STUDENT", List.of(
+					PermissionCode.ACADEMIC_SESSION_VIEW, PermissionCode.CLASS_VIEW,
+					PermissionCode.SUBJECT_VIEW, PermissionCode.TIMETABLE_VIEW,
+					PermissionCode.COMMUNICATION_VIEW, PermissionCode.DASHBOARD_VIEW,
+					PermissionCode.HOMEWORK_VIEW, PermissionCode.HOMEWORK_SUBMIT),
 			"SCHOOL_STAFF", List.of(
 					PermissionCode.ACADEMIC_SESSION_VIEW, PermissionCode.CLASS_VIEW,
 					PermissionCode.SECTION_VIEW, PermissionCode.SUBJECT_VIEW,
@@ -215,6 +231,13 @@ public class AcademicDatabaseInitializer implements ApplicationRunner {
 	}
 
 	private void seedDefaultRolePermissions() {
+		jdbc.getJdbcTemplate().execute("""
+				INSERT INTO roles (code, name, scope, organization_id, description, is_system_defined, created_at, updated_at)
+				SELECT 'STUDENT', 'Student', 'ORGANIZATION', NULL, 'Enrolled school student', 1, CURRENT_TIMESTAMP(6), CURRENT_TIMESTAMP(6)
+				WHERE NOT EXISTS (
+				    SELECT 1 FROM roles WHERE code = 'STUDENT' AND scope = 'ORGANIZATION' AND organization_id IS NULL
+				)
+				""");
 		String sql = """
 				INSERT INTO role_permissions (role_id, permission_id)
 				SELECT r.id, p.id
@@ -389,6 +412,18 @@ public class AcademicDatabaseInitializer implements ApplicationRunner {
 				"ALTER TABLE school_notices ADD CONSTRAINT fk_school_notices_org FOREIGN KEY (organization_id) REFERENCES organizations (id)");
 		addForeignKeyIfAbsent("school_notices", "fk_school_notices_session_org",
 				"ALTER TABLE school_notices ADD CONSTRAINT fk_school_notices_session_org FOREIGN KEY (academic_session_id, organization_id) REFERENCES academic_sessions (id, organization_id)");
+		addForeignKeyIfAbsent("homework_assignments", "fk_hw_session_org",
+				"ALTER TABLE homework_assignments ADD CONSTRAINT fk_hw_session_org FOREIGN KEY (academic_session_id, organization_id) REFERENCES academic_sessions (id, organization_id)");
+		addForeignKeyIfAbsent("homework_assignments", "fk_hw_class_org",
+				"ALTER TABLE homework_assignments ADD CONSTRAINT fk_hw_class_org FOREIGN KEY (class_id, organization_id) REFERENCES classes (id, organization_id)");
+		addForeignKeyIfAbsent("homework_assignments", "fk_hw_subject_org",
+				"ALTER TABLE homework_assignments ADD CONSTRAINT fk_hw_subject_org FOREIGN KEY (subject_id, organization_id) REFERENCES subjects (id, organization_id)");
+		addForeignKeyIfAbsent("homework_assignments", "fk_hw_teacher_org",
+				"ALTER TABLE homework_assignments ADD CONSTRAINT fk_hw_teacher_org FOREIGN KEY (teacher_id, organization_id) REFERENCES teachers (id, organization_id)");
+		addForeignKeyIfAbsent("student_homework_submissions", "fk_shs_homework_org",
+				"ALTER TABLE student_homework_submissions ADD CONSTRAINT fk_shs_homework_org FOREIGN KEY (homework_id, organization_id) REFERENCES homework_assignments (id, organization_id)");
+		addForeignKeyIfAbsent("student_homework_submissions", "fk_shs_student_org",
+				"ALTER TABLE student_homework_submissions ADD CONSTRAINT fk_shs_student_org FOREIGN KEY (student_id, organization_id) REFERENCES students (id, organization_id)");
 	}
 
 	private void addForeignKeyIfAbsent(String tableName, String constraintName, String alterSql) {

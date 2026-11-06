@@ -135,6 +135,15 @@ public enum PermissionCode {
 
 	REPORT_EXPORT("report.export"),
 
+	// Homework & Assignments
+	HOMEWORK_VIEW("homework.view"),
+
+	HOMEWORK_MANAGE("homework.manage"),
+
+	HOMEWORK_SUBMIT("homework.submit"),
+
+	HOMEWORK_EVALUATE("homework.evaluate"),
+
 	// Parent
 	PARENT_CHILD_VIEW("parent.child.view"),
 

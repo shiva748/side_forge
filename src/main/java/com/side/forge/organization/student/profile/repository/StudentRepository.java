@@ -28,6 +28,8 @@ public interface StudentRepository extends JpaRepository<Student, Long>, JpaSpec
 
 	List<Student> findAllByOrganizationIdOrderByIdAsc(Long organizationId);
 
+	Optional<Student> findByOrganizationIdAndUserId(Long organizationId, Long userId);
+
 	boolean existsByOrganizationIdAndAdmissionNumberIgnoreCase(Long organizationId, String admissionNumber);
 
 	boolean existsByOrganizationIdAndAdmissionNumberIgnoreCaseAndIdNot(
