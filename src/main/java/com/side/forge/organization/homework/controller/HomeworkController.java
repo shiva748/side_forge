@@ -9,22 +9,29 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
 
+import com.side.forge.authorization.annotation.RequirePermission;
+import com.side.forge.authorization.enums.PermissionCode;
 import com.side.forge.common.dto.ApiResponse;
 import com.side.forge.organization.homework.dto.HomeworkDtos.*;
 import com.side.forge.organization.homework.service.HomeworkService;
 
+import io.swagger.v3.oas.annotations.security.SecurityRequirement;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Positive;
 import lombok.RequiredArgsConstructor;
 
 @RestController
 @Validated
+@Tag(name = "Homework & Assignments", description = "Create, assign, submit, evaluate, and track homework assignments")
+@SecurityRequirement(name = "jwtCookie")
 @RequestMapping("/api/organizations/{organizationId}")
 @RequiredArgsConstructor
 public class HomeworkController {
 
 	private final HomeworkService homeworkService;
 
+	@RequirePermission(PermissionCode.HOMEWORK_MANAGE)
 	@PostMapping("/homework")
 	public ResponseEntity<ApiResponse<HomeworkAssignmentResponse>> createHomework(
 			@PathVariable @Positive Long organizationId,
@@ -34,6 +41,7 @@ public class HomeworkController {
 						homeworkService.createHomework(organizationId, request)));
 	}
 
+	@RequirePermission(PermissionCode.HOMEWORK_MANAGE)
 	@PutMapping("/homework/{homeworkId}")
 	public ResponseEntity<ApiResponse<HomeworkAssignmentResponse>> updateHomework(
 			@PathVariable @Positive Long organizationId,
@@ -43,6 +51,7 @@ public class HomeworkController {
 				homeworkService.updateHomework(organizationId, homeworkId, request)));
 	}
 
+	@RequirePermission(PermissionCode.HOMEWORK_MANAGE)
 	@DeleteMapping("/homework/{homeworkId}")
 	public ResponseEntity<ApiResponse<Void>> deleteHomework(
 			@PathVariable @Positive Long organizationId,
@@ -51,6 +60,7 @@ public class HomeworkController {
 		return ResponseEntity.ok(new ApiResponse<>(true, "Homework assignment deleted successfully", null));
 	}
 
+	@RequirePermission(PermissionCode.HOMEWORK_VIEW)
 	@GetMapping("/homework/{homeworkId}")
 	public ResponseEntity<ApiResponse<HomeworkAssignmentResponse>> getHomeworkById(
 			@PathVariable @Positive Long organizationId,
@@ -60,6 +70,7 @@ public class HomeworkController {
 				homeworkService.getHomeworkById(organizationId, homeworkId, referenceDate)));
 	}
 
+	@RequirePermission(PermissionCode.HOMEWORK_VIEW)
 	@GetMapping("/academic-sessions/{sessionId}/homework")
 	public ResponseEntity<ApiResponse<List<HomeworkAssignmentResponse>>> getSessionHomework(
 			@PathVariable @Positive Long organizationId,
@@ -72,6 +83,7 @@ public class HomeworkController {
 				homeworkService.getSessionHomework(
 						organizationId, sessionId, classId, subjectId, teacherId, referenceDate)));
 	}
+	@RequirePermission(PermissionCode.HOMEWORK_VIEW)
 	@GetMapping("/homework/{homeworkId}/submissions")
 	public ResponseEntity<ApiResponse<List<StudentHomeworkSubmissionResponse>>> getHomeworkRosterAndSubmissions(
 			@PathVariable @Positive Long organizationId,
@@ -81,6 +93,7 @@ public class HomeworkController {
 				homeworkService.getHomeworkRosterAndSubmissions(organizationId, homeworkId, referenceDate)));
 	}
 
+	@RequirePermission(PermissionCode.HOMEWORK_VIEW)
 	@GetMapping("/students/{studentId}/homework")
 	public ResponseEntity<ApiResponse<List<StudentHomeworkSubmissionResponse>>> getStudentHomework(
 			@PathVariable @Positive Long organizationId,
@@ -91,6 +104,7 @@ public class HomeworkController {
 				homeworkService.getStudentHomeworkList(organizationId, studentId, academicSessionId, referenceDate)));
 	}
 
+	@RequirePermission(PermissionCode.HOMEWORK_VIEW)
 	@GetMapping("/homework/my-assignments")
 	public ResponseEntity<ApiResponse<List<StudentHomeworkSubmissionResponse>>> getMyHomework(
 			@PathVariable @Positive Long organizationId,
@@ -100,6 +114,7 @@ public class HomeworkController {
 				homeworkService.getStudentHomeworkList(organizationId, null, academicSessionId, referenceDate)));
 	}
 
+	@RequirePermission(PermissionCode.HOMEWORK_SUBMIT)
 	@PostMapping("/homework/{homeworkId}/submissions")
 	public ResponseEntity<ApiResponse<StudentHomeworkSubmissionResponse>> submitHomework(
 			@PathVariable @Positive Long organizationId,
@@ -109,6 +124,7 @@ public class HomeworkController {
 				homeworkService.submitHomework(organizationId, homeworkId, request)));
 	}
 
+	@RequirePermission(PermissionCode.HOMEWORK_EVALUATE)
 	@PatchMapping("/homework/{homeworkId}/submissions/{submissionId}/evaluate")
 	public ResponseEntity<ApiResponse<StudentHomeworkSubmissionResponse>> evaluateSubmission(
 			@PathVariable @Positive Long organizationId,
@@ -119,6 +135,7 @@ public class HomeworkController {
 				homeworkService.evaluateSubmission(organizationId, homeworkId, submissionId, request)));
 	}
 
+	@RequirePermission(PermissionCode.HOMEWORK_VIEW)
 	@GetMapping("/homework/dashboard/teacher")
 	public ResponseEntity<ApiResponse<TeacherHomeworkDashboardResponse>> getTeacherHomeworkDashboard(
 			@PathVariable @Positive Long organizationId,
@@ -129,6 +146,7 @@ public class HomeworkController {
 				homeworkService.getTeacherHomeworkDashboard(organizationId, academicSessionId, teacherId, referenceDate)));
 	}
 
+	@RequirePermission(PermissionCode.HOMEWORK_VIEW)
 	@GetMapping("/homework/dashboard/student")
 	public ResponseEntity<ApiResponse<StudentHomeworkDashboardResponse>> getStudentHomeworkDashboard(
 			@PathVariable @Positive Long organizationId,

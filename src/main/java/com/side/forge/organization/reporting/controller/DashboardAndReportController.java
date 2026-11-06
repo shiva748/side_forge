@@ -8,24 +8,50 @@ import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.*;
+import org.springframework.validation.annotation.Validated;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.RestController;
 
+import com.side.forge.authorization.annotation.RequirePermission;
+import com.side.forge.authorization.enums.PermissionCode;
 import com.side.forge.common.dto.ApiResponse;
-import com.side.forge.organization.reporting.dto.DashboardDtos.*;
-import com.side.forge.organization.reporting.dto.ReportDtos.*;
+import com.side.forge.organization.reporting.dto.DashboardDtos.AcademicSessionScope;
+import com.side.forge.organization.reporting.dto.DashboardDtos.AccountantDashboardResponse;
+import com.side.forge.organization.reporting.dto.DashboardDtos.AdminDashboardResponse;
+import com.side.forge.organization.reporting.dto.DashboardDtos.CreateSchoolNoticeRequest;
+import com.side.forge.organization.reporting.dto.DashboardDtos.DateRangePreset;
+import com.side.forge.organization.reporting.dto.DashboardDtos.PrincipalDashboardResponse;
+import com.side.forge.organization.reporting.dto.DashboardDtos.SchoolNoticeResponse;
+import com.side.forge.organization.reporting.dto.DashboardDtos.TeacherDashboardResponse;
+import com.side.forge.organization.reporting.dto.ReportDtos.AttendanceReportResponse;
+import com.side.forge.organization.reporting.dto.ReportDtos.ExaminationPerformanceReportResponse;
+import com.side.forge.organization.reporting.dto.ReportDtos.ExportFormat;
+import com.side.forge.organization.reporting.dto.ReportDtos.FinancialReportResponse;
+import com.side.forge.organization.reporting.dto.ReportDtos.StudentEnrollmentReportResponse;
 import com.side.forge.organization.reporting.service.DashboardAndReportService;
 import com.side.forge.organization.reporting.service.ReportExportGenerator.ExportDocument;
 
+import io.swagger.v3.oas.annotations.security.SecurityRequirement;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 
 @RestController
+@Validated
+@Tag(name = "Dashboards & Reports", description = "Role-based school dashboards, analytical reports, notices, and CSV/Excel/PDF exports")
+@SecurityRequirement(name = "jwtCookie")
 @RequestMapping("/api/organizations/{organizationId}")
 @RequiredArgsConstructor
 public class DashboardAndReportController {
 
 	private final DashboardAndReportService service;
 
+	@RequirePermission(PermissionCode.COMMUNICATION_MANAGE)
 	@PostMapping("/notices")
 	public ResponseEntity<ApiResponse<SchoolNoticeResponse>> createNotice(
 			@PathVariable Long organizationId,
@@ -35,6 +61,7 @@ public class DashboardAndReportController {
 						service.createNotice(organizationId, request)));
 	}
 
+	@RequirePermission(PermissionCode.COMMUNICATION_VIEW)
 	@GetMapping("/notices")
 	public ResponseEntity<ApiResponse<List<SchoolNoticeResponse>>> getNotices(
 			@PathVariable Long organizationId,
@@ -43,6 +70,7 @@ public class DashboardAndReportController {
 				service.getNotices(organizationId, importantOnly)));
 	}
 
+	@RequirePermission(PermissionCode.DASHBOARD_VIEW)
 	@GetMapping("/dashboards/admin")
 	public ResponseEntity<ApiResponse<AdminDashboardResponse>> getAdminDashboard(
 			@PathVariable Long organizationId,
@@ -53,6 +81,7 @@ public class DashboardAndReportController {
 				service.getAdminDashboard(organizationId, academicSessionId, sessionScope, referenceDate)));
 	}
 
+	@RequirePermission(PermissionCode.DASHBOARD_VIEW)
 	@GetMapping("/dashboards/principal")
 	public ResponseEntity<ApiResponse<PrincipalDashboardResponse>> getPrincipalDashboard(
 			@PathVariable Long organizationId,
@@ -67,6 +96,7 @@ public class DashboardAndReportController {
 						lowAttendanceThreshold, academicAttentionThreshold)));
 	}
 
+	@RequirePermission(PermissionCode.FEES_REPORT_VIEW)
 	@GetMapping("/dashboards/accountant")
 	public ResponseEntity<ApiResponse<AccountantDashboardResponse>> getAccountantDashboard(
 			@PathVariable Long organizationId,
@@ -77,6 +107,7 @@ public class DashboardAndReportController {
 				service.getAccountantDashboard(organizationId, academicSessionId, sessionScope, referenceDate)));
 	}
 
+	@RequirePermission(PermissionCode.DASHBOARD_VIEW)
 	@GetMapping("/dashboards/teacher")
 	public ResponseEntity<ApiResponse<TeacherDashboardResponse>> getTeacherDashboard(
 			@PathVariable Long organizationId,
@@ -87,6 +118,7 @@ public class DashboardAndReportController {
 		return ResponseEntity.ok(new ApiResponse<>(true, "Teacher dashboard retrieved successfully",
 				service.getTeacherDashboard(organizationId, academicSessionId, sessionScope, teacherId, referenceDate)));
 	}
+	@RequirePermission(PermissionCode.REPORT_VIEW)
 	@GetMapping("/reports/students-enrollment")
 	public ResponseEntity<ApiResponse<StudentEnrollmentReportResponse>> getStudentEnrollmentReport(
 			@PathVariable Long organizationId,
@@ -105,6 +137,7 @@ public class DashboardAndReportController {
 						datePreset, startDate, endDate, selectedMonth, classId, page, size)));
 	}
 
+	@RequirePermission(PermissionCode.REPORT_VIEW)
 	@GetMapping("/reports/attendance")
 	public ResponseEntity<ApiResponse<AttendanceReportResponse>> getAttendanceReport(
 			@PathVariable Long organizationId,
@@ -127,6 +160,7 @@ public class DashboardAndReportController {
 						classId, studentId, staffId, threshold, page, size)));
 	}
 
+	@RequirePermission(PermissionCode.REPORT_VIEW)
 	@GetMapping("/reports/examinations")
 	public ResponseEntity<ApiResponse<ExaminationPerformanceReportResponse>> getExaminationPerformanceReport(
 			@PathVariable Long organizationId,
@@ -143,6 +177,7 @@ public class DashboardAndReportController {
 						classId, examinationId, studentId, includeDrafts, threshold)));
 	}
 
+	@RequirePermission(PermissionCode.FEES_REPORT_VIEW)
 	@GetMapping("/reports/financial")
 	public ResponseEntity<ApiResponse<FinancialReportResponse>> getFinancialReport(
 			@PathVariable Long organizationId,
@@ -162,6 +197,7 @@ public class DashboardAndReportController {
 						datePreset, startDate, endDate, selectedMonth, classId, studentId, page, size)));
 	}
 
+	@RequirePermission(PermissionCode.REPORT_EXPORT)
 	@GetMapping("/reports/{reportType}/export")
 	public ResponseEntity<byte[]> exportReport(
 			@PathVariable Long organizationId,
