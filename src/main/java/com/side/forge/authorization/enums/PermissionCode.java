@@ -75,12 +75,18 @@ public enum PermissionCode {
 
 	TIMETABLE_MANAGE("timetable.manage"),
 
+	TIMETABLE_PUBLISH("timetable.publish"),
+
 	// Attendance
 	ATTENDANCE_VIEW("attendance.view"),
 
 	ATTENDANCE_MARK("attendance.mark"),
 
 	ATTENDANCE_UPDATE("attendance.update"),
+
+	STAFF_ATTENDANCE_VIEW("staff.attendance.view"),
+
+	STAFF_ATTENDANCE_MANAGE("staff.attendance.manage"),
 
 	// Exams
 	EXAM_VIEW("exam.view"),

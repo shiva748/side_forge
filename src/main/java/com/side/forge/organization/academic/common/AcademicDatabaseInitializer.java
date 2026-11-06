@@ -62,7 +62,28 @@ public class AcademicDatabaseInitializer implements ApplicationRunner {
 			new PermissionSeed(PermissionCode.TEACHER_MANAGE, "Manage teachers", "STAFF",
 					"Create and update teacher profiles"),
 			new PermissionSeed(PermissionCode.STAFF_VIEW, "View staff", "STAFF", "View non-teaching staff"),
-			new PermissionSeed(PermissionCode.STAFF_MANAGE, "Manage staff", "STAFF", "Manage non-teaching staff")
+			new PermissionSeed(PermissionCode.STAFF_MANAGE, "Manage staff", "STAFF", "Manage non-teaching staff"),
+			new PermissionSeed(PermissionCode.TIMETABLE_VIEW, "View timetable", "ACADEMICS", "View class timetables"),
+			new PermissionSeed(PermissionCode.TIMETABLE_MANAGE, "Manage timetable", "ACADEMICS",
+					"Create and update timetables"),
+			new PermissionSeed(PermissionCode.TIMETABLE_PUBLISH, "Publish timetable", "ACADEMICS",
+					"Publish and reopen class timetables"),
+			new PermissionSeed(PermissionCode.ATTENDANCE_VIEW, "View attendance", "ATTENDANCE",
+					"View attendance records"),
+			new PermissionSeed(PermissionCode.ATTENDANCE_MARK, "Mark attendance", "ATTENDANCE",
+					"Record student attendance"),
+			new PermissionSeed(PermissionCode.ATTENDANCE_UPDATE, "Update attendance", "ATTENDANCE",
+					"Correct attendance records"),
+			new PermissionSeed(PermissionCode.STAFF_ATTENDANCE_VIEW, "View staff attendance", "ATTENDANCE",
+					"View staff and teacher attendance records"),
+			new PermissionSeed(PermissionCode.STAFF_ATTENDANCE_MANAGE, "Manage staff attendance", "ATTENDANCE",
+					"Record and update staff attendance"),
+			new PermissionSeed(PermissionCode.EXAM_VIEW, "View exams", "EXAM", "View examinations and schedules"),
+			new PermissionSeed(PermissionCode.EXAM_MANAGE, "Manage exams", "EXAM", "Create and manage examinations"),
+			new PermissionSeed(PermissionCode.EXAM_ENTER_MARKS, "Enter marks", "EXAM", "Enter student marks"),
+			new PermissionSeed(PermissionCode.EXAM_PUBLISH_RESULTS, "Publish results", "EXAM",
+					"Publish examination results"),
+			new PermissionSeed(PermissionCode.REPORT_VIEW, "View reports", "REPORT", "View permitted school reports")
 	);
 
 	private static final Map<String, List<PermissionCode>> ROLE_PERMISSION_MAPPINGS = Map.of(
@@ -76,7 +97,13 @@ public class AcademicDatabaseInitializer implements ApplicationRunner {
 					PermissionCode.STUDENT_UPDATE, PermissionCode.STUDENT_DELETE,
 					PermissionCode.STUDENT_ENROLLMENT_MANAGE, PermissionCode.STUDENT_GUARDIAN_MANAGE,
 					PermissionCode.STAFF_VIEW, PermissionCode.STAFF_MANAGE,
-					PermissionCode.TEACHER_VIEW, PermissionCode.TEACHER_MANAGE),
+					PermissionCode.TEACHER_VIEW, PermissionCode.TEACHER_MANAGE,
+					PermissionCode.TIMETABLE_VIEW, PermissionCode.TIMETABLE_MANAGE, PermissionCode.TIMETABLE_PUBLISH,
+					PermissionCode.ATTENDANCE_VIEW, PermissionCode.ATTENDANCE_MARK, PermissionCode.ATTENDANCE_UPDATE,
+					PermissionCode.STAFF_ATTENDANCE_VIEW, PermissionCode.STAFF_ATTENDANCE_MANAGE,
+					PermissionCode.EXAM_VIEW, PermissionCode.EXAM_MANAGE,
+					PermissionCode.EXAM_ENTER_MARKS, PermissionCode.EXAM_PUBLISH_RESULTS,
+					PermissionCode.REPORT_VIEW),
 			"PRINCIPAL", List.of(
 					PermissionCode.ACADEMIC_SESSION_VIEW, PermissionCode.ACADEMIC_SESSION_MANAGE,
 					PermissionCode.CLASS_VIEW, PermissionCode.CLASS_MANAGE,
@@ -87,25 +114,36 @@ public class AcademicDatabaseInitializer implements ApplicationRunner {
 					PermissionCode.STUDENT_UPDATE, PermissionCode.STUDENT_ENROLLMENT_MANAGE,
 					PermissionCode.STUDENT_GUARDIAN_MANAGE,
 					PermissionCode.STAFF_VIEW, PermissionCode.STAFF_MANAGE,
-					PermissionCode.TEACHER_VIEW, PermissionCode.TEACHER_MANAGE),
+					PermissionCode.TEACHER_VIEW, PermissionCode.TEACHER_MANAGE,
+					PermissionCode.TIMETABLE_VIEW, PermissionCode.TIMETABLE_MANAGE, PermissionCode.TIMETABLE_PUBLISH,
+					PermissionCode.ATTENDANCE_VIEW, PermissionCode.ATTENDANCE_MARK, PermissionCode.ATTENDANCE_UPDATE,
+					PermissionCode.STAFF_ATTENDANCE_VIEW, PermissionCode.STAFF_ATTENDANCE_MANAGE,
+					PermissionCode.EXAM_VIEW, PermissionCode.EXAM_MANAGE,
+					PermissionCode.EXAM_ENTER_MARKS, PermissionCode.EXAM_PUBLISH_RESULTS,
+					PermissionCode.REPORT_VIEW),
 			"RECEPTIONIST", List.of(
 					PermissionCode.STUDENT_VIEW, PermissionCode.STUDENT_CREATE,
 					PermissionCode.STUDENT_GUARDIAN_MANAGE,
-					PermissionCode.STAFF_VIEW, PermissionCode.TEACHER_VIEW),
+					PermissionCode.STAFF_VIEW, PermissionCode.TEACHER_VIEW,
+					PermissionCode.TIMETABLE_VIEW, PermissionCode.STAFF_ATTENDANCE_VIEW),
 			"TEACHER", List.of(
 					PermissionCode.ACADEMIC_SESSION_VIEW, PermissionCode.CLASS_VIEW,
 					PermissionCode.SECTION_VIEW, PermissionCode.SUBJECT_VIEW,
 					PermissionCode.CLASS_SUBJECT_VIEW, PermissionCode.STUDENT_VIEW,
-					PermissionCode.TEACHER_VIEW),
+					PermissionCode.TEACHER_VIEW, PermissionCode.TIMETABLE_VIEW,
+					PermissionCode.ATTENDANCE_VIEW, PermissionCode.ATTENDANCE_MARK, PermissionCode.ATTENDANCE_UPDATE,
+					PermissionCode.EXAM_VIEW, PermissionCode.EXAM_ENTER_MARKS, PermissionCode.REPORT_VIEW),
 			"SCHOOL_STAFF", List.of(
 					PermissionCode.ACADEMIC_SESSION_VIEW, PermissionCode.CLASS_VIEW,
 					PermissionCode.SECTION_VIEW, PermissionCode.SUBJECT_VIEW,
 					PermissionCode.CLASS_SUBJECT_VIEW, PermissionCode.STUDENT_VIEW,
-					PermissionCode.STAFF_VIEW, PermissionCode.TEACHER_VIEW),
+					PermissionCode.STAFF_VIEW, PermissionCode.TEACHER_VIEW,
+					PermissionCode.TIMETABLE_VIEW),
 			"ACCOUNTANT", List.of(
 					PermissionCode.ACADEMIC_SESSION_VIEW, PermissionCode.CLASS_VIEW,
 					PermissionCode.SECTION_VIEW, PermissionCode.STUDENT_VIEW,
-					PermissionCode.STAFF_VIEW, PermissionCode.TEACHER_VIEW)
+					PermissionCode.STAFF_VIEW, PermissionCode.TEACHER_VIEW,
+					PermissionCode.STAFF_ATTENDANCE_VIEW, PermissionCode.REPORT_VIEW)
 	);
 
 	@Override
@@ -238,6 +276,54 @@ public class AcademicDatabaseInitializer implements ApplicationRunner {
 				"ALTER TABLE teacher_subject_assignments ADD CONSTRAINT fk_tsa_subject_org FOREIGN KEY (subject_id, organization_id) REFERENCES subjects (id, organization_id)");
 		addForeignKeyIfAbsent("teacher_subject_assignments", "fk_tsa_teacher_org",
 				"ALTER TABLE teacher_subject_assignments ADD CONSTRAINT fk_tsa_teacher_org FOREIGN KEY (teacher_id, organization_id) REFERENCES teachers (id, organization_id)");
+		addForeignKeyIfAbsent("timetable_configs", "fk_tt_configs_org",
+				"ALTER TABLE timetable_configs ADD CONSTRAINT fk_tt_configs_org FOREIGN KEY (organization_id) REFERENCES organizations (id)");
+		addForeignKeyIfAbsent("timetable_periods", "fk_tt_periods_config_org",
+				"ALTER TABLE timetable_periods ADD CONSTRAINT fk_tt_periods_config_org FOREIGN KEY (timetable_config_id, organization_id) REFERENCES timetable_configs (id, organization_id)");
+		addForeignKeyIfAbsent("class_timetables", "fk_class_tt_session_org",
+				"ALTER TABLE class_timetables ADD CONSTRAINT fk_class_tt_session_org FOREIGN KEY (academic_session_id, organization_id) REFERENCES academic_sessions (id, organization_id)");
+		addForeignKeyIfAbsent("class_timetables", "fk_class_tt_class_org",
+				"ALTER TABLE class_timetables ADD CONSTRAINT fk_class_tt_class_org FOREIGN KEY (class_id, organization_id) REFERENCES classes (id, organization_id)");
+		addForeignKeyIfAbsent("class_timetables", "fk_class_tt_config_org",
+				"ALTER TABLE class_timetables ADD CONSTRAINT fk_class_tt_config_org FOREIGN KEY (timetable_config_id, organization_id) REFERENCES timetable_configs (id, organization_id)");
+		addForeignKeyIfAbsent("timetable_slots", "fk_tt_slots_timetable_org",
+				"ALTER TABLE timetable_slots ADD CONSTRAINT fk_tt_slots_timetable_org FOREIGN KEY (class_timetable_id, organization_id) REFERENCES class_timetables (id, organization_id)");
+		addForeignKeyIfAbsent("timetable_slots", "fk_tt_slots_period_org",
+				"ALTER TABLE timetable_slots ADD CONSTRAINT fk_tt_slots_period_org FOREIGN KEY (period_id, organization_id) REFERENCES timetable_periods (id, organization_id)");
+		addForeignKeyIfAbsent("timetable_slots", "fk_tt_slots_subject_org",
+				"ALTER TABLE timetable_slots ADD CONSTRAINT fk_tt_slots_subject_org FOREIGN KEY (subject_id, organization_id) REFERENCES subjects (id, organization_id)");
+		addForeignKeyIfAbsent("timetable_slots", "fk_tt_slots_teacher_org",
+				"ALTER TABLE timetable_slots ADD CONSTRAINT fk_tt_slots_teacher_org FOREIGN KEY (teacher_id, organization_id) REFERENCES teachers (id, organization_id)");
+		addForeignKeyIfAbsent("student_attendance", "fk_stu_att_session_org",
+				"ALTER TABLE student_attendance ADD CONSTRAINT fk_stu_att_session_org FOREIGN KEY (academic_session_id, organization_id) REFERENCES academic_sessions (id, organization_id)");
+		addForeignKeyIfAbsent("student_attendance", "fk_stu_att_class_org",
+				"ALTER TABLE student_attendance ADD CONSTRAINT fk_stu_att_class_org FOREIGN KEY (class_id, organization_id) REFERENCES classes (id, organization_id)");
+		addForeignKeyIfAbsent("student_attendance", "fk_stu_att_student_org",
+				"ALTER TABLE student_attendance ADD CONSTRAINT fk_stu_att_student_org FOREIGN KEY (student_id, organization_id) REFERENCES students (id, organization_id)");
+		addForeignKeyIfAbsent("staff_attendance", "fk_stf_att_staff_org",
+				"ALTER TABLE staff_attendance ADD CONSTRAINT fk_stf_att_staff_org FOREIGN KEY (staff_id, organization_id) REFERENCES staff (id, organization_id)");
+		addForeignKeyIfAbsent("grading_scales", "fk_grading_scales_org",
+				"ALTER TABLE grading_scales ADD CONSTRAINT fk_grading_scales_org FOREIGN KEY (organization_id) REFERENCES organizations (id)");
+		addForeignKeyIfAbsent("grading_rules", "fk_grading_rules_scale_org",
+				"ALTER TABLE grading_rules ADD CONSTRAINT fk_grading_rules_scale_org FOREIGN KEY (grading_scale_id, organization_id) REFERENCES grading_scales (id, organization_id)");
+		addForeignKeyIfAbsent("examinations", "fk_exams_session_org",
+				"ALTER TABLE examinations ADD CONSTRAINT fk_exams_session_org FOREIGN KEY (academic_session_id, organization_id) REFERENCES academic_sessions (id, organization_id)");
+		addForeignKeyIfAbsent("examinations", "fk_exams_class_org",
+				"ALTER TABLE examinations ADD CONSTRAINT fk_exams_class_org FOREIGN KEY (class_id, organization_id) REFERENCES classes (id, organization_id)");
+		addForeignKeyIfAbsent("examinations", "fk_exams_scale_org",
+				"ALTER TABLE examinations ADD CONSTRAINT fk_exams_scale_org FOREIGN KEY (grading_scale_id, organization_id) REFERENCES grading_scales (id, organization_id)");
+		addForeignKeyIfAbsent("exam_schedules", "fk_exam_sch_exam_org",
+				"ALTER TABLE exam_schedules ADD CONSTRAINT fk_exam_sch_exam_org FOREIGN KEY (examination_id, organization_id) REFERENCES examinations (id, organization_id)");
+		addForeignKeyIfAbsent("exam_schedules", "fk_exam_sch_subject_org",
+				"ALTER TABLE exam_schedules ADD CONSTRAINT fk_exam_sch_subject_org FOREIGN KEY (subject_id, organization_id) REFERENCES subjects (id, organization_id)");
+		addForeignKeyIfAbsent("exam_marks", "fk_exam_marks_exam_org",
+				"ALTER TABLE exam_marks ADD CONSTRAINT fk_exam_marks_exam_org FOREIGN KEY (examination_id, organization_id) REFERENCES examinations (id, organization_id)");
+		addForeignKeyIfAbsent("exam_marks", "fk_exam_marks_student_org",
+				"ALTER TABLE exam_marks ADD CONSTRAINT fk_exam_marks_student_org FOREIGN KEY (student_id, organization_id) REFERENCES students (id, organization_id)");
+		addForeignKeyIfAbsent("exam_results", "fk_exam_results_exam_org",
+				"ALTER TABLE exam_results ADD CONSTRAINT fk_exam_results_exam_org FOREIGN KEY (examination_id, organization_id) REFERENCES examinations (id, organization_id)");
+		addForeignKeyIfAbsent("exam_results", "fk_exam_results_student_org",
+				"ALTER TABLE exam_results ADD CONSTRAINT fk_exam_results_student_org FOREIGN KEY (student_id, organization_id) REFERENCES students (id, organization_id)");
 	}
 
 	private void addForeignKeyIfAbsent(String tableName, String constraintName, String alterSql) {
