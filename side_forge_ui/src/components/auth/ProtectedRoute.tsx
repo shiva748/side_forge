@@ -25,6 +25,8 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
     isOrgContextLoading,
     activeWorkspace,
     activeOrganization,
+    isOrganizationDeactivated,
+    isOrganizationRestricted,
     availableWorkspaces,
     hasPlatformAccess,
     activeMemberships,
@@ -114,6 +116,15 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
         />
       );
     }
+
+    // For a deactivated organization, route all school module paths to /app
+    // so only the dedicated Organization Deactivated screen is accessible
+    if (isOrganizationDeactivated) {
+      if (location.pathname !== '/app') {
+        return <Navigate to="/app" replace />;
+      }
+      return <>{children}</>;
+    }
   }
 
   if (requiredRoles && requiredRoles.length > 0 && !hasRole(requiredRoles)) {
@@ -146,7 +157,7 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
     );
   }
 
-  if (requiredFeature && !hasFeature(requiredFeature)) {
+  if (requiredFeature && !hasFeature(requiredFeature) && !isOrganizationRestricted) {
     return (
       <Navigate
         to="/unauthorized"

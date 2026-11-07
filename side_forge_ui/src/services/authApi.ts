@@ -7,6 +7,8 @@ import {
   PLATFORM_ROLE_PERMISSIONS,
   PlatformAdminUserResponse,
   RegisterUserRequest,
+  SchoolSubscriptionBillingSummaryResponse,
+  SchoolSubscriptionUsageResponse,
   UserProfile,
 } from '../types/auth';
 
@@ -112,7 +114,10 @@ export const authApi = {
   getOrganizationRoles: async (organizationId: number): Promise<OrganizationRoleDto[]> => {
     return apiClient.get<OrganizationRoleDto[]>(
       `/api/organizations/${organizationId}/roles`,
-      { suppressUnauthorizedEvent: true }
+      {
+        suppressUnauthorizedEvent: true,
+        suppressStatusRestrictionEvent: true,
+      }
     );
   },
 
@@ -124,7 +129,10 @@ export const authApi = {
   ): Promise<OrganizationSubscriptionResponse | null> => {
     return apiClient.get<OrganizationSubscriptionResponse | null>(
       `/api/organizations/${organizationId}/subscription`,
-      { suppressUnauthorizedEvent: true }
+      {
+        suppressUnauthorizedEvent: true,
+        suppressStatusRestrictionEvent: true,
+      }
     );
   },
 
@@ -136,7 +144,40 @@ export const authApi = {
   ): Promise<OrganizationEntitlementsResponse> => {
     return apiClient.get<OrganizationEntitlementsResponse>(
       `/api/organizations/${organizationId}/subscription/entitlements`,
-      { suppressUnauthorizedEvent: true }
+      {
+        suppressUnauthorizedEvent: true,
+        suppressStatusRestrictionEvent: true,
+      }
+    );
+  },
+
+  /**
+   * Loads student & storage usage for an organization (accessible during ACTIVE and SUSPENDED states).
+   */
+  getOrganizationUsage: async (
+    organizationId: number
+  ): Promise<SchoolSubscriptionUsageResponse> => {
+    return apiClient.get<SchoolSubscriptionUsageResponse>(
+      `/api/organizations/${organizationId}/subscription/usage`,
+      {
+        suppressUnauthorizedEvent: true,
+        suppressStatusRestrictionEvent: true,
+      }
+    );
+  },
+
+  /**
+   * Loads billing summary & payment receipts for an organization (accessible during ACTIVE and SUSPENDED states).
+   */
+  getOrganizationBillingSummary: async (
+    organizationId: number
+  ): Promise<SchoolSubscriptionBillingSummaryResponse> => {
+    return apiClient.get<SchoolSubscriptionBillingSummaryResponse>(
+      `/api/organizations/${organizationId}/subscription/billing`,
+      {
+        suppressUnauthorizedEvent: true,
+        suppressStatusRestrictionEvent: true,
+      }
     );
   },
 };

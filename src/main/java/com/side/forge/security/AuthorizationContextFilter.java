@@ -54,26 +54,26 @@ public class AuthorizationContextFilter extends OncePerRequestFilter {
         String path = organizationIdResolver.resolvePath(request);
         AuthorizationContext context;
 
-        if (isPlatformApi(path)) {
-            context = authorizationContextService.resolvePlatform(userId);
-        } else if (isOrganizationApi(path)) {
+            if ( isPlatformApi(path) ) {
+                context = authorizationContextService.resolvePlatform(userId);
+            } else if (isOrganizationApi(path)) {
             Long organizationId;
             try {
                 organizationId = organizationIdResolver.resolve(request);
             } catch (IllegalArgumentException exception) {
-                response.sendError(HttpServletResponse.SC_BAD_REQUEST, "Invalid organization context");
+                writeJsonError(response, HttpServletResponse.SC_BAD_REQUEST, "Invalid organization context");
                 return;
             }
 
             if (organizationId == null) {
-                response.sendError(HttpServletResponse.SC_BAD_REQUEST, "Organization ID is required in the URL");
+                writeJsonError(response, HttpServletResponse.SC_BAD_REQUEST, "Organization ID is required in the URL");
                 return;
             }
 
             try {
                 context = authorizationContextService.resolveOrganization(userId, organizationId);
             } catch (org.springframework.security.access.AccessDeniedException exception) {
-                response.sendError(HttpServletResponse.SC_FORBIDDEN,
+                writeJsonError(response, HttpServletResponse.SC_FORBIDDEN,
                         "No active membership in the requested organization");
                 return;
             }
@@ -100,5 +100,13 @@ public class AuthorizationContextFilter extends OncePerRequestFilter {
 
     private boolean isOrganizationApi(String path) {
         return ORGANIZATION_API.matcher(path).matches();
+    }
+
+    private void writeJsonError(HttpServletResponse response, int status, String message) throws IOException {
+        response.setStatus(status);
+        response.setContentType("application/json");
+        response.setCharacterEncoding("UTF-8");
+        String escaped = message != null ? message.replace("\\", "\\\\").replace("\"", "\\\"") : "Access denied";
+        response.getWriter().write("{\"success\":false,\"message\":\"" + escaped + "\",\"data\":null}");
     }
 }

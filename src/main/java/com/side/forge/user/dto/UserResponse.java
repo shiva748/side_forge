@@ -4,6 +4,7 @@ import java.time.Instant;
 import java.util.List;
 import java.util.Set;
 
+import com.side.forge.organization.entity.OrganizationStatus;
 import com.side.forge.user.entity.UserStatus;
 
 public record UserResponse(
@@ -39,7 +40,11 @@ public record UserResponse(
 			Long organizationId,
 			String organizationName,
 			String membershipStatus,
-			Set<String> roles
+			Set<String> roles,
+			OrganizationStatus organizationStatus,
+			String statusReason,
+			Instant statusChangedAt,
+			Set<String> permissions
 	) {
 	}
 }

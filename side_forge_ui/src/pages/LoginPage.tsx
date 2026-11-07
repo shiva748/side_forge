@@ -31,6 +31,8 @@ interface LoginLocationState {
 export const LoginPage: React.FC = () => {
   const {
     isAuthenticated,
+    isLoading,
+    isOrgContextLoading,
     activeWorkspace,
     activeOrganization,
     availableWorkspaces,
@@ -54,7 +56,7 @@ export const LoginPage: React.FC = () => {
     defaultValues: { email: locState.registeredEmail || '', password: '' },
   });
 
-  if (isAuthenticated) {
+  if (isAuthenticated && !isLoading && !isOrgContextLoading && !isSubmitting) {
     const fromPath = locState.from?.pathname;
     if (availableWorkspaces.length === 0) {
       return <Navigate to="/onboarding-status" replace />;

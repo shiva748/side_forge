@@ -20,7 +20,10 @@ import com.side.forge.authorization.repository.AuthorizationQueryRepository;
 import com.side.forge.authorization.repository.OrganizationMembershipRepository;
 import com.side.forge.common.utils.AuthenticationUtils;
 import com.side.forge.organization.entity.Organization;
+import com.side.forge.organization.entity.OrganizationStatus;
 import com.side.forge.organization.repository.OrganizationRepository;
+import com.side.forge.platform.saas.entity.OrganizationStatusHistory;
+import com.side.forge.platform.saas.repository.OrganizationStatusHistoryRepository;
 import com.side.forge.storage.dto.StorageDtos.DownloadedFilePayload;
 import com.side.forge.storage.dto.StorageDtos.StoredFileResponse;
 import com.side.forge.storage.entity.FileResourceCategory;
@@ -45,6 +48,7 @@ public class UserService {
 	private final OrganizationMembershipRepository membershipRepository;
 	private final AuthorizationQueryRepository authorizationQueryRepository;
 	private final OrganizationRepository organizationRepository;
+	private final OrganizationStatusHistoryRepository statusHistoryRepository;
 	private final PasswordEncoder passwordEncoder;
 	private final FileManagementService fileManagementService;
 
@@ -151,11 +155,34 @@ public class UserService {
 		for (OrganizationMembership m : memberships) {
 			Organization org = orgMap.get(m.getOrganizationId());
 			Set<String> roles = authorizationQueryRepository.findOrganizationRoles(user.getId(), m.getOrganizationId());
+			Set<String> permissions = authorizationQueryRepository.findOrganizationPermissions(
+					user.getId(), m.getOrganizationId());
+
+			OrganizationStatus orgStatus = org != null ? org.getStatus() : null;
+			String statusReason = null;
+			java.time.Instant statusChangedAt = null;
+
+			if (org != null && (orgStatus == OrganizationStatus.SUSPENDED || orgStatus == OrganizationStatus.DEACTIVATED)) {
+				List<OrganizationStatusHistory> history = statusHistoryRepository
+						.findAllByOrganizationIdOrderByCreatedAtDescIdDesc(org.getId());
+				for (OrganizationStatusHistory h : history) {
+					if (h.getNewStatus() == orgStatus) {
+						statusReason = h.getReason();
+						statusChangedAt = h.getCreatedAt();
+						break;
+					}
+				}
+			}
+
 			orgSummaries.add(new UserOrganizationSummary(
 					m.getOrganizationId(),
 					org != null ? org.getName() : null,
 					m.getStatus().name(),
-					roles
+					roles,
+					orgStatus,
+					statusReason,
+					statusChangedAt,
+					permissions
 			));
 		}
 

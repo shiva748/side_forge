@@ -28,7 +28,7 @@ import {
 import { useAuth } from '../context/AuthContext';
 import { ApiError } from '../lib/api-client';
 import { schoolDashboardApi } from '../services/schoolDashboardApi';
-import { formatRoleLabel } from '../types/auth';
+import { classifyOrganizationAccessError, formatRoleLabel } from '../types/auth';
 import { formatCurrencyINR } from '../types/platformSubscription';
 import {
   AcademicSessionResponse,
@@ -49,6 +49,7 @@ import {
 } from '../types/schoolDashboard';
 import { AppShell } from '../components/layout/AppShell';
 import { formatOnboardingDate } from '../components/platform/OnboardingRequestDetailsModal';
+import { SuspendedOrganizationWorkspaceView } from '../components/school/OrganizationStatusBanner';
 import { Badge, CounterLabel, IdLabel, RoleTag } from '../components/ui/Badge';
 import { Button } from '../components/ui/Button';
 import { Select } from '../components/ui/FormControls';
@@ -76,7 +77,10 @@ export const SchoolDashboardPage: React.FC = () => {
   const {
     activeOrganizationId,
     activeOrganization,
+    isOrganizationSuspended,
+    isOrganizationRestricted,
     organizationRoles,
+    revalidateOrganizationStatus,
     hasPermission,
     hasFeature,
   } = useAuth();
@@ -143,6 +147,26 @@ export const SchoolDashboardPage: React.FC = () => {
   const loadSchoolDashboard = useCallback(
     async (isManualRefresh = false) => {
       if (!activeOrganizationId) return;
+
+      if (isOrganizationRestricted) {
+        setAdminDash(null);
+        setPrincipalDash(null);
+        setAccountantDash(null);
+        setTeacherDash(null);
+        setSessions([]);
+        setRecentStudents([]);
+        setTotalStudentsCount(null);
+        setRecentStaff([]);
+        setTotalStaffCount(null);
+        setAnnouncements([]);
+        setError(null);
+        setIsLoading(false);
+        setIsRefreshing(false);
+        if (isManualRefresh) {
+          await revalidateOrganizationStatus();
+        }
+        return;
+      }
 
       if (isManualRefresh) {
         setIsRefreshing(true);
@@ -264,11 +288,15 @@ export const SchoolDashboardPage: React.FC = () => {
 
         await Promise.all(tasks);
       } catch (err) {
-        setError(
-          err instanceof ApiError
-            ? err.message
-            : 'Unable to load school dashboard information. Please try again.'
-        );
+        const classified = classifyOrganizationAccessError(err);
+        if (
+          classified.kind === 'ORG_SUSPENDED' ||
+          classified.kind === 'ORG_DEACTIVATED'
+        ) {
+          setError(null);
+          return;
+        }
+        setError(classified.userMessage);
       } finally {
         setIsLoading(false);
         setIsRefreshing(false);
@@ -284,7 +312,9 @@ export const SchoolDashboardPage: React.FC = () => {
       canViewStudents,
       hasDashboardFeature,
       isAdminOrPrincipalCapable,
+      isOrganizationRestricted,
       isTeacherRole,
+      revalidateOrganizationStatus,
       selectedSessionId,
     ]
   );
@@ -305,7 +335,11 @@ export const SchoolDashboardPage: React.FC = () => {
     if (selectedSessionId) {
       return sessions.find((s) => s.id === selectedSessionId) || null;
     }
-    return sessions.find((s) => s.status === 'CURRENT') || sessions[0] || null;
+    return (
+      sessions.find((s) => s.status === 'ACTIVE' || s.status === 'CURRENT') ||
+      sessions[0] ||
+      null
+    );
   }, [selectedSessionId, sessions]);
 
   const activeSessionName =
@@ -496,7 +530,11 @@ export const SchoolDashboardPage: React.FC = () => {
           description="Daily academic operations, attendance overview, upcoming examinations, fee collections, and recent school activity."
           badge={
             <div className="flex flex-wrap items-center gap-2">
-              {activeSessionName ? (
+              {isOrganizationSuspended ? (
+                <Badge variant="warning" dot>
+                  Organization Suspended
+                </Badge>
+              ) : activeSessionName ? (
                 <Badge variant={sessionBadgeMeta.variant} dot>
                   {activeSessionName} ({sessionBadgeMeta.label})
                 </Badge>
@@ -510,7 +548,7 @@ export const SchoolDashboardPage: React.FC = () => {
           }
           actions={
             <div className="flex flex-wrap items-center gap-2">
-              {sessions.length > 0 && (
+              {!isOrganizationSuspended && sessions.length > 0 && (
                 <Select
                   aria-label="Select Academic Session"
                   value={selectedSessionId ? String(selectedSessionId) : ''}
@@ -542,7 +580,9 @@ export const SchoolDashboardPage: React.FC = () => {
           }
         />
 
-        {isLoading ? (
+        {isOrganizationSuspended ? (
+          <SuspendedOrganizationWorkspaceView />
+        ) : isLoading ? (
           <LoadingState label="Loading school dashboard..." />
         ) : error ? (
           <ErrorState
@@ -699,6 +739,17 @@ export const SchoolDashboardPage: React.FC = () => {
               </div>
 
               <div className="flex flex-wrap items-center gap-2">
+                {hasAcademicFeature && (
+                  <Button
+                    variant="primary"
+                    size="sm"
+                    onClick={() => navigate('/app/academics')}
+                    leftIcon={<Calendar className="w-3.5 h-3.5" />}
+                  >
+                    Academic Management
+                  </Button>
+                )}
+
                 <Button
                   variant="outline"
                   size="sm"

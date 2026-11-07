@@ -25,6 +25,8 @@ export const WorkspaceShellPlaceholder: React.FC<WorkspaceShellPlaceholderProps>
     platformRoles,
     platformPermissions,
     activeOrganization,
+    activeOrganizationStatus,
+    activeOrganizationRestriction,
     activeMemberships,
     organizationRoles,
     organizationPermissions,
@@ -104,12 +106,39 @@ export const WorkspaceShellPlaceholder: React.FC<WorkspaceShellPlaceholderProps>
                   </Badge>
                 </dd>
               </div>
-              <div className="flex justify-between items-center py-1">
+              <div className="flex justify-between items-center py-1 border-b border-slate-100">
                 <dt className="text-slate-500">Active Memberships</dt>
                 <dd>
                   <CounterLabel count={activeMemberships.length} />
                 </dd>
               </div>
+              {workspace === 'SCHOOL' && (
+                <div className="flex justify-between items-center py-1">
+                  <dt className="text-slate-500">Organization Status</dt>
+                  <dd>
+                    <Badge
+                      variant={
+                        activeOrganizationStatus === 'ACTIVE'
+                          ? 'success'
+                          : activeOrganizationStatus === 'SUSPENDED'
+                          ? 'warning'
+                          : 'danger'
+                      }
+                      dot
+                    >
+                      {activeOrganizationStatus}
+                    </Badge>
+                  </dd>
+                </div>
+              )}
+              {workspace === 'SCHOOL' && activeOrganizationRestriction?.reason && (
+                <div className="pt-1 border-t border-slate-100">
+                  <dt className="text-slate-500 mb-0.5">Status Reason</dt>
+                  <dd className="text-slate-800 font-medium">
+                    {activeOrganizationRestriction.reason}
+                  </dd>
+                </div>
+              )}
             </dl>
           </div>
 

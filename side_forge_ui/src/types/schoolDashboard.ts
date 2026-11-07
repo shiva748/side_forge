@@ -1,6 +1,12 @@
 import { BadgeVariant } from '../components/ui/Badge';
 
-export type AcademicSessionStatus = 'UPCOMING' | 'CURRENT' | 'COMPLETED' | 'ARCHIVED';
+export type AcademicSessionStatus =
+  | 'PLANNED'
+  | 'ACTIVE'
+  | 'COMPLETED'
+  | 'UPCOMING'
+  | 'CURRENT'
+  | 'ARCHIVED';
 export type AcademicSessionScope = 'CURRENT' | 'PREVIOUS' | 'SPECIFIC';
 
 export type ExaminationStatus =
@@ -476,10 +482,12 @@ export function getAcademicSessionStatusBadgeMeta(
   status?: AcademicSessionStatus | string | null
 ): { label: string; variant: BadgeVariant } {
   switch (status) {
+    case 'ACTIVE':
     case 'CURRENT':
-      return { label: 'Current Session', variant: 'success' };
+      return { label: 'Active Session', variant: 'success' };
+    case 'PLANNED':
     case 'UPCOMING':
-      return { label: 'Upcoming', variant: 'info' };
+      return { label: 'Planned', variant: 'info' };
     case 'COMPLETED':
       return { label: 'Completed', variant: 'neutral' };
     case 'ARCHIVED':

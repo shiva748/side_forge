@@ -4,16 +4,25 @@ import React, {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
 } from 'react';
-import { AUTH_UNAUTHORIZED_EVENT } from '../lib/api-client';
+import {
+  ApiError,
+  AUTH_UNAUTHORIZED_EVENT,
+  ORG_STATUS_RESTRICTED_EVENT,
+  OrgStatusRestrictedEventDetail,
+} from '../lib/api-client';
 import { queryClient } from '../lib/query-client';
 import { authApi } from '../services/authApi';
+import { platformDashboardApi } from '../services/platformDashboardApi';
 import {
   LoginUserRequest,
   OrganizationEntitlementsResponse,
+  OrganizationRestrictionInfo,
   OrganizationSubscriptionResponse,
   PlatformFeature,
+  SchoolOrganizationStatus,
   SYSTEM_ROLE_PERMISSIONS,
   UserOrganizationSummary,
   UserProfile,
@@ -38,6 +47,12 @@ export interface AuthContextValue {
   platformPermissions: Set<string>;
   activeOrganizationId: number | null;
   activeOrganization: UserOrganizationSummary | null;
+  activeOrganizationStatus: SchoolOrganizationStatus;
+  activeOrganizationRestriction: OrganizationRestrictionInfo | null;
+  organizationStatusById: Record<number, OrganizationRestrictionInfo>;
+  isOrganizationSuspended: boolean;
+  isOrganizationDeactivated: boolean;
+  isOrganizationRestricted: boolean;
   activeMemberships: UserOrganizationSummary[];
   inactiveMemberships: UserOrganizationSummary[];
   organizationRoles: Set<string>;
@@ -48,8 +63,10 @@ export interface AuthContextValue {
   login: (credentials: LoginUserRequest) => Promise<{ defaultRoute: string }>;
   logout: () => Promise<void>;
   refreshSession: () => Promise<void>;
+  revalidateOrganizationStatus: () => Promise<SchoolOrganizationStatus>;
+  revalidateAllOrganizationsStatuses: () => Promise<void>;
   activatePlatformWorkspace: () => void;
-  selectOrganization: (organizationId: number) => void;
+  selectOrganization: (organizationId: number) => Promise<SchoolOrganizationStatus>;
   switchWorkspace: (workspace: WorkspaceType, organizationId?: number) => void;
   hasPermission: (permission: string | string[]) => boolean;
   hasRole: (role: string | string[]) => boolean;
@@ -73,6 +90,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [organizationPermissions, setOrganizationPermissions] = useState<Set<string>>(new Set());
   const [subscription, setSubscription] = useState<OrganizationSubscriptionResponse | null>(null);
   const [entitlements, setEntitlements] = useState<OrganizationEntitlementsResponse | null>(null);
+  const [organizationStatusById, setOrganizationStatusById] = useState<
+    Record<number, OrganizationRestrictionInfo>
+  >({});
+  const lastFocusCheckRef = useRef<number>(0);
+  const contextLoadSeqRef = useRef<number>(0);
+  const hasBootstrappedRef = useRef<boolean>(false);
+  const lastRestrictionEventByOrgRef = useRef<Record<number, number>>({});
 
   const activeMemberships = useMemo(() => {
     if (!user?.organizations) return [];
@@ -97,6 +121,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       });
     }
     for (const m of activeMemberships) {
+      const info = organizationStatusById[m.organizationId];
+      const knownStatus = info?.status || m.organizationStatus || 'ACTIVE';
       list.push({
         key: `SCHOOL:${m.organizationId}`,
         workspaceType: 'SCHOOL',
@@ -104,15 +130,65 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         displayName: m.organizationName || `School #${m.organizationId}`,
         roles: Array.isArray(m.roles) ? m.roles : [],
         membershipStatus: m.membershipStatus,
+        organizationStatus: knownStatus,
+        statusReason: info?.reason ?? m.statusReason ?? m.suspensionReason ?? null,
+        statusChangedAt: info?.changedAt ?? m.statusChangedAt ?? null,
       });
     }
     return list;
-  }, [activeMemberships, hasPlatformAccess, platformRoles]);
+  }, [activeMemberships, hasPlatformAccess, organizationStatusById, platformRoles]);
 
   const activeOrganization = useMemo(() => {
     if (!activeOrganizationId) return null;
     return activeMemberships.find((m) => m.organizationId === activeOrganizationId) || null;
   }, [activeMemberships, activeOrganizationId]);
+
+  const activeOrganizationRestriction = useMemo<OrganizationRestrictionInfo | null>(() => {
+    if (!activeOrganizationId) return null;
+    if (organizationStatusById[activeOrganizationId]) {
+      return organizationStatusById[activeOrganizationId];
+    }
+    if (activeOrganization?.organizationStatus) {
+      return {
+        organizationId: activeOrganization.organizationId,
+        status: activeOrganization.organizationStatus,
+        reason:
+          activeOrganization.statusReason ??
+          activeOrganization.suspensionReason ??
+          null,
+        changedAt: activeOrganization.statusChangedAt ?? null,
+        detectedAt: new Date().toISOString(),
+        backendMessage: null,
+      };
+    }
+    return null;
+  }, [activeOrganization, activeOrganizationId, organizationStatusById]);
+
+  const activeOrganizationStatus = useMemo<SchoolOrganizationStatus>(() => {
+    if (!activeOrganizationId) return 'ACTIVE';
+    return (
+      activeOrganizationRestriction?.status ||
+      activeOrganization?.organizationStatus ||
+      'ACTIVE'
+    );
+  }, [activeOrganization, activeOrganizationId, activeOrganizationRestriction]);
+
+  const isOrganizationSuspended =
+    activeWorkspace === 'SCHOOL' && activeOrganizationStatus === 'SUSPENDED';
+  const isOrganizationDeactivated =
+    activeWorkspace === 'SCHOOL' && activeOrganizationStatus === 'DEACTIVATED';
+  const isOrganizationRestricted =
+    isOrganizationSuspended || isOrganizationDeactivated;
+
+  // Keep refs synchronized so async callbacks remain stable and never trigger useEffect loops
+  const activeMembershipsRef = useRef<UserOrganizationSummary[]>(activeMemberships);
+  activeMembershipsRef.current = activeMemberships;
+  const hasPlatformAccessRef = useRef<boolean>(hasPlatformAccess);
+  hasPlatformAccessRef.current = hasPlatformAccess;
+  const activeOrganizationIdRef = useRef<number | null>(activeOrganizationId);
+  activeOrganizationIdRef.current = activeOrganizationId;
+  const activeOrganizationRef = useRef<UserOrganizationSummary | null>(activeOrganization);
+  activeOrganizationRef.current = activeOrganization;
 
   const activeWorkspaceOption = useMemo<WorkspaceContextOption | null>(() => {
     if (activeWorkspace === 'PLATFORM' && hasPlatformAccess) {
@@ -146,33 +222,221 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setOrganizationPermissions(new Set());
     setSubscription(null);
     setEntitlements(null);
+    setOrganizationStatusById({});
   }, []);
 
+  const probeOrganizationStatusInfo = useCallback(
+    async (
+      org: UserOrganizationSummary,
+      canQueryPlatform: boolean
+    ): Promise<OrganizationRestrictionInfo> => {
+      // 0. If GET /api/me already supplied the authoritative database organizationStatus, use it directly
+      if (
+        org.organizationStatus === 'ACTIVE' ||
+        org.organizationStatus === 'SUSPENDED' ||
+        org.organizationStatus === 'DEACTIVATED'
+      ) {
+        return {
+          organizationId: org.organizationId,
+          status: org.organizationStatus,
+          reason: org.statusReason ?? org.suspensionReason ?? null,
+          changedAt: org.statusChangedAt ?? null,
+          detectedAt: new Date().toISOString(),
+          backendMessage: null,
+        };
+      }
+
+      // 1. If user has platform organization view permission, query authoritative status + history
+      if (canQueryPlatform) {
+        try {
+          const detail = await platformDashboardApi.getOrganizationDetails(
+            org.organizationId
+          );
+          if (
+            detail.status === 'ACTIVE' ||
+            detail.status === 'SUSPENDED' ||
+            detail.status === 'DEACTIVATED'
+          ) {
+            const matchingHist = detail.statusHistory?.find(
+              (h) => h.newStatus === detail.status
+            );
+            return {
+              organizationId: org.organizationId,
+              status: detail.status,
+              reason: matchingHist?.reason ?? org.suspensionReason ?? null,
+              changedAt: matchingHist?.createdAt ?? org.statusChangedAt ?? null,
+              detectedAt: new Date().toISOString(),
+              backendMessage: null,
+            };
+          }
+        } catch {
+          // Fall back to tenant endpoint probing below
+        }
+      }
+
+      // 2. Probe tenant endpoints (/roles and /subscription) with suppressUnauthorizedEvent: true
+      const [rolesRes, subRes] = await Promise.allSettled([
+        authApi.getOrganizationRoles(org.organizationId),
+        authApi.getOrganizationSubscription(org.organizationId),
+      ]);
+
+      const errors: ApiError[] = [];
+      for (const r of [rolesRes, subRes]) {
+        if (r.status === 'rejected' && r.reason instanceof ApiError) {
+          errors.push(r.reason);
+        }
+      }
+
+      const suspendedErr = errors.find((e) =>
+        /current status is SUSPENDED/i.test(e.message)
+      );
+      const deactivatedErr = errors.find((e) =>
+        /current status is DEACTIVATED/i.test(e.message)
+      );
+      const bothBlockedByFilter =
+        rolesRes.status === 'rejected' &&
+        subRes.status === 'rejected' &&
+        errors.length === 2 &&
+        errors.every((e) => e.status === 403 || e.status === 401);
+
+      let status: SchoolOrganizationStatus = org.organizationStatus || 'ACTIVE';
+      let backendMessage: string | null = null;
+
+      if (deactivatedErr) {
+        status = 'DEACTIVATED';
+        backendMessage = deactivatedErr.message;
+      } else if (suspendedErr) {
+        status = 'SUSPENDED';
+        backendMessage = suspendedErr.message;
+      } else if (bothBlockedByFilter && org.membershipStatus === 'ACTIVE') {
+        status = 'DEACTIVATED';
+        backendMessage =
+          errors[0]?.message ||
+          'Organization is deactivated and normal operations are unavailable.';
+      } else {
+        status = 'ACTIVE';
+      }
+
+      return {
+        organizationId: org.organizationId,
+        status,
+        reason: org.suspensionReason ?? null,
+        changedAt: org.statusChangedAt ?? null,
+        detectedAt: new Date().toISOString(),
+        backendMessage,
+      };
+    },
+    []
+  );
+
+  const revalidateAllOrganizationsStatuses = useCallback(
+    async (
+      orgsOverride?: UserOrganizationSummary[],
+      canQueryPlatformOverride?: boolean
+    ) => {
+      let targetOrgs = orgsOverride;
+      if (!targetOrgs) {
+        try {
+          const freshProfile = await authApi.getCurrentUser();
+          if (freshProfile && typeof freshProfile.id === 'number') {
+            setUser(freshProfile);
+            targetOrgs = (freshProfile.organizations || []).filter(
+              (m) => m.membershipStatus === 'ACTIVE'
+            );
+          }
+        } catch {
+          targetOrgs = activeMembershipsRef.current;
+        }
+      }
+
+      const listToProbe = targetOrgs ?? activeMembershipsRef.current;
+      const canQuery = canQueryPlatformOverride ?? hasPlatformAccessRef.current;
+      if (!listToProbe || listToProbe.length === 0) return;
+
+      const results = await Promise.allSettled(
+        listToProbe.map((org) => probeOrganizationStatusInfo(org, canQuery))
+      );
+
+      setOrganizationStatusById((prev) => {
+        const next = { ...prev };
+        for (const res of results) {
+          if (res.status === 'fulfilled' && res.value) {
+            next[res.value.organizationId] = res.value;
+          }
+        }
+        return next;
+      });
+    },
+    [probeOrganizationStatusInfo]
+  );
+
   const loadOrganizationContext = useCallback(
-    async (org: UserOrganizationSummary | null) => {
+    async (
+      org: UserOrganizationSummary | null,
+      options?: { silent?: boolean; canQueryPlatform?: boolean }
+    ): Promise<SchoolOrganizationStatus> => {
+      const seq = ++contextLoadSeqRef.current;
+
       if (!org) {
         setOrganizationPermissions(new Set());
         setSubscription(null);
         setEntitlements(null);
-        return;
+        setIsOrgContextLoading(false);
+        return 'ACTIVE';
       }
 
-      setIsOrgContextLoading(true);
+      if (!options?.silent) {
+        setIsOrgContextLoading(true);
+      }
       try {
-        // Seed permissions from known system role mappings first
-        const resolvedPermissions = new Set<string>();
+        // Seed permissions from /api/me permissions (if present) and system role mappings
+        const resolvedPermissions = new Set<string>(org.permissions || []);
         for (const roleCode of org.roles) {
           for (const perm of SYSTEM_ROLE_PERMISSIONS[roleCode] || []) {
             resolvedPermissions.add(perm);
           }
         }
 
-        // Fetch live role definitions (including custom org roles) + subscription + entitlements in parallel
+        // If /api/me already confirmed the organization is DEACTIVATED, avoid firing
+        // doomed tenant calls that AuthorizationContextFilter will reject
+        if (org.organizationStatus === 'DEACTIVATED') {
+          const reason =
+            org.statusReason ?? org.suspensionReason ?? null;
+          const changedAt = org.statusChangedAt ?? null;
+
+          if (seq !== contextLoadSeqRef.current) return 'DEACTIVATED';
+
+          setOrganizationPermissions(resolvedPermissions);
+          setSubscription(null);
+          setEntitlements(null);
+          setOrganizationStatusById((prev) => ({
+            ...prev,
+            [org.organizationId]: {
+              organizationId: org.organizationId,
+              status: 'DEACTIVATED',
+              reason,
+              changedAt,
+              detectedAt: new Date().toISOString(),
+              backendMessage:
+                'This school organization has been deactivated by the Side_forge platform administrator.',
+            },
+          }));
+          return 'DEACTIVATED';
+        }
+
+        // Fetch live role definitions (when not known-suspended) + subscription + entitlements in parallel
+        const isKnownSuspended = org.organizationStatus === 'SUSPENDED';
         const [rolesResult, subResult, entResult] = await Promise.allSettled([
-          authApi.getOrganizationRoles(org.organizationId),
+          isKnownSuspended
+            ? Promise.resolve([] as never[])
+            : authApi.getOrganizationRoles(org.organizationId),
           authApi.getOrganizationSubscription(org.organizationId),
           authApi.getOrganizationEntitlements(org.organizationId),
         ]);
+
+        if (seq !== contextLoadSeqRef.current) {
+          return org.organizationStatus || 'ACTIVE';
+        }
 
         if (rolesResult.status === 'fulfilled' && Array.isArray(rolesResult.value)) {
           const userRoleSet = new Set(org.roles);
@@ -186,10 +450,113 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         }
 
         setOrganizationPermissions(resolvedPermissions);
-        setSubscription(subResult.status === 'fulfilled' ? subResult.value : null);
-        setEntitlements(entResult.status === 'fulfilled' ? entResult.value : null);
+        const rejectedErrors: ApiError[] = [];
+        for (const res of [rolesResult, subResult, entResult]) {
+          if (res.status === 'rejected' && res.reason instanceof ApiError) {
+            rejectedErrors.push(res.reason);
+          }
+        }
+
+        let detectedStatus: SchoolOrganizationStatus =
+          org.organizationStatus || 'ACTIVE';
+        let backendMessage: string | null = null;
+
+        const suspendedErr = rejectedErrors.find((e) =>
+          /current status is SUSPENDED/i.test(e.message)
+        );
+        const deactivatedErr = rejectedErrors.find((e) =>
+          /current status is DEACTIVATED/i.test(e.message)
+        );
+        const allThreeBlocked =
+          rolesResult.status === 'rejected' &&
+          subResult.status === 'rejected' &&
+          entResult.status === 'rejected' &&
+          rejectedErrors.length === 3 &&
+          rejectedErrors.every((e) => e.status === 403 || e.status === 401);
+
+        if (org.organizationStatus === 'SUSPENDED' || suspendedErr) {
+          detectedStatus = 'SUSPENDED';
+          backendMessage = suspendedErr?.message || null;
+        } else if (deactivatedErr) {
+          detectedStatus = 'DEACTIVATED';
+          backendMessage = deactivatedErr.message;
+        } else if (allThreeBlocked && org.membershipStatus === 'ACTIVE') {
+          try {
+            const latestProfile = await authApi.getCurrentUser();
+            if (seq === contextLoadSeqRef.current) {
+              setUser(latestProfile);
+            }
+            const latestMembership = (latestProfile.organizations || []).find(
+              (m) => m.organizationId === org.organizationId
+            );
+            if (latestMembership && latestMembership.membershipStatus === 'ACTIVE') {
+              detectedStatus =
+                latestMembership.organizationStatus || 'DEACTIVATED';
+              backendMessage =
+                rejectedErrors[0]?.message ||
+                'Organization is deactivated and normal operations are unavailable.';
+            }
+          } catch {
+            detectedStatus = 'DEACTIVATED';
+          }
+        } else {
+          detectedStatus = 'ACTIVE';
+        }
+
+        let reason: string | null =
+          org.statusReason ?? org.suspensionReason ?? null;
+        let changedAt: string | null = org.statusChangedAt ?? null;
+
+        if (
+          (detectedStatus === 'SUSPENDED' || detectedStatus === 'DEACTIVATED') &&
+          (!reason || !changedAt) &&
+          (options?.canQueryPlatform ?? hasPlatformAccessRef.current)
+        ) {
+          try {
+            const detail = await platformDashboardApi.getOrganizationDetails(
+              org.organizationId
+            );
+            const matchingHist = detail.statusHistory?.find(
+              (h) => h.newStatus === detectedStatus
+            );
+            if (matchingHist) {
+              reason = matchingHist.reason || reason;
+              changedAt = matchingHist.createdAt || changedAt;
+            }
+          } catch {
+            // Platform endpoint not permitted for pure school admin; ignore
+          }
+        }
+
+        if (seq !== contextLoadSeqRef.current) {
+          return detectedStatus;
+        }
+
+        setOrganizationStatusById((prev) => ({
+          ...prev,
+          [org.organizationId]: {
+            organizationId: org.organizationId,
+            status: detectedStatus,
+            reason,
+            changedAt,
+            detectedAt: new Date().toISOString(),
+            backendMessage,
+          },
+        }));
+
+        if (detectedStatus === 'DEACTIVATED') {
+          setSubscription(null);
+          setEntitlements(null);
+        } else {
+          setSubscription(subResult.status === 'fulfilled' ? subResult.value : null);
+          setEntitlements(entResult.status === 'fulfilled' ? entResult.value : null);
+        }
+
+        return detectedStatus;
       } finally {
-        setIsOrgContextLoading(false);
+        if (seq === contextLoadSeqRef.current && !options?.silent) {
+          setIsOrgContextLoading(false);
+        }
       }
     },
     []
@@ -248,7 +615,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           setActiveOrganizationId(singleOrg.organizationId);
           localStorage.setItem(ACTIVE_WORKSPACE_STORAGE_KEY, 'SCHOOL');
           localStorage.setItem(ACTIVE_ORG_STORAGE_KEY, String(singleOrg.organizationId));
-          await loadOrganizationContext(singleOrg);
+          await loadOrganizationContext(singleOrg, {
+            canQueryPlatform: platformCtx.hasPlatformAccess,
+          });
           return { profile, defaultRoute: '/app' };
         }
 
@@ -260,6 +629,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           localStorage.removeItem(ACTIVE_WORKSPACE_STORAGE_KEY);
           localStorage.removeItem(ACTIVE_ORG_STORAGE_KEY);
           await loadOrganizationContext(null);
+          await revalidateAllOrganizationsStatuses(
+            activeOrgs,
+            platformCtx.hasPlatformAccess
+          );
           return { profile, defaultRoute: '/workspaces' };
         }
 
@@ -277,13 +650,28 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           setActiveOrganizationId(null);
           localStorage.removeItem(ACTIVE_ORG_STORAGE_KEY);
           await loadOrganizationContext(null);
+          void revalidateAllOrganizationsStatuses(
+            activeOrgs,
+            platformCtx.hasPlatformAccess
+          );
           return { profile, defaultRoute: '/platform' };
         }
 
         if (storedWorkspace === 'SCHOOL' && matchedStoredOrg) {
           setActiveWorkspace('SCHOOL');
           setActiveOrganizationId(matchedStoredOrg.organizationId);
-          await loadOrganizationContext(matchedStoredOrg);
+          const otherOrgs = activeOrgs.filter(
+            (o) => o.organizationId !== matchedStoredOrg.organizationId
+          );
+          if (otherOrgs.length > 0) {
+            void revalidateAllOrganizationsStatuses(
+              otherOrgs,
+              platformCtx.hasPlatformAccess
+            );
+          }
+          await loadOrganizationContext(matchedStoredOrg, {
+            canQueryPlatform: platformCtx.hasPlatformAccess,
+          });
           return { profile, defaultRoute: '/app' };
         }
 
@@ -293,16 +681,22 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         localStorage.removeItem(ACTIVE_WORKSPACE_STORAGE_KEY);
         localStorage.removeItem(ACTIVE_ORG_STORAGE_KEY);
         await loadOrganizationContext(null);
+        await revalidateAllOrganizationsStatuses(
+          activeOrgs,
+          platformCtx.hasPlatformAccess
+        );
         return { profile, defaultRoute: '/workspaces' };
       } catch {
         clearAuthState();
         return null;
       }
     },
-    [clearAuthState, loadOrganizationContext]
+    [clearAuthState, loadOrganizationContext, revalidateAllOrganizationsStatuses]
   );
 
   useEffect(() => {
+    if (hasBootstrappedRef.current) return;
+    hasBootstrappedRef.current = true;
     let mounted = true;
     (async () => {
       setIsLoading(true);
@@ -318,22 +712,176 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }, [hydrateUserSession]);
 
   useEffect(() => {
-    const handleUnauthorized = () => {
-      clearAuthState();
-      queryClient.clear();
+    let isVerifyingAuth = false;
+    const handleUnauthorized = async (event: Event) => {
+      const custom = event as CustomEvent<{
+        endpoint?: string;
+        isOrganizationEndpoint?: boolean;
+      }>;
+      const endpoint = custom.detail?.endpoint || '';
+
+      // If /api/me itself returned 401, the user's JWT session is genuinely expired/invalid
+      if (endpoint === '/api/me' || endpoint.startsWith('/api/me?')) {
+        clearAuthState();
+        queryClient.clear();
+        return;
+      }
+
+      if (isVerifyingAuth) return;
+      isVerifyingAuth = true;
+      try {
+        // Verify with /api/me whether the user's JWT session is still valid.
+        // Do not interpret a failed tenant endpoint request as user logout if /api/me succeeds.
+        const profile = await authApi.getCurrentUser();
+        if (!profile || typeof profile.id !== 'number') {
+          clearAuthState();
+          queryClient.clear();
+        } else {
+          setUser(profile);
+        }
+      } catch {
+        clearAuthState();
+        queryClient.clear();
+      } finally {
+        isVerifyingAuth = false;
+      }
     };
     window.addEventListener(AUTH_UNAUTHORIZED_EVENT, handleUnauthorized);
     return () => window.removeEventListener(AUTH_UNAUTHORIZED_EVENT, handleUnauthorized);
   }, [clearAuthState]);
 
+  const revalidateOrganizationStatus = useCallback(async (): Promise<SchoolOrganizationStatus> => {
+    const currentOrgId = activeOrganizationIdRef.current;
+    try {
+      const freshProfile = await authApi.getCurrentUser();
+      if (freshProfile && typeof freshProfile.id === 'number') {
+        setUser(freshProfile);
+        const activeOrgs = (freshProfile.organizations || []).filter(
+          (m) => m.membershipStatus === 'ACTIVE'
+        );
+        await revalidateAllOrganizationsStatuses(
+          activeOrgs,
+          hasPlatformAccessRef.current
+        );
+        const freshTarget = activeOrgs.find(
+          (m) => m.organizationId === currentOrgId
+        );
+        if (freshTarget) {
+          const nextStatus = await loadOrganizationContext(freshTarget, {
+            silent: false,
+          });
+          await queryClient.invalidateQueries();
+          return nextStatus;
+        }
+      }
+    } catch {
+      // Fall back to existing activeOrganization reference
+    }
+
+    const currentOrg = activeOrganizationRef.current;
+    if (!currentOrg) {
+      await hydrateUserSession({ isFreshLogin: false });
+      return 'ACTIVE';
+    }
+    const nextStatus = await loadOrganizationContext(currentOrg, {
+      silent: false,
+    });
+    await queryClient.invalidateQueries();
+    return nextStatus;
+  }, [
+    hydrateUserSession,
+    loadOrganizationContext,
+    revalidateAllOrganizationsStatuses,
+  ]);
+
+  // Listen for real-time 403 organization suspension / deactivation signals from apiClient
+  useEffect(() => {
+    const handleOrgStatusRestricted = (event: Event) => {
+      const custom = event as CustomEvent<OrgStatusRestrictedEventDetail>;
+      const detail = custom.detail;
+      if (!detail || !detail.organizationId) return;
+
+      const now = Date.now();
+      const lastHandled =
+        lastRestrictionEventByOrgRef.current[detail.organizationId] || 0;
+      if (now - lastHandled < 5000) {
+        return;
+      }
+      lastRestrictionEventByOrgRef.current[detail.organizationId] = now;
+
+      if (
+        detail.detectedStatus === 'SUSPENDED' ||
+        detail.detectedStatus === 'DEACTIVATED'
+      ) {
+        const immediateStatus: SchoolOrganizationStatus = detail.detectedStatus;
+        setOrganizationStatusById((prev) => {
+          const existing = prev[detail.organizationId];
+          if (existing?.status === immediateStatus) return prev;
+          return {
+            ...prev,
+            [detail.organizationId]: {
+              organizationId: detail.organizationId,
+              status: immediateStatus,
+              reason: existing?.reason ?? null,
+              changedAt: existing?.changedAt ?? null,
+              detectedAt: new Date().toISOString(),
+              backendMessage: detail.message,
+            },
+          };
+        });
+        void queryClient.invalidateQueries();
+        return;
+      }
+
+      const targetOrg = activeMembershipsRef.current.find(
+        (m) => m.organizationId === detail.organizationId
+      );
+      if (targetOrg) {
+        void loadOrganizationContext(targetOrg, { silent: true });
+      }
+    };
+
+    window.addEventListener(
+      ORG_STATUS_RESTRICTED_EVENT,
+      handleOrgStatusRestricted
+    );
+    return () =>
+      window.removeEventListener(
+        ORG_STATUS_RESTRICTED_EVENT,
+        handleOrgStatusRestricted
+      );
+  }, [loadOrganizationContext]);
+
+  // Revalidate active school organization status when returning focus to the tab (throttled, no polling)
+  useEffect(() => {
+    if (activeWorkspace !== 'SCHOOL') return;
+
+    const handleWindowFocus = () => {
+      const currentOrg = activeOrganizationRef.current;
+      if (!currentOrg) return;
+      const now = Date.now();
+      if (now - lastFocusCheckRef.current < 30000) return;
+      lastFocusCheckRef.current = now;
+      void loadOrganizationContext(currentOrg, { silent: true });
+    };
+
+    window.addEventListener('focus', handleWindowFocus);
+    return () => window.removeEventListener('focus', handleWindowFocus);
+  }, [activeWorkspace, loadOrganizationContext]);
+
   const login = useCallback(
     async (credentials: LoginUserRequest): Promise<{ defaultRoute: string }> => {
       await authApi.login(credentials);
-      const result = await hydrateUserSession({ isFreshLogin: true });
-      if (!result) {
-        throw new Error('Failed to load user profile after sign in.');
+      setIsLoading(true);
+      try {
+        const result = await hydrateUserSession({ isFreshLogin: true });
+        if (!result) {
+          throw new Error('Failed to load user profile after sign in.');
+        }
+        return { defaultRoute: result.defaultRoute };
+      } finally {
+        setIsLoading(false);
       }
-      return { defaultRoute: result.defaultRoute };
     },
     [hydrateUserSession]
   );
@@ -354,25 +902,65 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }, [hydrateUserSession]);
 
   const activatePlatformWorkspace = useCallback(() => {
-    if (!hasPlatformAccess) return;
+    if (!hasPlatformAccessRef.current) return;
     setActiveWorkspace('PLATFORM');
     setActiveOrganizationId(null);
     localStorage.setItem(ACTIVE_WORKSPACE_STORAGE_KEY, 'PLATFORM');
     localStorage.removeItem(ACTIVE_ORG_STORAGE_KEY);
+    queryClient.removeQueries();
     void loadOrganizationContext(null);
-  }, [hasPlatformAccess, loadOrganizationContext]);
+  }, [loadOrganizationContext]);
 
   const selectOrganization = useCallback(
-    (organizationId: number) => {
-      const target = activeMemberships.find((m) => m.organizationId === organizationId);
-      if (!target) return;
+    async (organizationId: number): Promise<SchoolOrganizationStatus> => {
+      let target = activeMembershipsRef.current.find(
+        (m) => m.organizationId === organizationId
+      );
+      if (!target) return 'ACTIVE';
+
+      // Synchronously enter loading state and clear previous organization's cached data
+      // so no stale workspace content renders while the new organization initializes
+      setIsOrgContextLoading(true);
+      setSubscription(null);
+      setEntitlements(null);
+      setOrganizationPermissions(new Set(target.permissions || []));
+      queryClient.removeQueries();
+
       setActiveOrganizationId(organizationId);
       localStorage.setItem(ACTIVE_ORG_STORAGE_KEY, String(organizationId));
       setActiveWorkspace('SCHOOL');
       localStorage.setItem(ACTIVE_WORKSPACE_STORAGE_KEY, 'SCHOOL');
-      void loadOrganizationContext(target);
+
+      try {
+        const freshProfile = await authApi.getCurrentUser();
+        if (freshProfile && typeof freshProfile.id === 'number') {
+          setUser(freshProfile);
+          const freshActiveOrgs = (freshProfile.organizations || []).filter(
+            (m) => m.membershipStatus === 'ACTIVE'
+          );
+          const otherOrgs = freshActiveOrgs.filter(
+            (m) => m.organizationId !== organizationId
+          );
+          if (otherOrgs.length > 0) {
+            void revalidateAllOrganizationsStatuses(
+              otherOrgs,
+              hasPlatformAccessRef.current
+            );
+          }
+          const freshTarget = freshActiveOrgs.find(
+            (m) => m.organizationId === organizationId
+          );
+          if (freshTarget) {
+            target = freshTarget;
+          }
+        }
+      } catch {
+        // Proceed with cached membership summary if /api/me check fails
+      }
+
+      return loadOrganizationContext(target, { silent: false });
     },
-    [activeMemberships, loadOrganizationContext]
+    [loadOrganizationContext, revalidateAllOrganizationsStatuses]
   );
 
   const switchWorkspace = useCallback(
@@ -384,14 +972,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       if (workspace === 'SCHOOL') {
         const targetId =
           organizationId ||
-          activeOrganizationId ||
-          activeMemberships[0]?.organizationId;
+          activeOrganizationIdRef.current ||
+          activeMembershipsRef.current[0]?.organizationId;
         if (targetId) {
-          selectOrganization(targetId);
+          void selectOrganization(targetId);
         }
       }
     },
-    [activatePlatformWorkspace, activeMemberships, activeOrganizationId, selectOrganization]
+    [activatePlatformWorkspace, selectOrganization]
   );
 
   // Strictly check permissions within the currently active workspace context
@@ -445,6 +1033,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       platformPermissions,
       activeOrganizationId,
       activeOrganization,
+      activeOrganizationStatus,
+      activeOrganizationRestriction,
+      organizationStatusById,
+      isOrganizationSuspended,
+      isOrganizationDeactivated,
+      isOrganizationRestricted,
       activeMemberships,
       inactiveMemberships,
       organizationRoles,
@@ -455,6 +1049,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       login,
       logout,
       refreshSession,
+      revalidateOrganizationStatus,
+      revalidateAllOrganizationsStatuses,
       activatePlatformWorkspace,
       selectOrganization,
       switchWorkspace,
@@ -474,6 +1070,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       platformPermissions,
       activeOrganizationId,
       activeOrganization,
+      activeOrganizationStatus,
+      activeOrganizationRestriction,
+      organizationStatusById,
+      isOrganizationSuspended,
+      isOrganizationDeactivated,
+      isOrganizationRestricted,
       activeMemberships,
       inactiveMemberships,
       organizationRoles,
@@ -484,6 +1086,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       login,
       logout,
       refreshSession,
+      revalidateOrganizationStatus,
+      revalidateAllOrganizationsStatuses,
       activatePlatformWorkspace,
       selectOrganization,
       switchWorkspace,

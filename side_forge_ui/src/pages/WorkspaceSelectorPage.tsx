@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Link, Navigate, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import {
   ArrowRight,
@@ -36,6 +36,7 @@ export const WorkspaceSelectorPage: React.FC = () => {
     inactiveMemberships,
     activatePlatformWorkspace,
     selectOrganization,
+    revalidateAllOrganizationsStatuses,
     refreshSession,
     logout,
   } = useAuth();
@@ -47,18 +48,29 @@ export const WorkspaceSelectorPage: React.FC = () => {
 
   const locState = (location.state as WorkspaceSelectorLocationState) || {};
   const stayOnSelector = searchParams.get('stay') === '1';
+  const hasRevalidatedMountRef = useRef(false);
+  const hasAutoActivatedSingleRef = useRef(false);
+
+  // When explicitly navigating to the workspace selector (?stay=1), refresh statuses once on mount
+  useEffect(() => {
+    if (!isLoading && isAuthenticated && stayOnSelector && !hasRevalidatedMountRef.current) {
+      hasRevalidatedMountRef.current = true;
+      void revalidateAllOrganizationsStatuses();
+    }
+  }, [isAuthenticated, isLoading, revalidateAllOrganizationsStatuses, stayOnSelector]);
 
   // Automatically activate when only a single valid workspace context exists
   useEffect(() => {
     if (isLoading || isOrgContextLoading || !isAuthenticated) return;
-    if (availableWorkspaces.length === 1 && !stayOnSelector) {
+    if (availableWorkspaces.length === 1 && !stayOnSelector && !hasAutoActivatedSingleRef.current) {
+      hasAutoActivatedSingleRef.current = true;
       const only = availableWorkspaces[0];
       if (only.workspaceType === 'PLATFORM') {
         activatePlatformWorkspace();
         navigate('/platform', { replace: true });
       } else if (only.organizationId) {
-        selectOrganization(only.organizationId);
         navigate('/app', { replace: true });
+        void selectOrganization(only.organizationId);
       }
     }
   }, [
@@ -84,7 +96,7 @@ export const WorkspaceSelectorPage: React.FC = () => {
     return <Navigate to="/onboarding-status" replace />;
   }
 
-  const handleSelectWorkspace = (option: WorkspaceContextOption) => {
+  const handleSelectWorkspace = async (option: WorkspaceContextOption) => {
     if (option.workspaceType === 'PLATFORM') {
       activatePlatformWorkspace();
       toast.info(
@@ -99,14 +111,19 @@ export const WorkspaceSelectorPage: React.FC = () => {
     }
 
     if (option.workspaceType === 'SCHOOL' && option.organizationId) {
-      selectOrganization(option.organizationId);
+      const fromPath = locState.from?.pathname;
+      const target =
+        option.organizationStatus === 'DEACTIVATED'
+          ? '/app'
+          : fromPath && fromPath.startsWith('/app')
+          ? fromPath
+          : '/app';
+      navigate(target, { replace: true });
+      await selectOrganization(option.organizationId);
       toast.info(
         'Workspace activated',
         `Switched to ${option.displayName} (${option.roles.map(formatRoleLabel).join(', ')}).`
       );
-      const fromPath = locState.from?.pathname;
-      const target = fromPath && fromPath.startsWith('/app') ? fromPath : '/app';
-      navigate(target, { replace: true });
     }
   };
 
@@ -304,7 +321,15 @@ export const WorkspaceSelectorPage: React.FC = () => {
                       }`}
                     >
                       <div className="flex items-start gap-3.5 min-w-0">
-                        <div className="w-11 h-11 rounded-xl bg-slate-900 text-white group-hover:bg-indigo-600 transition-colors flex items-center justify-center shrink-0 shadow-xs">
+                        <div
+                          className={`w-11 h-11 rounded-xl text-white transition-colors flex items-center justify-center shrink-0 shadow-xs ${
+                            option.organizationStatus === 'SUSPENDED'
+                              ? 'bg-amber-600'
+                              : option.organizationStatus === 'DEACTIVATED'
+                              ? 'bg-rose-700'
+                              : 'bg-slate-900 group-hover:bg-indigo-600'
+                          }`}
+                        >
                           <Building2 className="w-5 h-5" />
                         </div>
                         <div className="space-y-1.5 min-w-0">
@@ -318,12 +343,35 @@ export const WorkspaceSelectorPage: React.FC = () => {
                             {option.organizationId && (
                               <IdLabel>Org #{option.organizationId}</IdLabel>
                             )}
-                            {isCurrent && (
+                            {option.organizationStatus === 'SUSPENDED' ? (
+                              <Badge variant="warning" dot>
+                                Suspended
+                              </Badge>
+                            ) : option.organizationStatus === 'DEACTIVATED' ? (
+                              <Badge variant="danger" dot>
+                                Deactivated
+                              </Badge>
+                            ) : (
                               <Badge variant="success" dot>
-                                Active Context
+                                Active
                               </Badge>
                             )}
+                            {isCurrent && (
+                              <Badge variant="primary">Current Context</Badge>
+                            )}
                           </div>
+                          {option.statusReason &&
+                            (option.organizationStatus === 'SUSPENDED' ||
+                              option.organizationStatus === 'DEACTIVATED') && (
+                              <p className="text-xs text-slate-600">
+                                <span className="font-semibold">
+                                  {option.organizationStatus === 'SUSPENDED'
+                                    ? 'Suspension Reason:'
+                                    : 'Deactivation Reason:'}
+                                </span>{' '}
+                                {option.statusReason}
+                              </p>
+                            )}
                           <div className="flex flex-wrap items-center gap-1.5">
                             <span className="text-xs text-slate-500 mr-1">
                               {option.roles.length > 1 ? 'Assigned Roles:' : 'Assigned Role:'}

@@ -6,12 +6,112 @@
 export type UserAccountStatus = 'ACTIVE' | 'INACTIVE' | 'SUSPENDED' | 'DELETED';
 export type MembershipStatus = 'INVITED' | 'ACTIVE' | 'SUSPENDED' | 'LEFT';
 export type WorkspaceType = 'PLATFORM' | 'SCHOOL';
+export type SchoolOrganizationStatus = 'ACTIVE' | 'SUSPENDED' | 'DEACTIVATED';
+
+export interface OrganizationRestrictionInfo {
+  organizationId: number;
+  status: SchoolOrganizationStatus;
+  reason?: string | null;
+  changedAt?: string | null;
+  detectedAt: string;
+  backendMessage?: string | null;
+}
+
+export type OrganizationAccessErrorKind =
+  | 'ORG_SUSPENDED'
+  | 'ORG_DEACTIVATED'
+  | 'SUBSCRIPTION_RESTRICTED'
+  | 'FEATURE_DISABLED'
+  | 'PERMISSION_DENIED'
+  | 'OTHER';
+
+export interface ClassifiedOrganizationError {
+  kind: OrganizationAccessErrorKind;
+  organizationStatus?: SchoolOrganizationStatus;
+  userTitle: string;
+  userMessage: string;
+}
+
+export function classifyOrganizationAccessError(
+  error: unknown
+): ClassifiedOrganizationError {
+  const rawMessage =
+    error instanceof Error
+      ? error.message
+      : typeof error === 'string'
+      ? error
+      : '';
+  const msg = rawMessage.trim();
+
+  if (/current status is SUSPENDED/i.test(msg)) {
+    return {
+      kind: 'ORG_SUSPENDED',
+      organizationStatus: 'SUSPENDED',
+      userTitle: 'Organization Suspended',
+      userMessage:
+        'Your school organization is currently suspended by a Platform Administrator. Normal school operations are temporarily restricted. Please contact Side_forge support for assistance.',
+    };
+  }
+
+  if (/current status is DEACTIVATED/i.test(msg)) {
+    return {
+      kind: 'ORG_DEACTIVATED',
+      organizationStatus: 'DEACTIVATED',
+      userTitle: 'Organization Deactivated',
+      userMessage:
+        'Your school organization has been deactivated by a Platform Administrator. Normal school operations and modules are unavailable.',
+    };
+  }
+
+  if (/Organization subscription is (SUSPENDED|EXPIRED|CANCELLED)/i.test(msg)) {
+    return {
+      kind: 'SUBSCRIPTION_RESTRICTED',
+      userTitle: 'SaaS Subscription Restricted',
+      userMessage:
+        msg ||
+        'Your school subscription is not currently active. Please review your subscription billing status or contact support.',
+    };
+  }
+
+  if (
+    /does not include feature/i.test(msg) ||
+    /Feature .* is disabled for this organization/i.test(msg)
+  ) {
+    return {
+      kind: 'FEATURE_DISABLED',
+      userTitle: 'Module Not Included in Subscription Plan',
+      userMessage:
+        msg ||
+        'This module is not enabled on your organization’s current subscription plan.',
+    };
+  }
+
+  if (/Access denied|required permissions/i.test(msg)) {
+    return {
+      kind: 'PERMISSION_DENIED',
+      userTitle: 'Permission Denied',
+      userMessage:
+        'You do not have the required role permission to perform this operation in the selected workspace.',
+    };
+  }
+
+  return {
+    kind: 'OTHER',
+    userTitle: 'Operation Unavailable',
+    userMessage: msg || 'The requested operation could not be completed.',
+  };
+}
 
 export interface UserOrganizationSummary {
   organizationId: number;
   organizationName: string | null;
   membershipStatus: MembershipStatus;
   roles: string[];
+  organizationStatus?: SchoolOrganizationStatus;
+  statusReason?: string | null;
+  suspensionReason?: string | null;
+  statusChangedAt?: string | null;
+  permissions?: string[];
 }
 
 export interface WorkspaceContextOption {
@@ -21,6 +121,9 @@ export interface WorkspaceContextOption {
   displayName: string;
   roles: string[];
   membershipStatus: MembershipStatus;
+  organizationStatus?: SchoolOrganizationStatus;
+  statusReason?: string | null;
+  statusChangedAt?: string | null;
 }
 
 export const ROLE_DISPLAY_LABELS: Record<string, string> = {
@@ -157,6 +260,62 @@ export interface OrganizationSubscriptionResponse {
   trial: boolean;
   currentSubscription: boolean;
   effectiveDate: string;
+  endedDate?: string | null;
+  cancelledAt?: string | null;
+  cancellationReason?: string | null;
+  remarks?: string | null;
+}
+
+export interface SchoolSubscriptionUsageResponse {
+  organizationId: number;
+  organizationName: string;
+  planCode: string | null;
+  planName: string | null;
+  subscriptionStatus: SubscriptionStatus | null;
+  enrolledStudentsCount: number;
+  activeStudentProfilesCount: number;
+  planStudentLimit: number | null;
+  overrideStudentLimit: number | null;
+  effectiveStudentLimit: number | null;
+  remainingStudentCapacity: number;
+  limitReached: boolean;
+  utilizationPercentage: number;
+  overrideReason: string | null;
+  overrideExpiresAt: string | null;
+  storageUsage: {
+    organizationId: number;
+    organizationName: string;
+    totalFilesCount: number;
+    totalStorageBytes: number;
+  } | null;
+}
+
+export interface SchoolSubscriptionPaymentItem {
+  id: number;
+  organizationId: number;
+  organizationName: string;
+  subscriptionId: number;
+  invoiceNumber: string;
+  paymentDate: string;
+  billedAmount: number;
+  amountReceived: number;
+  paymentMethod: string;
+  referenceNumber: string | null;
+  billingPeriodStart: string | null;
+  billingPeriodEnd: string | null;
+  status: string;
+  remarks: string | null;
+  createdAt: string;
+}
+
+export interface SchoolSubscriptionBillingSummaryResponse {
+  organizationId: number;
+  organizationName: string;
+  currentSubscription: OrganizationSubscriptionResponse | null;
+  totalBilledAmount: number;
+  totalPaidAmount: number;
+  currentPeriodOutstandingAmount: number;
+  payments: SchoolSubscriptionPaymentItem[];
 }
 
 export interface OrganizationRoleDto {

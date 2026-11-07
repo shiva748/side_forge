@@ -10,10 +10,13 @@ import {
   CreditCard,
   Layers,
   LayoutDashboard,
+  Lock,
   LogOut,
   Menu,
   PanelLeftClose,
   PanelLeftOpen,
+  PauseCircle,
+  PowerOff,
   RefreshCw,
   Shield,
   ShieldCheck,
@@ -24,6 +27,11 @@ import { useAuth } from '../../context/AuthContext';
 import { useToast } from '../../context/ToastContext';
 import { cn } from '../../lib/utils';
 import { formatRoleLabel, WorkspaceContextOption } from '../../types/auth';
+import {
+  OrganizationDeactivatedScreen,
+  OrganizationSuspendedBanner,
+  SubscriptionSuspendedBanner,
+} from '../school/OrganizationStatusBanner';
 import { Badge, CounterLabel, RoleTag } from '../ui/Badge';
 import { TruncatedText } from '../ui/TruncatedText';
 
@@ -35,6 +43,7 @@ export interface NavItemConfig {
   to: string;
   icon: React.ReactNode;
   matchPaths?: string[];
+  restricted?: boolean;
 }
 
 export interface NavGroupConfig {
@@ -59,13 +68,19 @@ export const AppShell: React.FC<AppShellProps> = ({
     availableWorkspaces,
     hasMultipleWorkspaces,
     activeOrganization,
+    activeOrganizationStatus,
+    isOrganizationSuspended,
+    isOrganizationDeactivated,
+    isOrganizationRestricted,
     platformRoles,
     organizationRoles,
     activatePlatformWorkspace,
     selectOrganization,
     refreshSession,
+    revalidateAllOrganizationsStatuses,
     logout,
     hasPermission,
+    hasFeature,
   } = useAuth();
   const toast = useToast();
   const location = useLocation();
@@ -180,18 +195,65 @@ export const AppShell: React.FC<AppShellProps> = ({
     }
 
     if (activeWorkspace === 'SCHOOL') {
+      // When an organization is DEACTIVATED, do not render normal school operations
+      // or module navigation in the sidebar.
+      if (isOrganizationDeactivated) {
+        return [
+          {
+            groupLabel: 'Restricted Workspace',
+            items: [
+              {
+                id: 'school-deactivated',
+                label: 'Organization Deactivated',
+                to: '/app',
+                icon: <PowerOff className="w-4 h-4 shrink-0" />,
+                matchPaths: ['/app', '/app/dashboard'],
+                restricted: true,
+              },
+            ],
+          },
+        ];
+      }
+
+      const schoolOpsItems: NavItemConfig[] = [
+        {
+          id: 'school-dashboard',
+          label: 'Dashboard',
+          to: '/app',
+          icon: <LayoutDashboard className="w-4 h-4 shrink-0" />,
+          matchPaths: ['/app', '/app/dashboard'],
+        },
+      ];
+
+      const hasAcademicRolePerms =
+        hasPermission('academic_session.view') ||
+        hasPermission('academic_session.manage') ||
+        hasPermission('class.view') ||
+        hasPermission('class.manage') ||
+        hasPermission('subject.view') ||
+        hasPermission('subject.manage') ||
+        hasPermission('class_subject.view') ||
+        hasPermission('class_subject.manage');
+
+      const canAccessAcademics =
+        hasAcademicRolePerms &&
+        (hasFeature('ACADEMIC_MANAGEMENT') || isOrganizationRestricted);
+
+      if (canAccessAcademics) {
+        schoolOpsItems.push({
+          id: 'school-academics',
+          label: 'Academic Management',
+          to: '/app/academics',
+          icon: <Layers className="w-4 h-4 shrink-0" />,
+          matchPaths: ['/app/academics'],
+          restricted: isOrganizationRestricted,
+        });
+      }
+
       return [
         {
           groupLabel: 'School Operations',
-          items: [
-            {
-              id: 'school-dashboard',
-              label: 'Dashboard',
-              to: '/app',
-              icon: <LayoutDashboard className="w-4 h-4 shrink-0" />,
-              matchPaths: ['/app', '/app/dashboard'],
-            },
-          ],
+          items: schoolOpsItems,
         },
         {
           groupLabel: 'Administration',
@@ -209,7 +271,13 @@ export const AppShell: React.FC<AppShellProps> = ({
     }
 
     return [];
-  }, [activeWorkspace, hasPermission]);
+  }, [
+    activeWorkspace,
+    hasFeature,
+    hasPermission,
+    isOrganizationDeactivated,
+    isOrganizationRestricted,
+  ]);
 
   const isNavItemActive = (item: NavItemConfig): boolean => {
     const currentPath = location.pathname.replace(/\/$/, '') || '/';
@@ -219,8 +287,7 @@ export const AppShell: React.FC<AppShellProps> = ({
     return currentPath === item.to;
   };
 
-
-  const handleSwitchWorkspaceOption = (option: WorkspaceContextOption) => {
+  const handleSwitchWorkspaceOption = async (option: WorkspaceContextOption) => {
     setIsWorkspaceMenuOpen(false);
     if (option.workspaceType === 'PLATFORM') {
       activatePlatformWorkspace();
@@ -232,12 +299,12 @@ export const AppShell: React.FC<AppShellProps> = ({
       return;
     }
     if (option.workspaceType === 'SCHOOL' && option.organizationId) {
-      selectOrganization(option.organizationId);
+      navigate('/app');
+      await selectOrganization(option.organizationId);
       toast.info(
         'Workspace switched',
         `Activated ${option.displayName} (${option.roles.map(formatRoleLabel).join(', ')}).`
       );
-      navigate('/app');
     }
   };
 
@@ -339,28 +406,70 @@ export const AppShell: React.FC<AppShellProps> = ({
         <div className="p-3 border-b border-slate-100">
           <div
             className={cn(
-              'rounded-xl border border-slate-200/80 bg-slate-50/70 p-2.5 flex items-center gap-2.5',
-              collapsed && 'justify-center p-2'
+              'rounded-xl border p-2.5 flex items-center gap-2.5 transition-colors',
+              collapsed && 'justify-center p-2',
+              isOrganizationSuspended
+                ? 'border-amber-300/90 bg-amber-50/60'
+                : isOrganizationDeactivated
+                ? 'border-rose-200/90 bg-rose-50/40'
+                : 'border-slate-200/80 bg-slate-50/70'
             )}
-            title={`${workspaceDisplayName} (${primaryRoleLabel})`}
+            title={`${workspaceDisplayName} (${primaryRoleLabel})${
+              activeWorkspace === 'SCHOOL' && activeOrganizationStatus !== 'ACTIVE'
+                ? ` • ${activeOrganizationStatus}`
+                : ''
+            }`}
           >
             <div
               className={cn(
                 'w-8 h-8 rounded-lg flex items-center justify-center shrink-0 text-white shadow-2xs',
-                activeWorkspace === 'PLATFORM' ? 'bg-indigo-600' : 'bg-slate-900'
+                activeWorkspace === 'PLATFORM'
+                  ? 'bg-indigo-600'
+                  : isOrganizationSuspended
+                  ? 'bg-amber-600'
+                  : isOrganizationDeactivated
+                  ? 'bg-rose-700'
+                  : 'bg-slate-900'
               )}
             >
               {activeWorkspace === 'PLATFORM' ? (
                 <Shield className="w-4 h-4" />
+              ) : isOrganizationSuspended ? (
+                <PauseCircle className="w-4 h-4" />
+              ) : isOrganizationDeactivated ? (
+                <PowerOff className="w-4 h-4" />
               ) : (
                 <Building2 className="w-4 h-4" />
               )}
             </div>
             {!collapsed && (
               <div className="min-w-0 flex-1 space-y-0.5">
-                <p className="text-[10px] font-semibold uppercase tracking-wider text-indigo-600 truncate">
-                  {activeWorkspace === 'PLATFORM' ? 'Platform Control' : 'School Workspace'}
-                </p>
+                <div className="flex items-center justify-between gap-1.5">
+                  <p
+                    className={cn(
+                      'text-[10px] font-semibold uppercase tracking-wider truncate',
+                      isOrganizationSuspended
+                        ? 'text-amber-800'
+                        : isOrganizationDeactivated
+                        ? 'text-rose-800'
+                        : 'text-indigo-600'
+                    )}
+                  >
+                    {activeWorkspace === 'PLATFORM'
+                      ? 'Platform Control'
+                      : 'School Workspace'}
+                  </p>
+                  {isOrganizationSuspended && (
+                    <Badge variant="warning" className="px-1.5 py-0 text-[9px]">
+                      Suspended
+                    </Badge>
+                  )}
+                  {isOrganizationDeactivated && (
+                    <Badge variant="danger" className="px-1.5 py-0 text-[9px]">
+                      Deactivated
+                    </Badge>
+                  )}
+                </div>
                 <TruncatedText
                   text={workspaceDisplayName}
                   as="p"
@@ -391,7 +500,11 @@ export const AppShell: React.FC<AppShellProps> = ({
                   <Link
                     key={item.id}
                     to={item.to}
-                    title={collapsed ? item.label : undefined}
+                    title={
+                      collapsed
+                        ? `${item.label}${item.restricted ? ' (Restricted)' : ''}`
+                        : undefined
+                    }
                     className={cn(
                       'flex items-center gap-2.5 rounded-xl px-2.5 py-2 text-xs font-medium transition-colors min-w-0',
                       collapsed && 'justify-center px-2',
@@ -404,6 +517,14 @@ export const AppShell: React.FC<AppShellProps> = ({
                       {item.icon}
                     </span>
                     {!collapsed && <TruncatedText text={item.label} className="flex-1" />}
+                    {!collapsed && item.restricted && (
+                      <span
+                        className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-amber-100/80 text-amber-800 text-[10px] font-semibold shrink-0"
+                        title="Restricted while organization is suspended or deactivated"
+                      >
+                        <Lock className="w-2.5 h-2.5" />
+                      </span>
+                    )}
                   </Link>
                 );
               })}
@@ -499,6 +620,16 @@ export const AppShell: React.FC<AppShellProps> = ({
                   maxWidthClass="max-w-[180px]"
                   className="hidden sm:inline-block font-medium text-slate-500"
                 />
+                {isOrganizationSuspended && (
+                  <Badge variant="warning" dot className="hidden sm:inline-flex">
+                    Suspended
+                  </Badge>
+                )}
+                {isOrganizationDeactivated && (
+                  <Badge variant="danger" dot className="hidden sm:inline-flex">
+                    Deactivated
+                  </Badge>
+                )}
                 <ChevronRight className="hidden sm:inline-block w-3.5 h-3.5 text-slate-300 shrink-0" />
                 <TruncatedText
                   text={pageTitle}
@@ -514,16 +645,45 @@ export const AppShell: React.FC<AppShellProps> = ({
               <div className="relative" ref={workspaceMenuRef}>
                 <button
                   type="button"
-                  onClick={() => setIsWorkspaceMenuOpen((prev) => !prev)}
-                  className="inline-flex items-center gap-2 rounded-xl border border-slate-200/90 bg-slate-50/70 hover:bg-slate-100/80 px-3 py-1.5 text-xs transition-colors cursor-pointer"
+                  onClick={() => {
+                    setIsWorkspaceMenuOpen((prev) => {
+                      const next = !prev;
+                      if (next) {
+                        void revalidateAllOrganizationsStatuses();
+                      }
+                      return next;
+                    });
+                  }}
+                  className={cn(
+                    'inline-flex items-center gap-2 rounded-xl border px-3 py-1.5 text-xs transition-colors cursor-pointer',
+                    isOrganizationSuspended
+                      ? 'border-amber-300 bg-amber-50/70 hover:bg-amber-100/70'
+                      : isOrganizationDeactivated
+                      ? 'border-rose-300 bg-rose-50/60 hover:bg-rose-100/60'
+                      : 'border-slate-200/90 bg-slate-50/70 hover:bg-slate-100/80'
+                  )}
                   aria-expanded={isWorkspaceMenuOpen}
                   aria-haspopup="true"
                 >
                   <Badge
-                    variant={activeWorkspace === 'PLATFORM' ? 'primary' : 'info'}
+                    variant={
+                      activeWorkspace === 'PLATFORM'
+                        ? 'primary'
+                        : isOrganizationSuspended
+                        ? 'warning'
+                        : isOrganizationDeactivated
+                        ? 'danger'
+                        : 'info'
+                    }
                     className="px-1.5 py-0 text-[10px]"
                   >
-                    {activeWorkspace === 'PLATFORM' ? 'Platform' : 'School'}
+                    {activeWorkspace === 'PLATFORM'
+                      ? 'Platform'
+                      : isOrganizationSuspended
+                      ? 'Suspended'
+                      : isOrganizationDeactivated
+                      ? 'Deactivated'
+                      : 'School'}
                   </Badge>
                   <TruncatedText
                     text={workspaceDisplayName}
@@ -569,25 +729,43 @@ export const AppShell: React.FC<AppShellProps> = ({
                                   'w-7 h-7 rounded-lg flex items-center justify-center shrink-0 text-white mt-0.5',
                                   option.workspaceType === 'PLATFORM'
                                     ? 'bg-indigo-600'
+                                    : option.organizationStatus === 'SUSPENDED'
+                                    ? 'bg-amber-600'
+                                    : option.organizationStatus === 'DEACTIVATED'
+                                    ? 'bg-rose-700'
                                     : 'bg-slate-900'
                                 )}
                               >
                                 {option.workspaceType === 'PLATFORM' ? (
                                   <Shield className="w-3.5 h-3.5" />
+                                ) : option.organizationStatus === 'SUSPENDED' ? (
+                                  <PauseCircle className="w-3.5 h-3.5" />
+                                ) : option.organizationStatus === 'DEACTIVATED' ? (
+                                  <PowerOff className="w-3.5 h-3.5" />
                                 ) : (
                                   <Building2 className="w-3.5 h-3.5" />
                                 )}
                               </div>
                               <div className="min-w-0">
-                                <div className="flex items-center gap-1.5 min-w-0">
+                                <div className="flex items-center gap-1.5 min-w-0 flex-wrap">
                                   <TruncatedText
                                     text={option.displayName}
-                                    maxWidthClass="max-w-[155px]"
+                                    maxWidthClass="max-w-[140px]"
                                     className="font-semibold text-slate-900"
                                   />
-                                  <span className="text-[10px] font-medium px-1.5 py-0.5 rounded bg-slate-100 text-slate-600 shrink-0">
-                                    {option.workspaceType === 'PLATFORM' ? 'Platform' : 'School'}
-                                  </span>
+                                  {option.organizationStatus === 'SUSPENDED' ? (
+                                    <Badge variant="warning" className="px-1.5 py-0 text-[9px]">
+                                      Suspended
+                                    </Badge>
+                                  ) : option.organizationStatus === 'DEACTIVATED' ? (
+                                    <Badge variant="danger" className="px-1.5 py-0 text-[9px]">
+                                      Deactivated
+                                    </Badge>
+                                  ) : (
+                                    <span className="text-[10px] font-medium px-1.5 py-0.5 rounded bg-slate-100 text-slate-600 shrink-0">
+                                      {option.workspaceType === 'PLATFORM' ? 'Platform' : 'School'}
+                                    </span>
+                                  )}
                                 </div>
                                 <TruncatedText
                                   text={option.roles.map(formatRoleLabel).join(', ')}
@@ -702,9 +880,17 @@ export const AppShell: React.FC<AppShellProps> = ({
           </div>
         </header>
 
+        {/* Organization / Subscription Status Notifications */}
+        <OrganizationSuspendedBanner />
+        <SubscriptionSuspendedBanner />
+
         {/* Page Content */}
         <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-8">
-          {children}
+          {isOrganizationDeactivated ? (
+            <OrganizationDeactivatedScreen />
+          ) : (
+            children
+          )}
         </main>
       </div>
     </div>

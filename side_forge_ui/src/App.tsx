@@ -15,6 +15,7 @@ import { PlatformOnboardingPage } from './pages/PlatformOnboardingPage';
 import { PlatformOrganizationsPage } from './pages/PlatformOrganizationsPage';
 import { PlatformSubscriptionsPage } from './pages/PlatformSubscriptionsPage';
 import { SchoolDashboardPage } from './pages/SchoolDashboardPage';
+import { SchoolAcademicPage } from './pages/SchoolAcademicPage';
 import { WorkspaceShellPlaceholder } from './pages/WorkspaceShellPlaceholder';
 import { UnauthorizedPage } from './pages/UnauthorizedPage';
 import { NotFoundPage } from './pages/NotFoundPage';
@@ -127,6 +128,17 @@ export default function App() {
                 element={
                   <ProtectedRoute workspace="SCHOOL">
                     <SchoolDashboardPage />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/app/academics"
+                element={
+                  <ProtectedRoute
+                    workspace="SCHOOL"
+                    requiredFeature="ACADEMIC_MANAGEMENT"
+                  >
+                    <SchoolAcademicPage />
                   </ProtectedRoute>
                 }
               />

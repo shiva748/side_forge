@@ -42,11 +42,19 @@ export class ApiError extends Error {
 
 export const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL || '').replace(/\/$/, '');
 export const AUTH_UNAUTHORIZED_EVENT = 'sideforge:auth-unauthorized';
+export const ORG_STATUS_RESTRICTED_EVENT = 'sideforge:org-status-restricted';
+
+export interface OrgStatusRestrictedEventDetail {
+  organizationId: number;
+  detectedStatus: 'SUSPENDED' | 'DEACTIVATED' | 'MEMBERSHIP_OR_DEACTIVATED';
+  message: string;
+}
 
 export interface RequestOptions extends Omit<RequestInit, 'body'> {
   params?: Record<string, string | number | boolean | undefined | null>;
   body?: unknown;
   suppressUnauthorizedEvent?: boolean;
+  suppressStatusRestrictionEvent?: boolean;
   timeoutMs?: number;
 }
 
@@ -124,7 +132,15 @@ function extractErrorDetails(status: number, payload: unknown) {
 }
 
 export async function request<T>(endpoint: string, options: RequestOptions = {}): Promise<T> {
-  const { params, body, headers, suppressUnauthorizedEvent, timeoutMs = 10000, ...rest } = options;
+  const {
+    params,
+    body,
+    headers,
+    suppressUnauthorizedEvent,
+    suppressStatusRestrictionEvent = false,
+    timeoutMs = 10000,
+    ...rest
+  } = options;
   const url = buildUrl(endpoint, params);
   const isFormData = typeof FormData !== 'undefined' && body instanceof FormData;
   const requestHeaders = new Headers(headers);
@@ -171,10 +187,72 @@ export async function request<T>(endpoint: string, options: RequestOptions = {})
   const payload = await parseResponsePayload(response);
 
   if (!response.ok) {
-    if (response.status === 401 && !suppressUnauthorizedEvent && !endpoint.startsWith('/api/auth/login')) {
-      window.dispatchEvent(new CustomEvent(AUTH_UNAUTHORIZED_EVENT));
-    }
     const { message, fieldErrors } = extractErrorDetails(response.status, payload);
+    const orgMatch = endpoint.match(/^\/?api\/organizations\/(\d+)(?:\/|$)/);
+
+    // Note on Spring Security + AuthorizationContextFilter behavior:
+    // When an organization is DEACTIVATED, AuthorizationContextFilter calls
+    // response.sendError(403, "No active membership in the requested organization").
+    // Tomcat dispatches that sendError to /error after SecurityContextHolder is cleared,
+    // and because JwtFilter (OncePerRequestFilter) skips ERROR dispatches while /error
+    // requires authentication, Spring Security's HttpStatusEntryPoint turns that 403
+    // sendError into an HTTP 401 on /api/organizations/{orgId}/** even when the user's
+    // JWT cookie is completely valid.
+    if (
+      !suppressStatusRestrictionEvent &&
+      orgMatch &&
+      (response.status === 403 || response.status === 401)
+    ) {
+      const orgId = Number(orgMatch[1]);
+      if (/current status is SUSPENDED/i.test(message)) {
+        window.dispatchEvent(
+          new CustomEvent<OrgStatusRestrictedEventDetail>(ORG_STATUS_RESTRICTED_EVENT, {
+            detail: {
+              organizationId: orgId,
+              detectedStatus: 'SUSPENDED',
+              message,
+            },
+          })
+        );
+      } else if (/current status is DEACTIVATED/i.test(message)) {
+        window.dispatchEvent(
+          new CustomEvent<OrgStatusRestrictedEventDetail>(ORG_STATUS_RESTRICTED_EVENT, {
+            detail: {
+              organizationId: orgId,
+              detectedStatus: 'DEACTIVATED',
+              message,
+            },
+          })
+        );
+      } else if (
+        response.status === 401 ||
+        /No active membership in the requested organization/i.test(message) ||
+        endpoint.includes(`/api/organizations/${orgId}/subscription`)
+      ) {
+        window.dispatchEvent(
+          new CustomEvent<OrgStatusRestrictedEventDetail>(ORG_STATUS_RESTRICTED_EVENT, {
+            detail: {
+              organizationId: orgId,
+              detectedStatus: 'MEMBERSHIP_OR_DEACTIVATED',
+              message,
+            },
+          })
+        );
+      }
+    }
+
+    if (
+      response.status === 401 &&
+      !suppressUnauthorizedEvent &&
+      !endpoint.startsWith('/api/auth/login')
+    ) {
+      window.dispatchEvent(
+        new CustomEvent(AUTH_UNAUTHORIZED_EVENT, {
+          detail: { endpoint, isOrganizationEndpoint: Boolean(orgMatch) },
+        })
+      );
+    }
+
     throw new ApiError(message, response.status, { fieldErrors, raw: payload });
   }
 
