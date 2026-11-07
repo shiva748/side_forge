@@ -17,6 +17,7 @@ import {
   SYSTEM_ROLE_PERMISSIONS,
   UserOrganizationSummary,
   UserProfile,
+  WorkspaceContextOption,
   WorkspaceType,
 } from '../types/auth';
 
@@ -29,12 +30,16 @@ export interface AuthContextValue {
   isLoading: boolean;
   isOrgContextLoading: boolean;
   activeWorkspace: WorkspaceType | null;
+  activeWorkspaceOption: WorkspaceContextOption | null;
+  availableWorkspaces: WorkspaceContextOption[];
+  hasMultipleWorkspaces: boolean;
   hasPlatformAccess: boolean;
   platformRoles: string[];
   platformPermissions: Set<string>;
   activeOrganizationId: number | null;
   activeOrganization: UserOrganizationSummary | null;
   activeMemberships: UserOrganizationSummary[];
+  inactiveMemberships: UserOrganizationSummary[];
   organizationRoles: Set<string>;
   organizationPermissions: Set<string>;
   subscription: OrganizationSubscriptionResponse | null;
@@ -43,8 +48,9 @@ export interface AuthContextValue {
   login: (credentials: LoginUserRequest) => Promise<{ defaultRoute: string }>;
   logout: () => Promise<void>;
   refreshSession: () => Promise<void>;
+  activatePlatformWorkspace: () => void;
   selectOrganization: (organizationId: number) => void;
-  switchWorkspace: (workspace: WorkspaceType) => void;
+  switchWorkspace: (workspace: WorkspaceType, organizationId?: number) => void;
   hasPermission: (permission: string | string[]) => boolean;
   hasRole: (role: string | string[]) => boolean;
   hasFeature: (feature: PlatformFeature) => boolean;
@@ -73,10 +79,54 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return user.organizations.filter((m) => m.membershipStatus === 'ACTIVE');
   }, [user]);
 
+  const inactiveMemberships = useMemo(() => {
+    if (!user?.organizations) return [];
+    return user.organizations.filter((m) => m.membershipStatus !== 'ACTIVE');
+  }, [user]);
+
+  const availableWorkspaces = useMemo<WorkspaceContextOption[]>(() => {
+    const list: WorkspaceContextOption[] = [];
+    if (hasPlatformAccess) {
+      list.push({
+        key: 'PLATFORM',
+        workspaceType: 'PLATFORM',
+        organizationId: null,
+        displayName: 'Platform Administration',
+        roles: platformRoles.length > 0 ? platformRoles : ['PLATFORM_USER'],
+        membershipStatus: 'ACTIVE',
+      });
+    }
+    for (const m of activeMemberships) {
+      list.push({
+        key: `SCHOOL:${m.organizationId}`,
+        workspaceType: 'SCHOOL',
+        organizationId: m.organizationId,
+        displayName: m.organizationName || `School #${m.organizationId}`,
+        roles: Array.isArray(m.roles) ? m.roles : [],
+        membershipStatus: m.membershipStatus,
+      });
+    }
+    return list;
+  }, [activeMemberships, hasPlatformAccess, platformRoles]);
+
   const activeOrganization = useMemo(() => {
     if (!activeOrganizationId) return null;
     return activeMemberships.find((m) => m.organizationId === activeOrganizationId) || null;
   }, [activeMemberships, activeOrganizationId]);
+
+  const activeWorkspaceOption = useMemo<WorkspaceContextOption | null>(() => {
+    if (activeWorkspace === 'PLATFORM' && hasPlatformAccess) {
+      return availableWorkspaces.find((w) => w.workspaceType === 'PLATFORM') || null;
+    }
+    if (activeWorkspace === 'SCHOOL' && activeOrganizationId) {
+      return (
+        availableWorkspaces.find(
+          (w) => w.workspaceType === 'SCHOOL' && w.organizationId === activeOrganizationId
+        ) || null
+      );
+    }
+    return null;
+  }, [activeOrganizationId, activeWorkspace, availableWorkspaces, hasPlatformAccess]);
 
   const organizationRoles = useMemo(() => {
     return new Set<string>(activeOrganization?.roles || []);
@@ -145,82 +195,119 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     []
   );
 
-  const hydrateUserSession = useCallback(async (): Promise<{
-    profile: UserProfile;
-    defaultRoute: string;
-  } | null> => {
-    try {
-      const profile = await authApi.getCurrentUser();
-      if (!profile || typeof profile.id !== 'number') {
+  const hydrateUserSession = useCallback(
+    async (
+      options?: { isFreshLogin?: boolean }
+    ): Promise<{
+      profile: UserProfile;
+      defaultRoute: string;
+    } | null> => {
+      try {
+        const profile = await authApi.getCurrentUser();
+        if (!profile || typeof profile.id !== 'number') {
+          clearAuthState();
+          return null;
+        }
+        const platformCtx = await authApi.probePlatformAccess(profile.id);
+
+        setUser(profile);
+        setHasPlatformAccess(platformCtx.hasPlatformAccess);
+        setPlatformRoles(platformCtx.platformRoles);
+        setPlatformPermissions(new Set(platformCtx.platformPermissions));
+
+        const activeOrgs = (profile.organizations || []).filter(
+          (m) => m.membershipStatus === 'ACTIVE'
+        );
+
+        const totalContexts =
+          (platformCtx.hasPlatformAccess ? 1 : 0) + activeOrgs.length;
+
+        // 0 valid contexts -> onboarding status page
+        if (totalContexts === 0) {
+          setActiveWorkspace(null);
+          setActiveOrganizationId(null);
+          localStorage.removeItem(ACTIVE_WORKSPACE_STORAGE_KEY);
+          localStorage.removeItem(ACTIVE_ORG_STORAGE_KEY);
+          await loadOrganizationContext(null);
+          return { profile, defaultRoute: '/onboarding-status' };
+        }
+
+        // Exactly 1 valid context -> automatically select & activate it
+        if (totalContexts === 1) {
+          if (platformCtx.hasPlatformAccess) {
+            setActiveWorkspace('PLATFORM');
+            setActiveOrganizationId(null);
+            localStorage.setItem(ACTIVE_WORKSPACE_STORAGE_KEY, 'PLATFORM');
+            localStorage.removeItem(ACTIVE_ORG_STORAGE_KEY);
+            await loadOrganizationContext(null);
+            return { profile, defaultRoute: '/platform/onboarding' };
+          }
+
+          const singleOrg = activeOrgs[0];
+          setActiveWorkspace('SCHOOL');
+          setActiveOrganizationId(singleOrg.organizationId);
+          localStorage.setItem(ACTIVE_WORKSPACE_STORAGE_KEY, 'SCHOOL');
+          localStorage.setItem(ACTIVE_ORG_STORAGE_KEY, String(singleOrg.organizationId));
+          await loadOrganizationContext(singleOrg);
+          return { profile, defaultRoute: '/app' };
+        }
+
+        // Multiple valid contexts (> 1):
+        // On fresh login, require explicit workspace selection on `/workspaces`.
+        if (options?.isFreshLogin) {
+          setActiveWorkspace(null);
+          setActiveOrganizationId(null);
+          localStorage.removeItem(ACTIVE_WORKSPACE_STORAGE_KEY);
+          localStorage.removeItem(ACTIVE_ORG_STORAGE_KEY);
+          await loadOrganizationContext(null);
+          return { profile, defaultRoute: '/workspaces' };
+        }
+
+        // On page refresh / normal navigation, preserve the stored workspace if still valid
+        const storedWorkspace = localStorage.getItem(
+          ACTIVE_WORKSPACE_STORAGE_KEY
+        ) as WorkspaceType | null;
+        const storedOrgId = Number(localStorage.getItem(ACTIVE_ORG_STORAGE_KEY));
+        const matchedStoredOrg = activeOrgs.find(
+          (m) => m.organizationId === storedOrgId
+        );
+
+        if (storedWorkspace === 'PLATFORM' && platformCtx.hasPlatformAccess) {
+          setActiveWorkspace('PLATFORM');
+          setActiveOrganizationId(null);
+          localStorage.removeItem(ACTIVE_ORG_STORAGE_KEY);
+          await loadOrganizationContext(null);
+          return { profile, defaultRoute: '/platform/onboarding' };
+        }
+
+        if (storedWorkspace === 'SCHOOL' && matchedStoredOrg) {
+          setActiveWorkspace('SCHOOL');
+          setActiveOrganizationId(matchedStoredOrg.organizationId);
+          await loadOrganizationContext(matchedStoredOrg);
+          return { profile, defaultRoute: '/app' };
+        }
+
+        // Stored membership/context is missing or became invalid/inactive -> require selection
+        setActiveWorkspace(null);
+        setActiveOrganizationId(null);
+        localStorage.removeItem(ACTIVE_WORKSPACE_STORAGE_KEY);
+        localStorage.removeItem(ACTIVE_ORG_STORAGE_KEY);
+        await loadOrganizationContext(null);
+        return { profile, defaultRoute: '/workspaces' };
+      } catch {
         clearAuthState();
         return null;
       }
-      const platformCtx = await authApi.probePlatformAccess(profile.id);
-
-      setUser(profile);
-      setHasPlatformAccess(platformCtx.hasPlatformAccess);
-      setPlatformRoles(platformCtx.platformRoles);
-      setPlatformPermissions(new Set(platformCtx.platformPermissions));
-
-      const activeOrgs = (profile.organizations || []).filter(
-        (m) => m.membershipStatus === 'ACTIVE'
-      );
-
-      const storedOrgId = Number(localStorage.getItem(ACTIVE_ORG_STORAGE_KEY));
-      const matchedOrg =
-        activeOrgs.find((m) => m.organizationId === storedOrgId) || activeOrgs[0] || null;
-
-      setActiveOrganizationId(matchedOrg ? matchedOrg.organizationId : null);
-      if (matchedOrg) {
-        localStorage.setItem(ACTIVE_ORG_STORAGE_KEY, String(matchedOrg.organizationId));
-      }
-
-      const storedWorkspace = localStorage.getItem(
-        ACTIVE_WORKSPACE_STORAGE_KEY
-      ) as WorkspaceType | null;
-      let resolvedWorkspace: WorkspaceType | null = null;
-
-      if (
-        storedWorkspace === 'PLATFORM' &&
-        platformCtx.hasPlatformAccess
-      ) {
-        resolvedWorkspace = 'PLATFORM';
-      } else if (storedWorkspace === 'SCHOOL' && matchedOrg) {
-        resolvedWorkspace = 'SCHOOL';
-      } else if (platformCtx.hasPlatformAccess && !matchedOrg) {
-        resolvedWorkspace = 'PLATFORM';
-      } else if (matchedOrg) {
-        resolvedWorkspace = 'SCHOOL';
-      } else if (platformCtx.hasPlatformAccess) {
-        resolvedWorkspace = 'PLATFORM';
-      }
-
-      setActiveWorkspace(resolvedWorkspace);
-      if (resolvedWorkspace) {
-        localStorage.setItem(ACTIVE_WORKSPACE_STORAGE_KEY, resolvedWorkspace);
-      }
-
-      await loadOrganizationContext(matchedOrg);
-
-      const defaultRoute =
-        resolvedWorkspace === 'PLATFORM'
-          ? '/platform'
-          : activeOrgs.length > 0
-          ? '/app'
-          : '/onboarding-status';
-      return { profile, defaultRoute };
-    } catch {
-      clearAuthState();
-      return null;
-    }
-  }, [clearAuthState, loadOrganizationContext]);
+    },
+    [clearAuthState, loadOrganizationContext]
+  );
 
   useEffect(() => {
     let mounted = true;
     (async () => {
       setIsLoading(true);
       try {
-        await hydrateUserSession();
+        await hydrateUserSession({ isFreshLogin: false });
       } finally {
         if (mounted) setIsLoading(false);
       }
@@ -242,7 +329,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const login = useCallback(
     async (credentials: LoginUserRequest): Promise<{ defaultRoute: string }> => {
       await authApi.login(credentials);
-      const result = await hydrateUserSession();
+      const result = await hydrateUserSession({ isFreshLogin: true });
       if (!result) {
         throw new Error('Failed to load user profile after sign in.');
       }
@@ -256,13 +343,24 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       await authApi.logout();
     } finally {
       clearAuthState();
+      localStorage.removeItem(ACTIVE_WORKSPACE_STORAGE_KEY);
+      localStorage.removeItem(ACTIVE_ORG_STORAGE_KEY);
       queryClient.clear();
     }
   }, [clearAuthState]);
 
   const refreshSession = useCallback(async () => {
-    await hydrateUserSession();
+    await hydrateUserSession({ isFreshLogin: false });
   }, [hydrateUserSession]);
+
+  const activatePlatformWorkspace = useCallback(() => {
+    if (!hasPlatformAccess) return;
+    setActiveWorkspace('PLATFORM');
+    setActiveOrganizationId(null);
+    localStorage.setItem(ACTIVE_WORKSPACE_STORAGE_KEY, 'PLATFORM');
+    localStorage.removeItem(ACTIVE_ORG_STORAGE_KEY);
+    void loadOrganizationContext(null);
+  }, [hasPlatformAccess, loadOrganizationContext]);
 
   const selectOrganization = useCallback(
     (organizationId: number) => {
@@ -278,33 +376,51 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   );
 
   const switchWorkspace = useCallback(
-    (workspace: WorkspaceType) => {
-      if (workspace === 'PLATFORM' && !hasPlatformAccess) return;
-      if (workspace === 'SCHOOL' && activeMemberships.length === 0) return;
-      setActiveWorkspace(workspace);
-      localStorage.setItem(ACTIVE_WORKSPACE_STORAGE_KEY, workspace);
+    (workspace: WorkspaceType, organizationId?: number) => {
+      if (workspace === 'PLATFORM') {
+        activatePlatformWorkspace();
+        return;
+      }
+      if (workspace === 'SCHOOL') {
+        const targetId =
+          organizationId ||
+          activeOrganizationId ||
+          activeMemberships[0]?.organizationId;
+        if (targetId) {
+          selectOrganization(targetId);
+        }
+      }
     },
-    [activeMemberships.length, hasPlatformAccess]
+    [activatePlatformWorkspace, activeMemberships, activeOrganizationId, selectOrganization]
   );
 
+  // Strictly check permissions within the currently active workspace context
   const hasPermission = useCallback(
     (permission: string | string[]): boolean => {
       const list = Array.isArray(permission) ? permission : [permission];
-      return list.every(
-        (p) => organizationPermissions.has(p) || platformPermissions.has(p)
-      );
+      if (activeWorkspace === 'PLATFORM') {
+        return list.every((p) => platformPermissions.has(p));
+      }
+      if (activeWorkspace === 'SCHOOL') {
+        return list.every((p) => organizationPermissions.has(p));
+      }
+      return false;
     },
-    [organizationPermissions, platformPermissions]
+    [activeWorkspace, organizationPermissions, platformPermissions]
   );
 
   const hasRole = useCallback(
     (role: string | string[]): boolean => {
       const list = Array.isArray(role) ? role : [role];
-      return list.some(
-        (r) => organizationRoles.has(r) || platformRoles.includes(r)
-      );
+      if (activeWorkspace === 'PLATFORM') {
+        return list.some((r) => platformRoles.includes(r));
+      }
+      if (activeWorkspace === 'SCHOOL') {
+        return list.some((r) => organizationRoles.has(r));
+      }
+      return false;
     },
-    [organizationRoles, platformRoles]
+    [activeWorkspace, organizationRoles, platformRoles]
   );
 
   const hasFeature = useCallback(
@@ -321,12 +437,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       isLoading,
       isOrgContextLoading,
       activeWorkspace,
+      activeWorkspaceOption,
+      availableWorkspaces,
+      hasMultipleWorkspaces: availableWorkspaces.length > 1,
       hasPlatformAccess,
       platformRoles,
       platformPermissions,
       activeOrganizationId,
       activeOrganization,
       activeMemberships,
+      inactiveMemberships,
       organizationRoles,
       organizationPermissions,
       subscription,
@@ -335,6 +455,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       login,
       logout,
       refreshSession,
+      activatePlatformWorkspace,
       selectOrganization,
       switchWorkspace,
       hasPermission,
@@ -346,12 +467,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       isLoading,
       isOrgContextLoading,
       activeWorkspace,
+      activeWorkspaceOption,
+      availableWorkspaces,
       hasPlatformAccess,
       platformRoles,
       platformPermissions,
       activeOrganizationId,
       activeOrganization,
       activeMemberships,
+      inactiveMemberships,
       organizationRoles,
       organizationPermissions,
       subscription,
@@ -360,6 +484,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       login,
       logout,
       refreshSession,
+      activatePlatformWorkspace,
       selectOrganization,
       switchWorkspace,
       hasPermission,

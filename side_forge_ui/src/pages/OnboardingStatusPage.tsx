@@ -162,7 +162,7 @@ export const OnboardingStatusPage: React.FC = () => {
                   <Button
                     variant="primary"
                     size="sm"
-                    onClick={() => navigate(hasPlatformAccess ? '/platform' : '/app')}
+                    onClick={() => navigate('/workspaces')}
                     rightIcon={<ArrowRight className="w-4 h-4" />}
                   >
                     Open Workspace

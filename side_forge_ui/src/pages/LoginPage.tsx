@@ -29,8 +29,14 @@ interface LoginLocationState {
 }
 
 export const LoginPage: React.FC = () => {
-  const { isAuthenticated, activeWorkspace, hasPlatformAccess, activeMemberships, login } =
-    useAuth();
+  const {
+    isAuthenticated,
+    activeWorkspace,
+    activeOrganization,
+    availableWorkspaces,
+    hasPlatformAccess,
+    login,
+  } = useAuth();
   const toast = useToast();
   const navigate = useNavigate();
   const location = useLocation();
@@ -50,13 +56,16 @@ export const LoginPage: React.FC = () => {
 
   if (isAuthenticated) {
     const fromPath = locState.from?.pathname;
-    const fallback =
-      activeWorkspace === 'PLATFORM' && hasPlatformAccess
-        ? '/platform'
-        : activeMemberships.length > 0
-        ? '/app'
-        : '/onboarding-status';
-    return <Navigate to={fromPath || fallback} replace />;
+    if (availableWorkspaces.length === 0) {
+      return <Navigate to="/onboarding-status" replace />;
+    }
+    if (activeWorkspace === 'PLATFORM' && hasPlatformAccess) {
+      return <Navigate to={fromPath || '/platform/onboarding'} replace />;
+    }
+    if (activeWorkspace === 'SCHOOL' && activeOrganization) {
+      return <Navigate to={fromPath || '/app'} replace />;
+    }
+    return <Navigate to="/workspaces" replace />;
   }
 
   const onSubmit = async (values: LoginFormValues) => {
@@ -67,8 +76,11 @@ export const LoginPage: React.FC = () => {
         password: values.password,
       });
       toast.success('Signed in successfully', 'Welcome back to SchoolForge.');
+      // When multiple workspaces exist (`defaultRoute === '/workspaces'`), always route to `/workspaces` first
       const fromPath = (location.state as { from?: { pathname?: string } })?.from?.pathname;
-      navigate(fromPath || defaultRoute, { replace: true });
+      const targetRoute =
+        defaultRoute === '/workspaces' ? '/workspaces' : fromPath || defaultRoute;
+      navigate(targetRoute, { replace: true });
     } catch (err) {
       if (err instanceof ApiError) {
         setServerError(

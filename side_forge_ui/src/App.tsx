@@ -9,6 +9,7 @@ import { LandingPage } from './pages/LandingPage';
 import { LoginPage } from './pages/LoginPage';
 import { RegisterPage } from './pages/RegisterPage';
 import { OnboardingStatusPage } from './pages/OnboardingStatusPage';
+import { WorkspaceSelectorPage } from './pages/WorkspaceSelectorPage';
 import { PlatformOnboardingPage } from './pages/PlatformOnboardingPage';
 import { WorkspaceShellPlaceholder } from './pages/WorkspaceShellPlaceholder';
 import { UnauthorizedPage } from './pages/UnauthorizedPage';
@@ -28,6 +29,16 @@ export default function App() {
               <Route path="/login" element={<LoginPage />} />
               <Route path="/register" element={<RegisterPage />} />
               <Route path="/onboarding-status" element={<OnboardingStatusPage />} />
+
+              {/* Multi-Workspace & Role Context Selection */}
+              <Route
+                path="/workspaces"
+                element={
+                  <ProtectedRoute>
+                    <WorkspaceSelectorPage />
+                  </ProtectedRoute>
+                }
+              />
 
               {/* Platform Administration: School Onboarding Requests Management */}
               <Route

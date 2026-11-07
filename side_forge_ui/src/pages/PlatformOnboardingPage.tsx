@@ -1,5 +1,4 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
 import {
   Building2,
   CheckCircle2,
@@ -8,12 +7,10 @@ import {
   Clock,
   Eye,
   Filter,
-  LogOut,
   Mail,
   Phone,
   RefreshCw,
   Search,
-  Shield,
   X,
   XCircle,
 } from 'lucide-react';
@@ -21,7 +18,6 @@ import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 import { ApiError } from '../lib/api-client';
 import { platformOnboardingApi } from '../services/onboardingApi';
-import { WorkspaceType } from '../types/auth';
 import {
   ApproveOnboardingSubscriptionRequest,
   ApprovedOrganizationResponse,
@@ -34,6 +30,7 @@ import {
   STUDENT_STRENGTH_LABELS,
   SubscriptionPlanSummary,
 } from '../types/onboarding';
+import { AppShell } from '../components/layout/AppShell';
 import {
   ApproveOnboardingDialog,
   RejectOnboardingDialog,
@@ -59,17 +56,8 @@ const STATUS_FILTER_OPTIONS: { value: OnboardingStatus | ''; label: string }[] =
 ];
 
 export const PlatformOnboardingPage: React.FC = () => {
-  const {
-    user,
-    hasPlatformAccess,
-    platformRoles,
-    platformPermissions,
-    activeMemberships,
-    switchWorkspace,
-    logout,
-  } = useAuth();
+  const { platformPermissions } = useAuth();
   const toast = useToast();
-  const navigate = useNavigate();
 
   // Strictly check platform-scoped permissions (never organization-scoped SCHOOL_ADMIN)
   const canViewOnboarding = platformPermissions.has('platform.organization.view');
@@ -293,17 +281,6 @@ export const PlatformOnboardingPage: React.FC = () => {
     }
   };
 
-  const handleWorkspaceToggle = (target: WorkspaceType) => {
-    switchWorkspace(target);
-    navigate(target === 'PLATFORM' ? '/platform' : '/app');
-  };
-
-  const handleLogout = async () => {
-    await logout();
-    toast.info('Signed out', 'Your session has been closed.');
-    navigate('/login', { replace: true });
-  };
-
   const selectedRequestAuditEntries = useMemo(() => {
     if (!selectedRequest) return [];
     return auditLogs.filter((item) => item.resourceId === selectedRequest.id);
@@ -462,7 +439,6 @@ export const PlatformOnboardingPage: React.FC = () => {
     [canManageOnboarding]
   );
 
-  const fullName = [user?.firstName, user?.lastName].filter(Boolean).join(' ') || user?.email;
   const rows = pagedData?.content || [];
   const totalElements = pagedData?.totalElements ?? 0;
   const totalPages = pagedData?.totalPages ?? 0;
@@ -470,86 +446,11 @@ export const PlatformOnboardingPage: React.FC = () => {
   const toRow = Math.min((page + 1) * pageSize, totalElements);
 
   return (
-    <div className="min-h-screen bg-stone-50/50 text-slate-900 flex flex-col">
-      {/* Top Platform Header */}
-      <header className="sticky top-0 z-30 bg-white/95 backdrop-blur-md border-b border-slate-200/80">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between gap-4">
-          <div className="flex items-center gap-4">
-            <Link to="/" className="flex items-center gap-2.5 text-slate-900">
-              <div className="w-8 h-8 rounded-lg bg-indigo-600 flex items-center justify-center text-white shadow-2xs">
-                <span className="font-extrabold text-sm tracking-tight">SF</span>
-              </div>
-              <span className="text-lg font-bold tracking-tight text-slate-900">
-                School<span className="text-indigo-600">Forge</span>
-              </span>
-            </Link>
-
-            <span className="h-4 w-px bg-slate-200 hidden sm:inline-block" />
-
-            <Badge variant="primary" dot>
-              Platform Administration
-            </Badge>
-
-            <nav className="hidden md:flex items-center gap-1 ml-2">
-              <Link
-                to="/platform/onboarding"
-                className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-indigo-50 text-indigo-700 border border-indigo-200/60"
-              >
-                Onboarding Requests
-              </Link>
-              <Link
-                to="/platform/context"
-                className="px-3 py-1.5 rounded-lg text-xs font-medium text-slate-600 hover:text-slate-900 hover:bg-slate-100 transition-colors"
-              >
-                Workspace Context
-              </Link>
-            </nav>
-          </div>
-
-          <div className="flex items-center gap-3">
-            {hasPlatformAccess && activeMemberships.length > 0 && (
-              <div className="hidden md:flex items-center rounded-xl bg-slate-100 p-0.5 border border-slate-200/70">
-                <button
-                  type="button"
-                  onClick={() => handleWorkspaceToggle('SCHOOL')}
-                  className="px-3 py-1 text-xs font-semibold rounded-lg text-slate-600 hover:text-slate-900 transition-colors cursor-pointer"
-                >
-                  School Workspace
-                </button>
-                <button
-                  type="button"
-                  onClick={() => handleWorkspaceToggle('PLATFORM')}
-                  className="px-3 py-1 text-xs font-semibold rounded-lg bg-white text-slate-900 shadow-2xs transition-colors cursor-pointer"
-                >
-                  Platform Admin
-                </button>
-              </div>
-            )}
-
-            <div className="hidden sm:flex items-center gap-2 text-xs text-slate-600 bg-slate-50 px-3 py-1.5 rounded-xl border border-slate-200/70">
-              <Shield className="w-3.5 h-3.5 text-indigo-600" />
-              <span className="font-medium text-slate-800">{fullName}</span>
-              {platformRoles[0] && (
-                <span className="font-mono text-[10px] text-indigo-700 bg-indigo-50 border border-indigo-200/60 px-1.5 py-0.5 rounded">
-                  {platformRoles[0]}
-                </span>
-              )}
-            </div>
-
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={handleLogout}
-              leftIcon={<LogOut className="w-3.5 h-3.5" />}
-            >
-              Sign out
-            </Button>
-          </div>
-        </div>
-      </header>
-
-      {/* Main Content */}
-      <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-6">
+    <AppShell
+      pageTitle="Onboarding Requests"
+      breadcrumbParent="Platform Administration"
+    >
+      <div className="space-y-6">
         <PageHeader
           eyebrow="Platform Control Plane"
           title="School Onboarding Requests"
@@ -816,7 +717,7 @@ export const PlatformOnboardingPage: React.FC = () => {
             )}
           </div>
         )}
-      </main>
+      </div>
 
       {/* Request Details Modal */}
       <OnboardingRequestDetailsModal
@@ -862,6 +763,6 @@ export const PlatformOnboardingPage: React.FC = () => {
         errorMessage={actionError}
         onConfirmReject={handleConfirmReject}
       />
-    </div>
+    </AppShell>
   );
 };

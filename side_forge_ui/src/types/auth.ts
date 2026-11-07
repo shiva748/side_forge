@@ -14,6 +14,43 @@ export interface UserOrganizationSummary {
   roles: string[];
 }
 
+export interface WorkspaceContextOption {
+  key: string;
+  workspaceType: WorkspaceType;
+  organizationId: number | null;
+  displayName: string;
+  roles: string[];
+  membershipStatus: MembershipStatus;
+}
+
+export const ROLE_DISPLAY_LABELS: Record<string, string> = {
+  SYSTEM_ADMIN: 'System Administrator',
+  PLATFORM_ADMIN: 'Platform Administrator',
+  PLATFORM_SUPPORT: 'Platform Support',
+  PLATFORM_FINANCE: 'Platform Finance',
+  PLATFORM_USER: 'Platform Staff',
+  SCHOOL_ADMIN: 'School Administrator',
+  PRINCIPAL: 'Principal',
+  TEACHER: 'Teacher',
+  ACCOUNTANT: 'Accountant',
+  RECEPTIONIST: 'Receptionist',
+  SCHOOL_STAFF: 'School Staff',
+  PARENT: 'Parent',
+  STUDENT: 'Student',
+};
+
+export function formatRoleLabel(roleCode: string): string {
+  if (!roleCode) return 'Member';
+  if (ROLE_DISPLAY_LABELS[roleCode]) {
+    return ROLE_DISPLAY_LABELS[roleCode];
+  }
+  return roleCode
+    .split('_')
+    .filter(Boolean)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1).toLowerCase())
+    .join(' ');
+}
+
 export interface UserProfile {
   id: number;
   firstName: string;

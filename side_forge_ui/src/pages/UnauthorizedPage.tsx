@@ -6,8 +6,14 @@ import { Button } from '../components/ui/Button';
 import { Badge } from '../components/ui/Badge';
 
 export const UnauthorizedPage: React.FC = () => {
-  const { isAuthenticated, activeWorkspace, hasPlatformAccess, activeMemberships, logout } =
-    useAuth();
+  const {
+    isAuthenticated,
+    activeWorkspace,
+    hasMultipleWorkspaces,
+    hasPlatformAccess,
+    activeMemberships,
+    logout,
+  } = useAuth();
   const location = useLocation();
   const navigate = useNavigate();
 
@@ -19,10 +25,10 @@ export const UnauthorizedPage: React.FC = () => {
 
   const defaultWorkspacePath =
     activeWorkspace === 'PLATFORM' && hasPlatformAccess
-      ? '/platform'
+      ? '/platform/onboarding'
       : activeMemberships.length > 0
       ? '/app'
-      : '/';
+      : '/workspaces';
 
   const handleSignOut = async () => {
     await logout();
@@ -55,6 +61,14 @@ export const UnauthorizedPage: React.FC = () => {
               >
                 Return to Workspace
               </Button>
+              {hasMultipleWorkspaces && (
+                <Button
+                  variant="outline"
+                  onClick={() => navigate('/workspaces?stay=1')}
+                >
+                  Switch Workspace
+                </Button>
+              )}
               <Button
                 variant="outline"
                 onClick={handleSignOut}

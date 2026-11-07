@@ -1,19 +1,14 @@
 import React from 'react';
-import { Link, useNavigate } from 'react-router-dom';
 import {
   CheckCircle2,
   Layers,
-  LogOut,
-  RefreshCw,
   Shield,
   UserCheck,
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
-import { useToast } from '../context/ToastContext';
 import { WorkspaceType } from '../types/auth';
+import { AppShell } from '../components/layout/AppShell';
 import { Badge } from '../components/ui/Badge';
-import { Button } from '../components/ui/Button';
-import { Select } from '../components/ui/FormControls';
 import { PageHeader } from '../components/ui/PageHeader';
 import { InlineAlert } from '../components/ui/StateViews';
 
@@ -26,143 +21,29 @@ export const WorkspaceShellPlaceholder: React.FC<WorkspaceShellPlaceholderProps>
 }) => {
   const {
     user,
-    hasPlatformAccess,
     platformRoles,
     platformPermissions,
     activeOrganization,
-    activeOrganizationId,
     activeMemberships,
     organizationRoles,
     organizationPermissions,
     subscription,
     entitlements,
     enabledFeatures,
-    selectOrganization,
-    switchWorkspace,
-    refreshSession,
-    logout,
   } = useAuth();
-  const toast = useToast();
-  const navigate = useNavigate();
-
-  const handleWorkspaceToggle = (target: WorkspaceType) => {
-    switchWorkspace(target);
-    navigate(target === 'PLATFORM' ? '/platform' : '/app');
-  };
-
-  const handleLogout = async () => {
-    await logout();
-    toast.info('Signed out', 'Your session has been closed.');
-    navigate('/login', { replace: true });
-  };
 
   const fullName = [user?.firstName, user?.lastName].filter(Boolean).join(' ') || user?.email;
 
   return (
-    <div className="min-h-screen bg-stone-50/50 text-slate-900 flex flex-col">
-      <header className="sticky top-0 z-30 bg-white/95 backdrop-blur-md border-b border-slate-200/80">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between gap-4">
-          <div className="flex items-center gap-4">
-            <Link to="/" className="flex items-center gap-2.5 text-slate-900">
-              <div className="w-8 h-8 rounded-lg bg-indigo-600 flex items-center justify-center text-white shadow-2xs">
-                <span className="font-extrabold text-sm tracking-tight">SF</span>
-              </div>
-              <span className="text-lg font-bold tracking-tight text-slate-900">
-                School<span className="text-indigo-600">Forge</span>
-              </span>
-            </Link>
-
-            <span className="h-4 w-px bg-slate-200 hidden sm:inline-block" />
-
-            <Badge variant={workspace === 'PLATFORM' ? 'primary' : 'info'} dot>
-              {workspace === 'PLATFORM' ? 'Platform Administration' : 'School Administration'}
-            </Badge>
-
-            {workspace === 'PLATFORM' && (
-              <nav className="hidden md:flex items-center gap-1 ml-2">
-                <Link
-                  to="/platform/onboarding"
-                  className="px-3 py-1.5 rounded-lg text-xs font-medium text-slate-600 hover:text-slate-900 hover:bg-slate-100 transition-colors"
-                >
-                  Onboarding Requests
-                </Link>
-                <Link
-                  to="/platform/context"
-                  className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-indigo-50 text-indigo-700 border border-indigo-200/60"
-                >
-                  Workspace Context
-                </Link>
-              </nav>
-            )}
-          </div>
-
-          <div className="flex items-center gap-3">
-            {hasPlatformAccess && activeMemberships.length > 0 && (
-              <div className="hidden md:flex items-center rounded-xl bg-slate-100 p-0.5 border border-slate-200/70">
-                <button
-                  type="button"
-                  onClick={() => handleWorkspaceToggle('SCHOOL')}
-                  className={`px-3 py-1 text-xs font-semibold rounded-lg transition-colors cursor-pointer ${
-                    workspace === 'SCHOOL'
-                      ? 'bg-white text-slate-900 shadow-2xs'
-                      : 'text-slate-600 hover:text-slate-900'
-                  }`}
-                >
-                  School Workspace
-                </button>
-                <button
-                  type="button"
-                  onClick={() => handleWorkspaceToggle('PLATFORM')}
-                  className={`px-3 py-1 text-xs font-semibold rounded-lg transition-colors cursor-pointer ${
-                    workspace === 'PLATFORM'
-                      ? 'bg-white text-indigo-600 shadow-2xs'
-                      : 'text-slate-600 hover:text-slate-900'
-                  }`}
-                >
-                  Platform Admin
-                </button>
-              </div>
-            )}
-
-            {workspace === 'SCHOOL' && activeMemberships.length > 1 && (
-              <div className="w-48 hidden sm:block">
-                <Select
-                  aria-label="Select active school organization"
-                  value={activeOrganizationId ?? ''}
-                  onChange={(e) => selectOrganization(Number(e.target.value))}
-                  className="h-9 text-xs"
-                >
-                  {activeMemberships.map((m) => (
-                    <option key={m.organizationId} value={m.organizationId}>
-                      {m.organizationName || `School #${m.organizationId}`}
-                    </option>
-                  ))}
-                </Select>
-              </div>
-            )}
-
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => void refreshSession()}
-              leftIcon={<RefreshCw className="w-3.5 h-3.5" />}
-            >
-              <span className="hidden sm:inline">Sync</span>
-            </Button>
-
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={handleLogout}
-              leftIcon={<LogOut className="w-3.5 h-3.5" />}
-            >
-              Sign Out
-            </Button>
-          </div>
-        </div>
-      </header>
-
-      <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-6">
+    <AppShell
+      pageTitle="Workspace Overview"
+      breadcrumbParent={
+        workspace === 'PLATFORM'
+          ? 'Platform Administration'
+          : activeOrganization?.organizationName || 'School Administration'
+      }
+    >
+      <div className="space-y-6">
         <PageHeader
           eyebrow={
             workspace === 'PLATFORM'
@@ -174,7 +55,7 @@ export const WorkspaceShellPlaceholder: React.FC<WorkspaceShellPlaceholderProps>
               ? 'Platform Administration Workspace'
               : activeOrganization?.organizationName || 'School Administration Workspace'
           }
-          description="Authenticated Admin Web foundation is active. Sidebar navigation, header shell, and domain modules will be mounted here in the next phase."
+          description="Active workspace identity, assigned roles, resolved RBAC permissions, and module feature entitlements."
           badge={
             workspace === 'SCHOOL' && subscription ? (
               <Badge
@@ -312,8 +193,8 @@ export const WorkspaceShellPlaceholder: React.FC<WorkspaceShellPlaceholderProps>
             )}
           </div>
         </div>
-      </main>
-    </div>
+      </div>
+    </AppShell>
   );
 };
 
