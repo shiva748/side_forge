@@ -1,11 +1,16 @@
 package com.side.forge.organization.academic.common;
 
+import java.util.HashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.ApplicationArguments;
 import org.springframework.boot.ApplicationRunner;
+import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -13,20 +18,77 @@ import com.side.forge.authorization.enums.PermissionCode;
 import com.side.forge.platform.saas.service.SubscriptionPlanService;
 
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 
 /**
- * Idempotently seeds Academic Foundation permissions, default role-permission
- * mappings, and composite cross-tenant foreign keys on startup.
+ * Idempotently seeds predefined system permissions, PLATFORM and ORGANIZATION
+ * system roles, default role-permission mappings, default subscription plans,
+ * the initial platform administrator account, and composite cross-tenant
+ * foreign keys on every application startup.
  */
+@Slf4j
 @Component
 @RequiredArgsConstructor
 public class AcademicDatabaseInitializer implements ApplicationRunner {
 
+	private static final String STARTUP_LOCK_NAME = "side_forge_startup_init";
+
 	private final NamedParameterJdbcTemplate jdbc;
 	private final SubscriptionPlanService subscriptionPlanService;
+	private final PasswordEncoder passwordEncoder;
+
+	@Value("${forge.bootstrap.admin.email:admin@sideforge.com}")
+	private String bootstrapAdminEmail;
+
+	@Value("${forge.bootstrap.admin.password:}")
+	private String bootstrapAdminPassword;
+
+	@Value("${forge.bootstrap.admin.first-name:Platform}")
+	private String bootstrapAdminFirstName;
+
+	@Value("${forge.bootstrap.admin.last-name:Administrator}")
+	private String bootstrapAdminLastName;
+
+	@Value("${forge.bootstrap.admin.phone:+919999999999}")
+	private String bootstrapAdminPhone;
+
+	@Value("${forge.bootstrap.admin.role:SYSTEM_ADMIN}")
+	private String bootstrapAdminRole;
 
 	private record PermissionSeed(PermissionCode code, String name, String module, String description) {
 	}
+
+	private record RoleSeed(String code, String name, String description) {
+	}
+
+	private static final List<RoleSeed> PLATFORM_ROLES = List.of(
+			new RoleSeed("SYSTEM_ADMIN", "System Administrator", "Full platform and SaaS administration access"),
+			new RoleSeed("PLATFORM_ADMIN", "Platform Administrator",
+					"Platform operations, onboarding, plans, subscriptions, and entitlements"),
+			new RoleSeed("PLATFORM_SUPPORT", "Platform Support",
+					"Read-only platform support and troubleshooting access"),
+			new RoleSeed("PLATFORM_FINANCE", "Platform Finance",
+					"Subscription billing, payment recording, and invoice management")
+	);
+
+	private static final List<RoleSeed> ORGANIZATION_ROLES = List.of(
+			new RoleSeed("SCHOOL_ADMIN", "School Administrator",
+					"Full school administration and management access"),
+			new RoleSeed("PRINCIPAL", "Principal",
+					"School academic and operational leadership"),
+			new RoleSeed("TEACHER", "Teacher",
+					"Classroom instruction, attendance, examinations, and homework management"),
+			new RoleSeed("ACCOUNTANT", "Accountant",
+					"School fee collection, billing, refunds, and financial reporting"),
+			new RoleSeed("RECEPTIONIST", "Receptionist",
+					"Front-office student inquiries, admissions, and general communication"),
+			new RoleSeed("SCHOOL_STAFF", "School Staff",
+					"General non-teaching school staff"),
+			new RoleSeed("STUDENT", "Student",
+					"Enrolled school student"),
+			new RoleSeed("PARENT", "Parent / Guardian",
+					"Parent or guardian of enrolled student")
+	);
 
 	private static final List<PermissionSeed> ACADEMIC_PERMISSIONS = List.of(
 			new PermissionSeed(PermissionCode.ACADEMIC_SESSION_VIEW, "View academic sessions", "ACADEMICS",
@@ -116,6 +178,24 @@ public class AcademicDatabaseInitializer implements ApplicationRunner {
 					"View linked child academic, attendance, fee, and homework records"),
 			new PermissionSeed(PermissionCode.PARENT_CHILD_COMMUNICATION, "Parent communication", "PARENT",
 					"Communicate regarding linked student records"),
+			new PermissionSeed(PermissionCode.SCHOOL_VIEW, "View school profile", "SCHOOL",
+					"View school profile and general organization settings"),
+			new PermissionSeed(PermissionCode.SCHOOL_UPDATE, "Update school profile", "SCHOOL",
+					"Update school profile and general organization details"),
+			new PermissionSeed(PermissionCode.SCHOOL_SETTINGS_MANAGE, "Manage school settings", "SCHOOL",
+					"Configure school-wide operational settings and preferences"),
+			new PermissionSeed(PermissionCode.ADMISSION_VIEW, "View admissions", "ADMISSION",
+					"View student admission inquiries and applications"),
+			new PermissionSeed(PermissionCode.ADMISSION_MANAGE, "Manage admissions", "ADMISSION",
+					"Manage student admission inquiries, applications, and pipeline"),
+			new PermissionSeed(PermissionCode.LIBRARY_VIEW, "View library", "LIBRARY",
+					"View library catalog and circulation records"),
+			new PermissionSeed(PermissionCode.LIBRARY_MANAGE, "Manage library", "LIBRARY",
+					"Manage library books, inventory, and circulation"),
+			new PermissionSeed(PermissionCode.TRANSPORT_VIEW, "View transport", "TRANSPORT",
+					"View school transport routes, vehicles, and assignments"),
+			new PermissionSeed(PermissionCode.TRANSPORT_MANAGE, "Manage transport", "TRANSPORT",
+					"Manage school transport fleet, routes, and student allocations"),
 			new PermissionSeed(PermissionCode.PLATFORM_DASHBOARD_VIEW, "View platform dashboard", "PLATFORM",
 					"View platform-wide SaaS metrics, revenue, and subscription summaries"),
 			new PermissionSeed(PermissionCode.PLATFORM_ORGANIZATION_VIEW, "View all organizations", "PLATFORM",
@@ -146,6 +226,7 @@ public class AcademicDatabaseInitializer implements ApplicationRunner {
 
 	private static final Map<String, List<PermissionCode>> ROLE_PERMISSION_MAPPINGS = Map.of(
 			"SCHOOL_ADMIN", List.of(
+					PermissionCode.SCHOOL_VIEW, PermissionCode.SCHOOL_UPDATE, PermissionCode.SCHOOL_SETTINGS_MANAGE,
 					PermissionCode.ACADEMIC_SESSION_VIEW, PermissionCode.ACADEMIC_SESSION_MANAGE,
 					PermissionCode.CLASS_VIEW, PermissionCode.CLASS_MANAGE,
 					PermissionCode.SECTION_VIEW, PermissionCode.SECTION_MANAGE,
@@ -163,10 +244,14 @@ public class AcademicDatabaseInitializer implements ApplicationRunner {
 					PermissionCode.EXAM_ENTER_MARKS, PermissionCode.EXAM_PUBLISH_RESULTS,
 					PermissionCode.FEES_VIEW, PermissionCode.FEES_MANAGE,
 					PermissionCode.FEES_COLLECT, PermissionCode.FEES_REFUND, PermissionCode.FEES_REPORT_VIEW,
+					PermissionCode.ADMISSION_VIEW, PermissionCode.ADMISSION_MANAGE,
+					PermissionCode.LIBRARY_VIEW, PermissionCode.LIBRARY_MANAGE,
+					PermissionCode.TRANSPORT_VIEW, PermissionCode.TRANSPORT_MANAGE,
 					PermissionCode.COMMUNICATION_VIEW, PermissionCode.COMMUNICATION_MANAGE,
 					PermissionCode.DASHBOARD_VIEW, PermissionCode.REPORT_VIEW, PermissionCode.REPORT_EXPORT,
 					PermissionCode.HOMEWORK_VIEW, PermissionCode.HOMEWORK_MANAGE, PermissionCode.HOMEWORK_EVALUATE),
 			"PRINCIPAL", List.of(
+					PermissionCode.SCHOOL_VIEW, PermissionCode.SCHOOL_UPDATE,
 					PermissionCode.ACADEMIC_SESSION_VIEW, PermissionCode.ACADEMIC_SESSION_MANAGE,
 					PermissionCode.CLASS_VIEW, PermissionCode.CLASS_MANAGE,
 					PermissionCode.SECTION_VIEW, PermissionCode.SECTION_MANAGE,
@@ -184,10 +269,14 @@ public class AcademicDatabaseInitializer implements ApplicationRunner {
 					PermissionCode.EXAM_ENTER_MARKS, PermissionCode.EXAM_PUBLISH_RESULTS,
 					PermissionCode.FEES_VIEW, PermissionCode.FEES_MANAGE,
 					PermissionCode.FEES_COLLECT, PermissionCode.FEES_REFUND, PermissionCode.FEES_REPORT_VIEW,
+					PermissionCode.ADMISSION_VIEW, PermissionCode.ADMISSION_MANAGE,
+					PermissionCode.LIBRARY_VIEW, PermissionCode.TRANSPORT_VIEW,
 					PermissionCode.COMMUNICATION_VIEW, PermissionCode.COMMUNICATION_MANAGE,
 					PermissionCode.DASHBOARD_VIEW, PermissionCode.REPORT_VIEW, PermissionCode.REPORT_EXPORT,
 					PermissionCode.HOMEWORK_VIEW, PermissionCode.HOMEWORK_MANAGE, PermissionCode.HOMEWORK_EVALUATE),
 			"RECEPTIONIST", List.of(
+					PermissionCode.SCHOOL_VIEW,
+					PermissionCode.ADMISSION_VIEW, PermissionCode.ADMISSION_MANAGE,
 					PermissionCode.STUDENT_VIEW, PermissionCode.STUDENT_CREATE,
 					PermissionCode.STUDENT_GUARDIAN_MANAGE,
 					PermissionCode.STAFF_VIEW, PermissionCode.TEACHER_VIEW,
@@ -268,12 +357,42 @@ public class AcademicDatabaseInitializer implements ApplicationRunner {
 	@Override
 	@Transactional
 	public void run(ApplicationArguments args) {
-		ensureRolePermissionsTable();
-		seedAcademicPermissions();
-		seedDefaultRolePermissions();
-		seedPlatformRolesAndPermissions();
-		subscriptionPlanService.seedDefaultPlansIfMissing();
-		ensureCompositeForeignKeys();
+		Integer lockAcquired = null;
+		try {
+			lockAcquired = jdbc.queryForObject(
+					"SELECT GET_LOCK(:lockName, 30)",
+					Map.of("lockName", STARTUP_LOCK_NAME),
+					Integer.class);
+			if (lockAcquired == null || lockAcquired != 1) {
+				throw new IllegalStateException(
+						"Could not acquire database startup initialization lock: " + STARTUP_LOCK_NAME);
+			}
+
+			log.info("Starting automatic database initialization check...");
+			ensureRolePermissionsTable();
+			seedAcademicPermissions();
+			seedDefaultRolePermissions();
+			seedPlatformRolesAndPermissions();
+			seedDefaultSubscriptionPlans();
+			seedInitialPlatformAdministrator();
+			ensureCompositeForeignKeys();
+			log.info("Automatic database initialization completed successfully.");
+		} catch (Exception ex) {
+			log.error("Automatic database initialization failed: {}", ex.getMessage(), ex);
+			throw ex;
+		} finally {
+			if (lockAcquired != null && lockAcquired == 1) {
+				try {
+					jdbc.queryForObject(
+							"SELECT RELEASE_LOCK(:lockName)",
+							Map.of("lockName", STARTUP_LOCK_NAME),
+							Integer.class);
+				} catch (Exception releaseEx) {
+					log.warn("Failed to release startup initialization lock {}: {}",
+							STARTUP_LOCK_NAME, releaseEx.getMessage());
+				}
+			}
+		}
 	}
 
 	private void ensureRolePermissionsTable() {
@@ -295,30 +414,46 @@ public class AcademicDatabaseInitializer implements ApplicationRunner {
 				SELECT :code, :name, :module, :description, CURRENT_TIMESTAMP(6), CURRENT_TIMESTAMP(6)
 				WHERE NOT EXISTS (SELECT 1 FROM permissions WHERE code = :code)
 				""";
+		int inserted = 0;
+		int existing = 0;
 		for (PermissionSeed seed : ACADEMIC_PERMISSIONS) {
-			jdbc.update(sql, Map.of(
+			int rows = jdbc.update(sql, Map.of(
 					"code", seed.code().getValue(),
 					"name", seed.name(),
 					"module", seed.module(),
 					"description", seed.description()));
+			if (rows > 0) {
+				inserted += rows;
+			} else {
+				existing++;
+			}
 		}
+		for (PermissionCode code : PermissionCode.values()) {
+			int rows = jdbc.update(sql, Map.of(
+					"code", code.getValue(),
+					"name", code.name().replace('_', ' '),
+					"module", code.name().split("_")[0],
+					"description", "System permission " + code.getValue()));
+			if (rows > 0) {
+				inserted += rows;
+			}
+		}
+		log.info("System permissions verified: {} already present, {} newly initialized (total defined: {}).",
+				existing, inserted, PermissionCode.values().length);
 	}
 
 	private void seedDefaultRolePermissions() {
-		jdbc.getJdbcTemplate().execute("""
-				INSERT INTO roles (code, name, scope, organization_id, description, is_system_defined, created_at, updated_at)
-				SELECT 'STUDENT', 'Student', 'ORGANIZATION', NULL, 'Enrolled school student', 1, CURRENT_TIMESTAMP(6), CURRENT_TIMESTAMP(6)
-				WHERE NOT EXISTS (
-				    SELECT 1 FROM roles WHERE code = 'STUDENT' AND scope = 'ORGANIZATION' AND organization_id IS NULL
-				)
-				""");
-		jdbc.getJdbcTemplate().execute("""
-				INSERT INTO roles (code, name, scope, organization_id, description, is_system_defined, created_at, updated_at)
-				SELECT 'PARENT', 'Parent / Guardian', 'ORGANIZATION', NULL, 'Parent or guardian of enrolled student', 1, CURRENT_TIMESTAMP(6), CURRENT_TIMESTAMP(6)
-				WHERE NOT EXISTS (
-				    SELECT 1 FROM roles WHERE code = 'PARENT' AND scope = 'ORGANIZATION' AND organization_id IS NULL
-				)
-				""");
+		int rolesInserted = 0;
+		int rolesExisting = 0;
+		for (RoleSeed role : ORGANIZATION_ROLES) {
+			int rows = seedRoleIfMissing(role.code(), role.name(), "ORGANIZATION", role.description());
+			if (rows > 0) {
+				rolesInserted += rows;
+			} else {
+				rolesExisting++;
+			}
+		}
+
 		String sql = """
 				INSERT INTO role_permissions (role_id, permission_id)
 				SELECT r.id, p.id
@@ -332,29 +467,36 @@ public class AcademicDatabaseInitializer implements ApplicationRunner {
 				      WHERE rp.role_id = r.id AND rp.permission_id = p.id
 				  )
 				""";
+		int mappingsInserted = 0;
+		int mappingsExisting = 0;
 		for (Map.Entry<String, List<PermissionCode>> entry : ROLE_PERMISSION_MAPPINGS.entrySet()) {
 			String roleCode = entry.getKey();
 			for (PermissionCode permissionCode : entry.getValue()) {
-				jdbc.update(sql, Map.of(
+				int rows = jdbc.update(sql, Map.of(
 						"roleCode", roleCode,
 						"permissionCode", permissionCode.getValue()));
+				if (rows > 0) {
+					mappingsInserted += rows;
+				} else {
+					mappingsExisting++;
+				}
 			}
 		}
-		jdbc.update("""
-				DELETE rp FROM role_permissions rp
-				JOIN roles r ON r.id = rp.role_id
-				JOIN permissions p ON p.id = rp.permission_id
-				WHERE p.code = :permCode
-				  AND r.scope = 'ORGANIZATION'
-				  AND r.code NOT IN ('SCHOOL_ADMIN', 'PRINCIPAL')
-				""", Map.of("permCode", PermissionCode.FEES_MANAGE.getValue()));
+		log.info("ORGANIZATION roles verified: {} already present, {} newly initialized. Role-permission mappings: {} already present, {} newly initialized.",
+				rolesExisting, rolesInserted, mappingsExisting, mappingsInserted);
 	}
 
 	private void seedPlatformRolesAndPermissions() {
-		seedPlatformRoleIfMissing("SYSTEM_ADMIN", "System Administrator", "Full platform and SaaS administration access");
-		seedPlatformRoleIfMissing("PLATFORM_ADMIN", "Platform Administrator", "Platform operations, onboarding, plans, subscriptions, and entitlements");
-		seedPlatformRoleIfMissing("PLATFORM_SUPPORT", "Platform Support", "Read-only platform support and troubleshooting access");
-		seedPlatformRoleIfMissing("PLATFORM_FINANCE", "Platform Finance", "Subscription billing, payment recording, and invoice management");
+		int rolesInserted = 0;
+		int rolesExisting = 0;
+		for (RoleSeed role : PLATFORM_ROLES) {
+			int rows = seedRoleIfMissing(role.code(), role.name(), "PLATFORM", role.description());
+			if (rows > 0) {
+				rolesInserted += rows;
+			} else {
+				rolesExisting++;
+			}
+		}
 
 		String sql = """
 				INSERT INTO role_permissions (role_id, permission_id)
@@ -369,24 +511,147 @@ public class AcademicDatabaseInitializer implements ApplicationRunner {
 				      WHERE rp.role_id = r.id AND rp.permission_id = p.id
 				  )
 				""";
+		int mappingsInserted = 0;
+		int mappingsExisting = 0;
 		for (Map.Entry<String, List<PermissionCode>> entry : PLATFORM_ROLE_PERMISSION_MAPPINGS.entrySet()) {
 			String roleCode = entry.getKey();
 			for (PermissionCode permissionCode : entry.getValue()) {
-				jdbc.update(sql, Map.of(
+				int rows = jdbc.update(sql, Map.of(
 						"roleCode", roleCode,
 						"permissionCode", permissionCode.getValue()));
+				if (rows > 0) {
+					mappingsInserted += rows;
+				} else {
+					mappingsExisting++;
+				}
 			}
 		}
+		log.info("PLATFORM roles verified: {} already present, {} newly initialized. Role-permission mappings: {} already present, {} newly initialized.",
+				rolesExisting, rolesInserted, mappingsExisting, mappingsInserted);
 	}
 
-	private void seedPlatformRoleIfMissing(String code, String name, String description) {
-		jdbc.update("""
+	private int seedRoleIfMissing(String code, String name, String scope, String description) {
+		return jdbc.update("""
 				INSERT INTO roles (code, name, scope, organization_id, description, is_system_defined, created_at, updated_at)
-				SELECT :code, :name, 'PLATFORM', NULL, :description, 1, CURRENT_TIMESTAMP(6), CURRENT_TIMESTAMP(6)
+				SELECT :code, :name, :scope, NULL, :description, 1, CURRENT_TIMESTAMP(6), CURRENT_TIMESTAMP(6)
 				WHERE NOT EXISTS (
-				    SELECT 1 FROM roles WHERE code = :code AND scope = 'PLATFORM' AND organization_id IS NULL
+				    SELECT 1 FROM roles WHERE code = :code AND scope = :scope AND organization_id IS NULL
 				)
-				""", Map.of("code", code, "name", name, "description", description));
+				""", Map.of("code", code, "name", name, "scope", scope, "description", description));
+	}
+
+	private void seedDefaultSubscriptionPlans() {
+		Integer beforeCount = jdbc.queryForObject(
+				"SELECT COUNT(*) FROM subscription_plans",
+				Map.of(),
+				Integer.class);
+		subscriptionPlanService.seedDefaultPlansIfMissing();
+		Integer afterCount = jdbc.queryForObject(
+				"SELECT COUNT(*) FROM subscription_plans",
+				Map.of(),
+				Integer.class);
+		int before = beforeCount != null ? beforeCount : 0;
+		int after = afterCount != null ? afterCount : 0;
+		log.info("Default subscription plans verified: {} already present, {} newly initialized.",
+				before, Math.max(0, after - before));
+	}
+
+	private void seedInitialPlatformAdministrator() {
+		String email = bootstrapAdminEmail == null ? "" : bootstrapAdminEmail.trim().toLowerCase(Locale.ROOT);
+		if (email.isBlank()) {
+			throw new IllegalStateException("Bootstrap platform administrator email must not be blank");
+		}
+
+		List<Long> existingUserIds = jdbc.queryForList(
+				"SELECT id FROM users WHERE LOWER(email) = :email",
+				Map.of("email", email),
+				Long.class);
+
+		boolean accountCreated = false;
+		Long adminUserId;
+
+		if (existingUserIds.isEmpty()) {
+			if (bootstrapAdminPassword == null || bootstrapAdminPassword.isBlank()) {
+				throw new IllegalStateException(
+						"Initial platform administrator account (" + email + ") does not exist and "
+								+ "forge.bootstrap.admin.password is not configured.");
+			}
+
+			String encodedPassword = passwordEncoder.encode(bootstrapAdminPassword);
+			String phoneToUse = (bootstrapAdminPhone != null && !bootstrapAdminPhone.isBlank())
+					? bootstrapAdminPhone.trim()
+					: null;
+			if (phoneToUse != null) {
+				Integer phoneConflict = jdbc.queryForObject(
+						"SELECT COUNT(*) FROM users WHERE phone_number = :phone",
+						Map.of("phone", phoneToUse),
+						Integer.class);
+				if (phoneConflict != null && phoneConflict > 0) {
+					phoneToUse = null;
+				}
+			}
+
+			MapSqlParameterSource params = new MapSqlParameterSource()
+					.addValue("firstName", bootstrapAdminFirstName != null ? bootstrapAdminFirstName.trim() : "Platform")
+					.addValue("lastName", bootstrapAdminLastName != null ? bootstrapAdminLastName.trim() : "Administrator")
+					.addValue("email", email)
+					.addValue("phoneNumber", phoneToUse)
+					.addValue("passwordHash", encodedPassword);
+
+			int inserted = jdbc.update("""
+					INSERT INTO users (
+					    first_name, last_name, email, phone_number, password_hash,
+					    status, email_verified, phone_verified, created_at, updated_at
+					)
+					SELECT :firstName, :lastName, :email, :phoneNumber, :passwordHash,
+					       'ACTIVE', 1, 1, CURRENT_TIMESTAMP(6), CURRENT_TIMESTAMP(6)
+					WHERE NOT EXISTS (
+					    SELECT 1 FROM users WHERE LOWER(email) = :email
+					)
+					""", params);
+			accountCreated = inserted > 0;
+			adminUserId = jdbc.queryForObject(
+					"SELECT id FROM users WHERE LOWER(email) = :email",
+					Map.of("email", email),
+					Long.class);
+		} else {
+			adminUserId = existingUserIds.get(0);
+		}
+
+		if (adminUserId == null) {
+			throw new IllegalStateException("Failed to resolve user ID for bootstrap platform administrator: " + email);
+		}
+
+		String targetRoleCode = (bootstrapAdminRole != null && !bootstrapAdminRole.isBlank())
+				? bootstrapAdminRole.trim().toUpperCase(Locale.ROOT)
+				: "SYSTEM_ADMIN";
+
+		List<Long> roleIds = jdbc.queryForList("""
+				SELECT id FROM roles
+				WHERE code = :code AND scope = 'PLATFORM' AND organization_id IS NULL
+				""",
+				Map.of("code", targetRoleCode),
+				Long.class);
+
+		if (roleIds.isEmpty()) {
+			throw new IllegalStateException("Platform role '" + targetRoleCode + "' not found during bootstrap admin initialization");
+		}
+
+		Long platformRoleId = roleIds.get(0);
+		int roleAssigned = jdbc.update("""
+				INSERT INTO platform_user_roles (user_id, role_id, assigned_by, assigned_at)
+				SELECT :userId, :roleId, :userId, CURRENT_TIMESTAMP(6)
+				WHERE NOT EXISTS (
+				    SELECT 1 FROM platform_user_roles WHERE user_id = :userId AND role_id = :roleId
+				)
+				""",
+				Map.of("userId", adminUserId, "roleId", platformRoleId));
+
+		log.info("Initial platform administrator ({}) verified: account={}, platformRole={} ({}).",
+				email,
+				accountCreated ? "CREATED" : "ALREADY_EXISTS",
+				targetRoleCode,
+				roleAssigned > 0 ? "ASSIGNED" : "ALREADY_ASSIGNED");
 	}
 
 	private void ensureCompositeForeignKeys() {
