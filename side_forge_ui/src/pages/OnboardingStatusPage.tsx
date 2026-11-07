@@ -122,15 +122,15 @@ export const OnboardingStatusPage: React.FC = () => {
       <div className="max-w-3xl w-full mx-auto my-8 space-y-6">
         <div className="rounded-2xl border border-slate-200/90 bg-white p-6 sm:p-8 shadow-sm">
           <div className="flex flex-wrap items-start justify-between gap-4 pb-6 border-b border-slate-100">
-            <div className="space-y-1.5">
-              <div className="inline-flex items-center gap-1.5 rounded-full bg-amber-50 border border-amber-200/70 px-3 py-1 text-xs font-semibold text-amber-800">
-                <Clock className="w-3.5 h-3.5" />
-                <span>
-                  {activeMemberships.length > 0 || hasPlatformAccess
-                    ? 'Workspace Access Active'
-                    : 'Pending Organization Approval / Membership'}
-                </span>
-              </div>
+            <div className="space-y-1.5 min-w-0">
+              <Badge
+                variant={activeMemberships.length > 0 || hasPlatformAccess ? 'success' : 'warning'}
+                dot
+              >
+                {activeMemberships.length > 0 || hasPlatformAccess
+                  ? 'Workspace Access Active'
+                  : 'Pending Organization Approval / Membership'}
+              </Badge>
               <h1 className="text-2xl font-bold tracking-tight text-slate-900">
                 Account &amp; Onboarding Status
               </h1>

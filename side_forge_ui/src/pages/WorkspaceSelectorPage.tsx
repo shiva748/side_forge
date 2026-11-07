@@ -14,9 +14,10 @@ import {
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 import { formatRoleLabel, WorkspaceContextOption } from '../types/auth';
-import { Badge } from '../components/ui/Badge';
+import { Badge, CounterLabel, IdLabel, RoleTag } from '../components/ui/Badge';
 import { Button } from '../components/ui/Button';
 import { FullScreenLoader, InlineAlert } from '../components/ui/StateViews';
+import { TruncatedText } from '../components/ui/TruncatedText';
 
 interface WorkspaceSelectorLocationState {
   from?: { pathname?: string };
@@ -142,12 +143,20 @@ export const WorkspaceSelectorPage: React.FC = () => {
           </span>
         </Link>
 
-        <div className="flex items-center gap-2.5">
-          <div className="hidden sm:flex items-center gap-2 text-xs text-slate-600 bg-white px-3 py-1.5 rounded-xl border border-slate-200/80 shadow-2xs">
-            <UserCheck className="w-3.5 h-3.5 text-indigo-600" />
-            <span className="font-medium text-slate-900">{fullName}</span>
-            <span className="text-slate-400">•</span>
-            <span className="font-mono text-slate-500">{user.email}</span>
+        <div className="flex items-center gap-2.5 min-w-0">
+          <div className="hidden sm:flex items-center gap-2 text-xs text-slate-600 bg-white px-3 py-1.5 rounded-lg border border-slate-200/80 shadow-2xs min-w-0">
+            <UserCheck className="w-3.5 h-3.5 text-indigo-600 shrink-0" />
+            <TruncatedText
+              text={fullName}
+              maxWidthClass="max-w-[140px]"
+              className="font-medium text-slate-900"
+            />
+            <span className="text-slate-300 shrink-0">•</span>
+            <TruncatedText
+              text={user.email}
+              maxWidthClass="max-w-[180px]"
+              className="font-mono text-slate-500"
+            />
           </div>
 
           <Button
@@ -174,10 +183,10 @@ export const WorkspaceSelectorPage: React.FC = () => {
       {/* Main Selector Container */}
       <div className="max-w-3xl w-full mx-auto my-8 space-y-6">
         <div className="rounded-2xl border border-slate-200/80 bg-white p-6 sm:p-8 shadow-sm space-y-6">
-          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 border-b border-slate-100 pb-5">
-            <div className="space-y-1">
+          <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3 border-b border-slate-100 pb-5">
+            <div className="space-y-1 min-w-0">
               <div className="inline-flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-indigo-600">
-                <Layers className="w-3.5 h-3.5" />
+                <Layers className="w-3.5 h-3.5 shrink-0" />
                 <span>Workspace Context Selection</span>
               </div>
               <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-slate-900">
@@ -188,10 +197,12 @@ export const WorkspaceSelectorPage: React.FC = () => {
                 the platform or school organization context you want to work in.
               </p>
             </div>
-            <Badge variant="neutral">
-              {availableWorkspaces.length}{' '}
-              {availableWorkspaces.length === 1 ? 'Workspace' : 'Workspaces'}
-            </Badge>
+            <div className="shrink-0 self-start">
+              <CounterLabel
+                count={availableWorkspaces.length}
+                label={availableWorkspaces.length === 1 ? 'Workspace' : 'Workspaces'}
+              />
+            </div>
           </div>
 
           {locState.message && (
@@ -224,15 +235,17 @@ export const WorkspaceSelectorPage: React.FC = () => {
                           : 'border-slate-200/90 bg-white hover:border-indigo-300 hover:bg-slate-50/60 shadow-2xs'
                       }`}
                     >
-                      <div className="flex items-start gap-3.5">
+                      <div className="flex items-start gap-3.5 min-w-0">
                         <div className="w-11 h-11 rounded-xl bg-indigo-600 text-white flex items-center justify-center shrink-0 shadow-xs">
                           <Shield className="w-5 h-5" />
                         </div>
-                        <div className="space-y-1.5">
-                          <div className="flex items-center gap-2 flex-wrap">
-                            <span className="text-base font-bold text-slate-900 group-hover:text-indigo-600 transition-colors">
-                              {option.displayName}
-                            </span>
+                        <div className="space-y-1.5 min-w-0">
+                          <div className="flex items-center gap-2 flex-wrap min-w-0">
+                            <TruncatedText
+                              text={option.displayName}
+                              maxWidthClass="max-w-[220px] sm:max-w-[320px]"
+                              className="text-sm sm:text-base font-bold text-slate-900 group-hover:text-indigo-600 transition-colors"
+                            />
                             <Badge variant="primary">Platform</Badge>
                             {isCurrent && (
                               <Badge variant="success" dot>
@@ -243,15 +256,11 @@ export const WorkspaceSelectorPage: React.FC = () => {
                           <div className="flex flex-wrap items-center gap-1.5">
                             <span className="text-xs text-slate-500 mr-1">Assigned Role(s):</span>
                             {option.roles.map((role) => (
-                              <span
+                              <RoleTag
                                 key={role}
-                                className="inline-flex items-center gap-1 text-xs font-medium text-indigo-700 bg-indigo-50 border border-indigo-200/70 px-2 py-0.5 rounded-md"
-                              >
-                                {formatRoleLabel(role)}
-                                <span className="font-mono text-[10px] text-indigo-500">
-                                  ({role})
-                                </span>
-                              </span>
+                                label={formatRoleLabel(role)}
+                                code={role}
+                              />
                             ))}
                           </div>
                         </div>
@@ -294,20 +303,20 @@ export const WorkspaceSelectorPage: React.FC = () => {
                           : 'border-slate-200/90 bg-white hover:border-indigo-300 hover:bg-slate-50/60 shadow-2xs'
                       }`}
                     >
-                      <div className="flex items-start gap-3.5">
+                      <div className="flex items-start gap-3.5 min-w-0">
                         <div className="w-11 h-11 rounded-xl bg-slate-900 text-white group-hover:bg-indigo-600 transition-colors flex items-center justify-center shrink-0 shadow-xs">
                           <Building2 className="w-5 h-5" />
                         </div>
-                        <div className="space-y-1.5">
-                          <div className="flex items-center gap-2 flex-wrap">
-                            <span className="text-base font-bold text-slate-900 group-hover:text-indigo-600 transition-colors">
-                              {option.displayName}
-                            </span>
+                        <div className="space-y-1.5 min-w-0">
+                          <div className="flex items-center gap-2 flex-wrap min-w-0">
+                            <TruncatedText
+                              text={option.displayName}
+                              maxWidthClass="max-w-[220px] sm:max-w-[320px]"
+                              className="text-sm sm:text-base font-bold text-slate-900 group-hover:text-indigo-600 transition-colors"
+                            />
                             <Badge variant="info">School</Badge>
                             {option.organizationId && (
-                              <span className="font-mono text-[11px] text-slate-500 bg-slate-100 px-1.5 py-0.5 rounded">
-                                Org #{option.organizationId}
-                              </span>
+                              <IdLabel>Org #{option.organizationId}</IdLabel>
                             )}
                             {isCurrent && (
                               <Badge variant="success" dot>
@@ -321,15 +330,11 @@ export const WorkspaceSelectorPage: React.FC = () => {
                             </span>
                             {option.roles.length > 0 ? (
                               option.roles.map((role) => (
-                                <span
+                                <RoleTag
                                   key={role}
-                                  className="inline-flex items-center gap-1 text-xs font-medium text-slate-700 bg-slate-100 border border-slate-200/80 px-2 py-0.5 rounded-md"
-                                >
-                                  {formatRoleLabel(role)}
-                                  <span className="font-mono text-[10px] text-slate-500">
-                                    ({role})
-                                  </span>
-                                </span>
+                                  label={formatRoleLabel(role)}
+                                  code={role}
+                                />
                               ))
                             ) : (
                               <span className="text-xs text-slate-500">Member</span>
@@ -364,12 +369,14 @@ export const WorkspaceSelectorPage: React.FC = () => {
                     key={m.organizationId}
                     className="flex items-center justify-between gap-3 rounded-xl border border-slate-200/80 bg-slate-50/70 px-3.5 py-2.5 text-xs"
                   >
-                    <div>
-                      <span className="font-semibold text-slate-800">
-                        {m.organizationName || `Organization #${m.organizationId}`}
-                      </span>
+                    <div className="min-w-0 flex items-center gap-2 flex-wrap">
+                      <TruncatedText
+                        text={m.organizationName || `Organization #${m.organizationId}`}
+                        maxWidthClass="max-w-[220px] sm:max-w-[320px]"
+                        className="font-semibold text-slate-800"
+                      />
                       {m.roles.length > 0 && (
-                        <span className="text-slate-500 ml-2">
+                        <span className="text-slate-500">
                           ({m.roles.map(formatRoleLabel).join(', ')})
                         </span>
                       )}
@@ -382,6 +389,7 @@ export const WorkspaceSelectorPage: React.FC = () => {
                           ? 'danger'
                           : 'neutral'
                       }
+                      dot
                     >
                       {m.membershipStatus}
                     </Badge>

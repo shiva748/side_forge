@@ -12,6 +12,9 @@ import { OnboardingStatusPage } from './pages/OnboardingStatusPage';
 import { WorkspaceSelectorPage } from './pages/WorkspaceSelectorPage';
 import { PlatformDashboardPage } from './pages/PlatformDashboardPage';
 import { PlatformOnboardingPage } from './pages/PlatformOnboardingPage';
+import { PlatformOrganizationsPage } from './pages/PlatformOrganizationsPage';
+import { PlatformSubscriptionsPage } from './pages/PlatformSubscriptionsPage';
+import { SchoolDashboardPage } from './pages/SchoolDashboardPage';
 import { WorkspaceShellPlaceholder } from './pages/WorkspaceShellPlaceholder';
 import { UnauthorizedPage } from './pages/UnauthorizedPage';
 import { NotFoundPage } from './pages/NotFoundPage';
@@ -76,6 +79,28 @@ export default function App() {
                 }
               />
               <Route
+                path="/platform/organizations"
+                element={
+                  <ProtectedRoute
+                    workspace="PLATFORM"
+                    requiredPermissions={['platform.organization.view']}
+                  >
+                    <PlatformOrganizationsPage />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/platform/subscriptions"
+                element={
+                  <ProtectedRoute
+                    workspace="PLATFORM"
+                    requiredPermissions={['platform.subscription.view']}
+                  >
+                    <PlatformSubscriptionsPage />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
                 path="/platform/context"
                 element={
                   <ProtectedRoute workspace="PLATFORM">
@@ -88,14 +113,34 @@ export default function App() {
                 element={<Navigate to="/platform" replace />}
               />
 
-              {/* School Administration Workspace Shell Placeholder */}
+              {/* School Administration Workspace */}
               <Route
-                path="/app/*"
+                path="/app"
+                element={
+                  <ProtectedRoute workspace="SCHOOL">
+                    <SchoolDashboardPage />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/app/dashboard"
+                element={
+                  <ProtectedRoute workspace="SCHOOL">
+                    <SchoolDashboardPage />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/app/context"
                 element={
                   <ProtectedRoute workspace="SCHOOL">
                     <WorkspaceShellPlaceholder workspace="SCHOOL" />
                   </ProtectedRoute>
                 }
+              />
+              <Route
+                path="/app/*"
+                element={<Navigate to="/app" replace />}
               />
 
               {/* Access Denied / Unauthorized */}

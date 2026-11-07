@@ -41,12 +41,13 @@ import {
   getOnboardingStatusBadgeMeta,
   OnboardingRequestDetailsModal,
 } from '../components/platform/OnboardingRequestDetailsModal';
-import { Badge } from '../components/ui/Badge';
+import { Badge, IdLabel } from '../components/ui/Badge';
 import { Button } from '../components/ui/Button';
 import { DataTable, DataTableColumn } from '../components/ui/DataTable';
 import { Input, Select } from '../components/ui/FormControls';
 import { PageHeader } from '../components/ui/PageHeader';
 import { ErrorState, InlineAlert } from '../components/ui/StateViews';
+import { TruncatedText } from '../components/ui/TruncatedText';
 
 const STATUS_FILTER_OPTIONS: { value: OnboardingStatus | ''; label: string }[] = [
   { value: '', label: 'All Statuses' },
@@ -335,26 +336,29 @@ export const PlatformOnboardingPage: React.FC = () => {
         header: 'School / Organization',
         render: (row) => (
           <div className="space-y-1 min-w-[210px]">
-            <div className="flex items-center gap-2 flex-wrap">
+            <div className="flex items-center gap-2 flex-wrap min-w-0">
               <button
                 type="button"
                 onClick={() => void handleOpenDetails(row)}
-                className="font-semibold text-slate-900 hover:text-indigo-600 transition-colors text-left cursor-pointer"
+                className="font-semibold text-slate-900 hover:text-indigo-600 transition-colors text-left cursor-pointer min-w-0"
               >
-                {row.schoolName}
+                <TruncatedText
+                  text={row.schoolName}
+                  maxWidthClass="max-w-[210px]"
+                  className="font-semibold"
+                />
               </button>
-              <span className="font-mono text-[11px] font-medium text-indigo-700 bg-indigo-50 border border-indigo-200/70 px-1.5 py-0.5 rounded-md">
-                #ONB-{row.id}
-              </span>
+              <IdLabel>#ONB-{row.id}</IdLabel>
             </div>
-            <div className="flex items-center gap-2 text-xs text-slate-500">
-              <span className="font-medium text-slate-600">
+            <div className="flex items-center gap-2 text-xs text-slate-500 min-w-0">
+              <span className="font-medium text-slate-600 shrink-0">
                 {BOARD_AFFILIATION_LABELS[row.boardAffiliation] || row.boardAffiliation}
               </span>
-              <span>•</span>
-              <span>
-                {row.city}, {row.state}
-              </span>
+              <span className="shrink-0">•</span>
+              <TruncatedText
+                text={`${row.city}, ${row.state}`}
+                maxWidthClass="max-w-[160px]"
+              />
             </div>
           </div>
         ),
@@ -364,13 +368,19 @@ export const PlatformOnboardingPage: React.FC = () => {
         header: 'Applicant',
         render: (row) => (
           <div className="space-y-0.5 min-w-[160px]">
-            <div className="font-medium text-slate-900">{row.contactPersonName}</div>
+            <TruncatedText
+              text={row.contactPersonName}
+              maxWidthClass="max-w-[170px]"
+              as="div"
+              className="font-medium text-slate-900"
+            />
             <div className="text-xs text-slate-500 flex items-center gap-1.5 flex-wrap">
-              <span>{row.designation}</span>
+              <TruncatedText
+                text={row.designation}
+                maxWidthClass="max-w-[130px]"
+              />
               {row.requestedBy ? (
-                <span className="text-[10px] font-mono bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded">
-                  User #{row.requestedBy}
-                </span>
+                <IdLabel>User #{row.requestedBy}</IdLabel>
               ) : null}
             </div>
           </div>
@@ -381,15 +391,16 @@ export const PlatformOnboardingPage: React.FC = () => {
         header: 'Contact Info',
         render: (row) => (
           <div className="space-y-1 text-xs min-w-[185px]">
-            <div className="flex items-center gap-1.5 text-slate-700">
+            <div className="flex items-center gap-1.5 text-slate-700 min-w-0">
               <Mail className="w-3.5 h-3.5 text-slate-400 shrink-0" />
-              <span className="truncate max-w-[200px]" title={row.contactEmail}>
-                {row.contactEmail}
-              </span>
+              <TruncatedText
+                text={row.contactEmail}
+                maxWidthClass="max-w-[190px]"
+              />
             </div>
             <div className="flex items-center gap-1.5 text-slate-500">
               <Phone className="w-3.5 h-3.5 text-slate-400 shrink-0" />
-              <span>+91 {row.mobileNumber}</span>
+              <span className="whitespace-nowrap">+91 {row.mobileNumber}</span>
             </div>
           </div>
         ),

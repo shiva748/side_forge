@@ -21,7 +21,7 @@ import {
   PlatformOnboardingAuditItem,
   STUDENT_STRENGTH_LABELS,
 } from '../../types/onboarding';
-import { Badge, BadgeVariant } from '../ui/Badge';
+import { Badge, BadgeVariant, IdLabel } from '../ui/Badge';
 import { Button } from '../ui/Button';
 import { Dialog } from '../ui/Dialog';
 import { InlineAlert, LoadingState } from '../ui/StateViews';
@@ -160,13 +160,11 @@ export const OnboardingRequestDetailsModal: React.FC<OnboardingRequestDetailsMod
           The requested onboarding application could not be loaded.
         </InlineAlert>
       ) : (
-        <div className="max-h-[72vh] overflow-y-auto pr-1 space-y-5">
+        <div className="space-y-5">
           {/* Top Status & Workflow Summary Bar */}
           <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-slate-200/80 bg-slate-50/70 px-4 py-3">
             <div className="flex flex-wrap items-center gap-2.5">
-              <span className="font-mono text-xs font-semibold text-indigo-700 bg-indigo-50 border border-indigo-200/70 px-2.5 py-0.5 rounded-md">
-                #ONB-{request.id}
-              </span>
+              <IdLabel>#ONB-{request.id}</IdLabel>
               <Badge variant="neutral">
                 {BOARD_AFFILIATION_LABELS[request.boardAffiliation] || request.boardAffiliation}
               </Badge>

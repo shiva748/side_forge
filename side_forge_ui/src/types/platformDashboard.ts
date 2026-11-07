@@ -1,4 +1,9 @@
-import { BillingInterval, SubscriptionStatus } from './auth';
+import {
+  BillingInterval,
+  OrganizationEntitlementsResponse,
+  OrganizationSubscriptionResponse,
+  SubscriptionStatus,
+} from './auth';
 import { BoardAffiliation } from './onboarding';
 import { BadgeVariant } from '../components/ui/Badge';
 
@@ -8,6 +13,8 @@ export type OrganizationStatus =
   | 'SUSPENDED'
   | 'REJECTED'
   | 'DEACTIVATED';
+
+export type ManageableOrganizationStatus = 'ACTIVE' | 'SUSPENDED' | 'DEACTIVATED';
 
 export type PlatformAuditAction =
   | 'ONBOARDING_APPROVED'
@@ -92,6 +99,104 @@ export interface PlatformAuditLogItem {
   summary: string | null;
   details: string | null;
   createdAt: string;
+}
+
+export interface CategoryStorageUsageItem {
+  category: string;
+  filesCount: number;
+  totalBytes: number;
+}
+
+export interface OrganizationStorageUsageResponse {
+  organizationId: number;
+  organizationName: string;
+  totalFilesCount: number;
+  totalStorageBytes: number;
+  byCategory: CategoryStorageUsageItem[];
+}
+
+export interface OrganizationUsageResponse {
+  organizationId: number;
+  organizationName: string;
+  planCode: string | null;
+  planName: string | null;
+  subscriptionStatus: SubscriptionStatus | null;
+  enrolledStudentsCount: number;
+  activeStudentProfilesCount: number;
+  planStudentLimit: number | null;
+  overrideStudentLimit: number | null;
+  effectiveStudentLimit: number | null;
+  remainingStudentCapacity: number;
+  limitReached: boolean;
+  utilizationPercentage: number;
+  overrideReason: string | null;
+  overrideExpiresAt: string | null;
+  storageUsage: OrganizationStorageUsageResponse | null;
+}
+
+export interface OrganizationStatusHistoryItem {
+  id: number;
+  organizationId: number;
+  previousStatus: OrganizationStatus | null;
+  newStatus: OrganizationStatus;
+  reason: string;
+  changedBy: number | null;
+  createdAt: string;
+}
+
+export interface OrganizationSubscriptionHistoryItem {
+  id: number;
+  organizationId: number;
+  subscriptionId: number;
+  eventType: string;
+  previousPlanId: number | null;
+  previousPlanCode: string | null;
+  newPlanId: number | null;
+  newPlanCode: string | null;
+  previousStatus: SubscriptionStatus | null;
+  newStatus: SubscriptionStatus | null;
+  billingInterval: BillingInterval | null;
+  contractedAmount: number | null;
+  studentLimit: number | null;
+  effectiveDate: string | null;
+  remarks: string | null;
+  actorUserId: number | null;
+  createdAt: string;
+}
+
+export interface OrganizationAdminDetailResponse {
+  id: number;
+  name: string;
+  boardAffiliation: BoardAffiliation;
+  status: OrganizationStatus;
+  address: string;
+  city: string;
+  state: string;
+  postalCode: string;
+  contactEmail: string;
+  contactPhone: string;
+  timezone: string;
+  createdAt: string;
+  updatedAt: string;
+  totalMembers: number;
+  currentSubscription: OrganizationSubscriptionResponse | null;
+  usage: OrganizationUsageResponse | null;
+  entitlements: OrganizationEntitlementsResponse | null;
+  statusHistory: OrganizationStatusHistoryItem[];
+  subscriptionHistory: OrganizationSubscriptionHistoryItem[];
+}
+
+export interface ChangeOrganizationStatusRequest {
+  status: ManageableOrganizationStatus;
+  reason: string;
+}
+
+export function formatStorageBytes(bytes?: number | null): string {
+  if (bytes === undefined || bytes === null || bytes <= 0) return '0 B';
+  const units = ['B', 'KB', 'MB', 'GB', 'TB'];
+  const i = Math.min(Math.floor(Math.log(bytes) / Math.log(1024)), units.length - 1);
+  const value = bytes / Math.pow(1024, i);
+  return `${value.toFixed(i === 0 ? 0 : 1)} ${units[i]}`;
 }
 
 export function getOrganizationStatusBadgeMeta(status: OrganizationStatus): {

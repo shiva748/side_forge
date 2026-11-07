@@ -6,11 +6,12 @@ import {
   UserCheck,
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
-import { WorkspaceType } from '../types/auth';
+import { formatRoleLabel, WorkspaceType } from '../types/auth';
 import { AppShell } from '../components/layout/AppShell';
-import { Badge } from '../components/ui/Badge';
+import { Badge, CounterLabel, RoleTag } from '../components/ui/Badge';
 import { PageHeader } from '../components/ui/PageHeader';
 import { InlineAlert } from '../components/ui/StateViews';
+import { TruncatedText } from '../components/ui/TruncatedText';
 
 export interface WorkspaceShellPlaceholderProps {
   workspace: WorkspaceType;
@@ -83,23 +84,31 @@ export const WorkspaceShellPlaceholder: React.FC<WorkspaceShellPlaceholderProps>
               <span>Authenticated Identity</span>
             </div>
             <dl className="space-y-2.5 text-xs">
-              <div className="flex justify-between py-1 border-b border-slate-100">
-                <dt className="text-slate-500">Name</dt>
-                <dd className="font-semibold text-slate-900">{fullName}</dd>
+              <div className="flex justify-between gap-2 py-1 border-b border-slate-100 min-w-0">
+                <dt className="text-slate-500 shrink-0">Name</dt>
+                <dd className="font-semibold text-slate-900 min-w-0">
+                  <TruncatedText text={fullName} maxWidthClass="max-w-[180px]" />
+                </dd>
               </div>
-              <div className="flex justify-between py-1 border-b border-slate-100">
-                <dt className="text-slate-500">Email</dt>
-                <dd className="font-mono text-slate-700">{user?.email}</dd>
+              <div className="flex justify-between gap-2 py-1 border-b border-slate-100 min-w-0">
+                <dt className="text-slate-500 shrink-0">Email</dt>
+                <dd className="font-mono text-slate-700 min-w-0">
+                  <TruncatedText text={user?.email} maxWidthClass="max-w-[190px]" />
+                </dd>
               </div>
               <div className="flex justify-between py-1 border-b border-slate-100">
                 <dt className="text-slate-500">Account Status</dt>
                 <dd>
-                  <Badge variant="success">{user?.status}</Badge>
+                  <Badge variant="success" dot>
+                    {user?.status}
+                  </Badge>
                 </dd>
               </div>
-              <div className="flex justify-between py-1">
+              <div className="flex justify-between items-center py-1">
                 <dt className="text-slate-500">Active Memberships</dt>
-                <dd className="font-semibold text-slate-900">{activeMemberships.length}</dd>
+                <dd>
+                  <CounterLabel count={activeMemberships.length} />
+                </dd>
               </div>
             </dl>
           </div>
@@ -121,20 +130,21 @@ export const WorkspaceShellPlaceholder: React.FC<WorkspaceShellPlaceholderProps>
                     ? platformRoles
                     : Array.from(organizationRoles)
                   ).map((role) => (
-                    <Badge key={role} variant="primary">
-                      {role}
-                    </Badge>
+                    <RoleTag key={role} label={formatRoleLabel(role)} code={role} />
                   ))}
                 </div>
               </div>
               <div>
-                <p className="text-xs text-slate-500 mb-1.5">
-                  Resolved Permissions (
-                  {workspace === 'PLATFORM'
-                    ? platformPermissions.size
-                    : organizationPermissions.size}
-                  )
-                </p>
+                <div className="flex items-center justify-between gap-2 mb-1.5">
+                  <p className="text-xs text-slate-500">Resolved Permissions</p>
+                  <CounterLabel
+                    count={
+                      workspace === 'PLATFORM'
+                        ? platformPermissions.size
+                        : organizationPermissions.size
+                    }
+                  />
+                </div>
                 <div className="max-h-28 overflow-y-auto flex flex-wrap gap-1 p-2 rounded-xl bg-slate-50 border border-slate-100">
                   {Array.from(
                     workspace === 'PLATFORM' ? platformPermissions : organizationPermissions

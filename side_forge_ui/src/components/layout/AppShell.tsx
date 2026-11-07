@@ -7,6 +7,7 @@ import {
   ChevronDown,
   ChevronRight,
   ClipboardCheck,
+  CreditCard,
   Layers,
   LayoutDashboard,
   LogOut,
@@ -23,7 +24,8 @@ import { useAuth } from '../../context/AuthContext';
 import { useToast } from '../../context/ToastContext';
 import { cn } from '../../lib/utils';
 import { formatRoleLabel, WorkspaceContextOption } from '../../types/auth';
-import { Badge } from '../ui/Badge';
+import { Badge, CounterLabel, RoleTag } from '../ui/Badge';
+import { TruncatedText } from '../ui/TruncatedText';
 
 const SIDEBAR_COLLAPSED_STORAGE_KEY = 'sideforge.sidebarCollapsed';
 
@@ -137,6 +139,22 @@ export const AppShell: React.FC<AppShellProps> = ({
           icon: <ClipboardCheck className="w-4 h-4 shrink-0" />,
           matchPaths: ['/platform/onboarding'],
         });
+        opsItems.push({
+          id: 'platform-organizations',
+          label: 'Organizations',
+          to: '/platform/organizations',
+          icon: <Building2 className="w-4 h-4 shrink-0" />,
+          matchPaths: ['/platform/organizations'],
+        });
+      }
+      if (hasPermission('platform.subscription.view')) {
+        opsItems.push({
+          id: 'platform-subscriptions',
+          label: 'Subscriptions',
+          to: '/platform/subscriptions',
+          icon: <CreditCard className="w-4 h-4 shrink-0" />,
+          matchPaths: ['/platform/subscriptions'],
+        });
       }
 
       const groups: NavGroupConfig[] = [];
@@ -164,14 +182,26 @@ export const AppShell: React.FC<AppShellProps> = ({
     if (activeWorkspace === 'SCHOOL') {
       return [
         {
-          groupLabel: 'School Administration',
+          groupLabel: 'School Operations',
           items: [
             {
-              id: 'school-overview',
-              label: 'Workspace Overview',
+              id: 'school-dashboard',
+              label: 'Dashboard',
               to: '/app',
               icon: <LayoutDashboard className="w-4 h-4 shrink-0" />,
-              matchPaths: ['/app'],
+              matchPaths: ['/app', '/app/dashboard'],
+            },
+          ],
+        },
+        {
+          groupLabel: 'Administration',
+          items: [
+            {
+              id: 'school-context',
+              label: 'Workspace Overview',
+              to: '/app/context',
+              icon: <ShieldCheck className="w-4 h-4 shrink-0" />,
+              matchPaths: ['/app/context'],
             },
           ],
         },
@@ -327,14 +357,20 @@ export const AppShell: React.FC<AppShellProps> = ({
               )}
             </div>
             {!collapsed && (
-              <div className="min-w-0 flex-1">
+              <div className="min-w-0 flex-1 space-y-0.5">
                 <p className="text-[10px] font-semibold uppercase tracking-wider text-indigo-600 truncate">
                   {activeWorkspace === 'PLATFORM' ? 'Platform Control' : 'School Workspace'}
                 </p>
-                <p className="text-xs font-bold text-slate-900 truncate">
-                  {workspaceDisplayName}
-                </p>
-                <p className="text-[11px] text-slate-500 truncate">{primaryRoleLabel}</p>
+                <TruncatedText
+                  text={workspaceDisplayName}
+                  as="p"
+                  className="text-xs font-bold text-slate-900"
+                />
+                <TruncatedText
+                  text={primaryRoleLabel}
+                  as="p"
+                  className="text-[11px] text-slate-500"
+                />
               </div>
             )}
           </div>
@@ -357,17 +393,17 @@ export const AppShell: React.FC<AppShellProps> = ({
                     to={item.to}
                     title={collapsed ? item.label : undefined}
                     className={cn(
-                      'flex items-center gap-2.5 rounded-xl px-2.5 py-2 text-xs font-medium transition-colors',
+                      'flex items-center gap-2.5 rounded-xl px-2.5 py-2 text-xs font-medium transition-colors min-w-0',
                       collapsed && 'justify-center px-2',
                       active
                         ? 'bg-indigo-50 text-indigo-700 font-semibold border border-indigo-200/70 shadow-2xs'
                         : 'text-slate-600 hover:bg-slate-100/80 hover:text-slate-900 border border-transparent'
                     )}
                   >
-                    <span className={cn(active ? 'text-indigo-600' : 'text-slate-400')}>
+                    <span className={cn('shrink-0', active ? 'text-indigo-600' : 'text-slate-400')}>
                       {item.icon}
                     </span>
-                    {!collapsed && <span className="truncate">{item.label}</span>}
+                    {!collapsed && <TruncatedText text={item.label} className="flex-1" />}
                   </Link>
                 );
               })}
@@ -458,11 +494,17 @@ export const AppShell: React.FC<AppShellProps> = ({
               </button>
 
               <div className="flex items-center gap-2 text-xs sm:text-sm min-w-0">
-                <span className="hidden sm:inline-block font-medium text-slate-500 truncate max-w-[200px]">
-                  {breadcrumbParent || workspaceDisplayName}
-                </span>
+                <TruncatedText
+                  text={breadcrumbParent || workspaceDisplayName}
+                  maxWidthClass="max-w-[180px]"
+                  className="hidden sm:inline-block font-medium text-slate-500"
+                />
                 <ChevronRight className="hidden sm:inline-block w-3.5 h-3.5 text-slate-300 shrink-0" />
-                <span className="font-semibold text-slate-900 truncate">{pageTitle}</span>
+                <TruncatedText
+                  text={pageTitle}
+                  maxWidthClass="max-w-[200px] sm:max-w-[280px]"
+                  className="font-semibold text-slate-900"
+                />
               </div>
             </div>
 
@@ -479,27 +521,31 @@ export const AppShell: React.FC<AppShellProps> = ({
                 >
                   <Badge
                     variant={activeWorkspace === 'PLATFORM' ? 'primary' : 'info'}
-                    className="px-2 py-0 text-[10px]"
+                    className="px-1.5 py-0 text-[10px]"
                   >
                     {activeWorkspace === 'PLATFORM' ? 'Platform' : 'School'}
                   </Badge>
-                  <span className="font-semibold text-slate-800 max-w-[150px] truncate hidden md:inline">
-                    {workspaceDisplayName}
-                  </span>
+                  <TruncatedText
+                    text={workspaceDisplayName}
+                    maxWidthClass="max-w-[150px]"
+                    className="font-semibold text-slate-800 hidden md:inline-block"
+                  />
                   <span className="hidden lg:inline text-slate-400">•</span>
-                  <span className="hidden lg:inline text-slate-500 max-w-[140px] truncate">
-                    {primaryRoleLabel}
-                  </span>
-                  <ChevronDown className="w-3.5 h-3.5 text-slate-400" />
+                  <TruncatedText
+                    text={primaryRoleLabel}
+                    maxWidthClass="max-w-[140px]"
+                    className="hidden lg:inline-block text-slate-500"
+                  />
+                  <ChevronDown className="w-3.5 h-3.5 text-slate-400 shrink-0" />
                 </button>
 
                 {isWorkspaceMenuOpen && (
                   <div className="absolute right-0 mt-2 w-80 rounded-2xl border border-slate-200/90 bg-white shadow-xl p-2 z-50 space-y-1.5">
-                    <div className="px-2.5 py-1.5 border-b border-slate-100 flex items-center justify-between">
+                    <div className="px-2.5 py-1.5 border-b border-slate-100 flex items-center justify-between gap-2">
                       <span className="text-[11px] font-semibold uppercase tracking-wider text-slate-400">
-                        Available Workspaces ({availableWorkspaces.length})
+                        Available Workspaces
                       </span>
-                      <Layers className="w-3.5 h-3.5 text-slate-400" />
+                      <CounterLabel count={availableWorkspaces.length} />
                     </div>
 
                     <div className="max-h-64 overflow-y-auto space-y-1 py-1">
@@ -533,17 +579,22 @@ export const AppShell: React.FC<AppShellProps> = ({
                                 )}
                               </div>
                               <div className="min-w-0">
-                                <div className="flex items-center gap-1.5">
-                                  <span className="font-semibold text-slate-900 truncate">
-                                    {option.displayName}
-                                  </span>
-                                  <span className="text-[10px] font-medium px-1.5 py-0.2 rounded bg-slate-100 text-slate-600">
+                                <div className="flex items-center gap-1.5 min-w-0">
+                                  <TruncatedText
+                                    text={option.displayName}
+                                    maxWidthClass="max-w-[155px]"
+                                    className="font-semibold text-slate-900"
+                                  />
+                                  <span className="text-[10px] font-medium px-1.5 py-0.5 rounded bg-slate-100 text-slate-600 shrink-0">
                                     {option.workspaceType === 'PLATFORM' ? 'Platform' : 'School'}
                                   </span>
                                 </div>
-                                <p className="text-[11px] text-slate-500 truncate mt-0.5">
-                                  {option.roles.map(formatRoleLabel).join(', ')}
-                                </p>
+                                <TruncatedText
+                                  text={option.roles.map(formatRoleLabel).join(', ')}
+                                  maxWidthClass="max-w-[200px]"
+                                  as="p"
+                                  className="text-[11px] text-slate-500 mt-0.5"
+                                />
                               </div>
                             </div>
                             {isCurrent && (
@@ -581,27 +632,30 @@ export const AppShell: React.FC<AppShellProps> = ({
                   <div className="w-6 h-6 rounded-lg bg-indigo-600 text-white font-bold text-[11px] flex items-center justify-center shrink-0">
                     {initials}
                   </div>
-                  <span className="hidden sm:inline font-medium text-slate-800 max-w-[130px] truncate">
-                    {fullName}
-                  </span>
-                  <ChevronDown className="w-3.5 h-3.5 text-slate-400" />
+                  <TruncatedText
+                    text={fullName}
+                    maxWidthClass="max-w-[130px]"
+                    className="hidden sm:inline-block font-medium text-slate-800"
+                  />
+                  <ChevronDown className="w-3.5 h-3.5 text-slate-400 shrink-0" />
                 </button>
 
                 {isUserMenuOpen && (
                   <div className="absolute right-0 mt-2 w-64 rounded-2xl border border-slate-200/90 bg-white shadow-xl p-2 z-50 space-y-1.5">
                     <div className="px-3 py-2 border-b border-slate-100 space-y-0.5">
-                      <p className="text-xs font-semibold text-slate-900 truncate">{fullName}</p>
-                      <p className="text-[11px] font-mono text-slate-500 truncate">
-                        {user?.email}
-                      </p>
+                      <TruncatedText
+                        text={fullName}
+                        as="p"
+                        className="text-xs font-semibold text-slate-900"
+                      />
+                      <TruncatedText
+                        text={user?.email}
+                        as="p"
+                        className="text-[11px] font-mono text-slate-500"
+                      />
                       <div className="pt-1 flex flex-wrap gap-1">
                         {activeRoleCodes.map((rc) => (
-                          <span
-                            key={rc}
-                            className="text-[10px] font-medium px-1.5 py-0.5 rounded bg-indigo-50 text-indigo-700 border border-indigo-200/60"
-                          >
-                            {formatRoleLabel(rc)}
-                          </span>
+                          <RoleTag key={rc} label={formatRoleLabel(rc)} />
                         ))}
                       </div>
                     </div>

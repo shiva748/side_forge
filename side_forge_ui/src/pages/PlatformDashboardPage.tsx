@@ -35,7 +35,7 @@ import {
   formatOnboardingDate,
   getOnboardingStatusBadgeMeta,
 } from '../components/platform/OnboardingRequestDetailsModal';
-import { Badge } from '../components/ui/Badge';
+import { Badge, CounterLabel, IdLabel } from '../components/ui/Badge';
 import { Button } from '../components/ui/Button';
 import { PageHeader } from '../components/ui/PageHeader';
 import {
@@ -44,6 +44,7 @@ import {
   InlineAlert,
   LoadingState,
 } from '../components/ui/StateViews';
+import { TruncatedText } from '../components/ui/TruncatedText';
 
 export function formatShortDate(iso?: string | null): string {
   if (!iso) return '—';
@@ -396,13 +397,13 @@ export const PlatformDashboardPage: React.FC = () => {
                             className="px-5 py-3.5 flex items-center justify-between gap-3 hover:bg-slate-50/60 transition-colors"
                           >
                             <div className="min-w-0 space-y-0.5">
-                              <div className="flex items-center gap-2 flex-wrap">
-                                <span className="text-sm font-semibold text-slate-900 truncate">
-                                  {req.schoolName}
-                                </span>
-                                <span className="font-mono text-[10px] text-indigo-700 bg-indigo-50 border border-indigo-200/70 px-1.5 py-0.5 rounded">
-                                  #ONB-{req.id}
-                                </span>
+                              <div className="flex items-center gap-2 flex-wrap min-w-0">
+                                <TruncatedText
+                                  text={req.schoolName}
+                                  maxWidthClass="max-w-[220px]"
+                                  className="text-sm font-semibold text-slate-900"
+                                />
+                                <IdLabel>#ONB-{req.id}</IdLabel>
                               </div>
                               <p className="text-xs text-slate-500 truncate">
                                 Applicant:{' '}
@@ -468,10 +469,12 @@ export const PlatformDashboardPage: React.FC = () => {
                             className="px-5 py-3.5 flex items-center justify-between gap-3 hover:bg-slate-50/60 transition-colors"
                           >
                             <div className="min-w-0 space-y-0.5">
-                              <div className="flex items-center gap-2 flex-wrap">
-                                <span className="text-sm font-semibold text-slate-900 truncate">
-                                  {org.name}
-                                </span>
+                              <div className="flex items-center gap-2 flex-wrap min-w-0">
+                                <TruncatedText
+                                  text={org.name}
+                                  maxWidthClass="max-w-[220px]"
+                                  className="text-sm font-semibold text-slate-900"
+                                />
                                 <span className="text-[11px] text-slate-500">
                                   {BOARD_AFFILIATION_LABELS[org.boardAffiliation] ||
                                     org.boardAffiliation}
@@ -579,14 +582,14 @@ export const PlatformDashboardPage: React.FC = () => {
                 <div className="grid grid-cols-1 lg:grid-cols-2 divide-y lg:divide-y-0 lg:divide-x divide-slate-100">
                   {/* Upcoming Expirations (Within 30 Days) */}
                   <div className="p-5 space-y-3">
-                    <div className="flex items-center justify-between">
+                    <div className="flex items-center justify-between gap-2">
                       <span className="text-xs font-semibold uppercase tracking-wider text-slate-500 flex items-center gap-1.5">
-                        <Calendar className="w-3.5 h-3.5 text-indigo-600" />
+                        <Calendar className="w-3.5 h-3.5 text-indigo-600 shrink-0" />
                         <span>Upcoming Subscription Expirations (30 Days)</span>
                       </span>
-                      <Badge variant="neutral">
-                        {(metrics.expiringSubscriptionsWithin30Days || []).length}
-                      </Badge>
+                      <CounterLabel
+                        count={(metrics.expiringSubscriptionsWithin30Days || []).length}
+                      />
                     </div>
 
                     {(metrics.expiringSubscriptionsWithin30Days || []).length === 0 ? (
@@ -604,15 +607,20 @@ export const PlatformDashboardPage: React.FC = () => {
                               className="py-2.5 flex items-center justify-between gap-3 text-xs"
                             >
                               <div className="min-w-0">
-                                <p className="font-semibold text-slate-900 truncate">
-                                  {item.name}
-                                </p>
+                                <TruncatedText
+                                  text={item.name}
+                                  maxWidthClass="max-w-[220px]"
+                                  as="p"
+                                  className="font-semibold text-slate-900"
+                                />
                                 <p className="text-slate-500">
                                   {item.planName || 'Standard Plan'} • Expires{' '}
                                   {formatShortDate(item.expiryDate)}
                                 </p>
                               </div>
-                              <Badge variant={subMeta.variant}>{subMeta.label}</Badge>
+                              <Badge variant={subMeta.variant} dot>
+                                {subMeta.label}
+                              </Badge>
                             </div>
                           );
                         })}
@@ -622,18 +630,12 @@ export const PlatformDashboardPage: React.FC = () => {
 
                   {/* Organizations in Grace Period / Overdue */}
                   <div className="p-5 space-y-3">
-                    <div className="flex items-center justify-between">
+                    <div className="flex items-center justify-between gap-2">
                       <span className="text-xs font-semibold uppercase tracking-wider text-slate-500 flex items-center gap-1.5">
-                        <AlertTriangle className="w-3.5 h-3.5 text-amber-600" />
+                        <AlertTriangle className="w-3.5 h-3.5 text-amber-600 shrink-0" />
                         <span>Grace Period &amp; Overdue Subscriptions</span>
                       </span>
-                      <Badge
-                        variant={
-                          (metrics.overdueSubscriptions || []).length > 0 ? 'warning' : 'neutral'
-                        }
-                      >
-                        {(metrics.overdueSubscriptions || []).length}
-                      </Badge>
+                      <CounterLabel count={(metrics.overdueSubscriptions || []).length} />
                     </div>
 
                     {(metrics.overdueSubscriptions || []).length === 0 ? (
@@ -650,9 +652,12 @@ export const PlatformDashboardPage: React.FC = () => {
                               className="py-2.5 flex items-center justify-between gap-3 text-xs"
                             >
                               <div className="min-w-0">
-                                <p className="font-semibold text-slate-900 truncate">
-                                  {item.name}
-                                </p>
+                                <TruncatedText
+                                  text={item.name}
+                                  maxWidthClass="max-w-[220px]"
+                                  as="p"
+                                  className="font-semibold text-slate-900"
+                                />
                                 <p className="text-slate-500">
                                   {item.planName || 'Plan'} • Expiry:{' '}
                                   {formatShortDate(item.expiryDate)}
@@ -706,19 +711,17 @@ export const PlatformDashboardPage: React.FC = () => {
                           className="px-5 py-3.5 flex flex-col sm:flex-row sm:items-center justify-between gap-2 hover:bg-slate-50/60 transition-colors text-xs"
                         >
                           <div className="space-y-1 min-w-0">
-                            <div className="flex items-center gap-2 flex-wrap">
+                            <div className="flex items-center gap-2 flex-wrap min-w-0">
                               <Badge variant={actionMeta.variant}>{actionMeta.label}</Badge>
                               {entry.organizationName && (
-                                <span className="font-semibold text-slate-800">
-                                  {entry.organizationName}
-                                </span>
+                                <TruncatedText
+                                  text={entry.organizationName}
+                                  maxWidthClass="max-w-[240px]"
+                                  className="font-semibold text-slate-800"
+                                />
                               )}
                               {entry.resourceType === 'ONBOARDING_REQUEST' &&
-                                entry.resourceId && (
-                                  <span className="font-mono text-[11px] text-indigo-700 bg-indigo-50 border border-indigo-200/70 px-1.5 py-0.5 rounded">
-                                    #ONB-{entry.resourceId}
-                                  </span>
-                                )}
+                                entry.resourceId && <IdLabel>#ONB-{entry.resourceId}</IdLabel>}
                             </div>
                             <p className="text-slate-700">
                               {entry.summary || `${entry.action} on ${entry.resourceType}`}
