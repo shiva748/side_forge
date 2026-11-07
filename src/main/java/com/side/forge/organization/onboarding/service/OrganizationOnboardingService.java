@@ -1,11 +1,17 @@
 package com.side.forge.organization.onboarding.service;
 
+import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.List;
+import java.util.Locale;
+
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import com.side.forge.authorization.annotation.RequirePermission;
 import com.side.forge.authorization.enums.PermissionCode;
 import com.side.forge.authorization.service.OrganizationAdminProvisioningService;
+import com.side.forge.common.dto.PagedResponse;
 import com.side.forge.invitation.service.InvitationService;
 import com.side.forge.organization.onboarding.dto.OnboardingRequestDto;
 import com.side.forge.organization.onboarding.entity.OnboardingRequest;
@@ -44,6 +50,76 @@ public class OrganizationOnboardingService {
 		request.setRequestedBy(requestedBy);
 		request.setStatus(OnboardingStatus.PENDING);
 		return onboardingRequestRepository.save(request);
+	}
+
+	@RequirePermission(PermissionCode.PLATFORM_ORGANIZATION_VIEW)
+	@Transactional(readOnly = true)
+	public PagedResponse<OnboardingRequest> listOnboardingRequests(
+			OnboardingStatus status, String search, int page, int size) {
+		int safePage = Math.max(0, page);
+		int safeSize = Math.min(100, Math.max(1, size));
+
+		List<OnboardingRequest> allRequests = new ArrayList<>(onboardingRequestRepository.findAll());
+		allRequests.sort(Comparator.comparing(OnboardingRequest::getId).reversed());
+
+		String normalizedSearch = search != null && !search.isBlank()
+				? search.trim().toLowerCase(Locale.ROOT)
+				: null;
+
+		List<OnboardingRequest> filtered = new ArrayList<>();
+		for (OnboardingRequest req : allRequests) {
+			if (status != null && req.getStatus() != status) {
+				continue;
+			}
+			if (normalizedSearch != null && !matchesSearch(req, normalizedSearch)) {
+				continue;
+			}
+			filtered.add(req);
+		}
+
+		long totalElements = filtered.size();
+		int totalPages = totalElements == 0 ? 0 : (int) Math.ceil((double) totalElements / safeSize);
+		int fromIndex = Math.min(safePage * safeSize, filtered.size());
+		int toIndex = Math.min(fromIndex + safeSize, filtered.size());
+		List<OnboardingRequest> pageContent = filtered.subList(fromIndex, toIndex);
+
+		return new PagedResponse<>(
+				pageContent,
+				safePage,
+				safeSize,
+				totalElements,
+				totalPages,
+				safePage == 0,
+				totalPages == 0 || safePage >= totalPages - 1
+		);
+	}
+
+	@RequirePermission(PermissionCode.PLATFORM_ORGANIZATION_VIEW)
+	@Transactional(readOnly = true)
+	public OnboardingRequest getOnboardingRequest(Long requestId) {
+		return getRequest(requestId);
+	}
+
+	private boolean matchesSearch(OnboardingRequest req, String query) {
+		if (req.getId() != null) {
+			String idStr = String.valueOf(req.getId());
+			String refStr = ("#onb-" + idStr);
+			if (idStr.contains(query) || refStr.contains(query)) {
+				return true;
+			}
+		}
+		return containsIgnoreCase(req.getSchoolName(), query)
+				|| containsIgnoreCase(req.getContactPersonName(), query)
+				|| containsIgnoreCase(req.getContactEmail(), query)
+				|| containsIgnoreCase(req.getSchoolEmail(), query)
+				|| containsIgnoreCase(req.getMobileNumber(), query)
+				|| containsIgnoreCase(req.getSchoolPhone(), query)
+				|| containsIgnoreCase(req.getCity(), query)
+				|| containsIgnoreCase(req.getState(), query);
+	}
+
+	private boolean containsIgnoreCase(String value, String query) {
+		return value != null && value.toLowerCase(Locale.ROOT).contains(query);
 	}
 
 	@RequirePermission(PermissionCode.PLATFORM_ORGANIZATION_MANAGE)

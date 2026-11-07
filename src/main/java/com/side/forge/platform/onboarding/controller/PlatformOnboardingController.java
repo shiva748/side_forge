@@ -2,11 +2,14 @@ package com.side.forge.platform.onboarding.controller;
 
 import com.side.forge.authorization.annotation.RequirePermission;
 import com.side.forge.common.dto.ApiResponse;
+import com.side.forge.common.dto.PagedResponse;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import com.side.forge.authorization.enums.PermissionCode;
 import com.side.forge.common.utils.AuthenticationUtils;
 import com.side.forge.organization.entity.Organization;
+import com.side.forge.organization.onboarding.entity.OnboardingRequest;
+import com.side.forge.organization.onboarding.entity.OnboardingStatus;
 import com.side.forge.organization.onboarding.service.OrganizationOnboardingService;
 import com.side.forge.platform.saas.dto.SaaSDtos.ApproveOnboardingSubscriptionRequest;
 import jakarta.validation.Valid;
@@ -29,6 +32,29 @@ import org.springframework.web.bind.annotation.*;
 public class PlatformOnboardingController {
 
     private final OrganizationOnboardingService onboardingService;
+
+    @RequirePermission(PermissionCode.PLATFORM_ORGANIZATION_VIEW)
+    @GetMapping
+    public ResponseEntity<ApiResponse<PagedResponse<OnboardingRequest>>> listRequests(
+            @RequestParam(required = false) OnboardingStatus status,
+            @RequestParam(required = false) String search,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "20") int size) {
+        return ResponseEntity.ok(new ApiResponse<>(
+                true,
+                "Onboarding requests retrieved successfully",
+                onboardingService.listOnboardingRequests(status, search, page, size)));
+    }
+
+    @RequirePermission(PermissionCode.PLATFORM_ORGANIZATION_VIEW)
+    @GetMapping("/{requestId}")
+    public ResponseEntity<ApiResponse<OnboardingRequest>> getRequest(
+            @PathVariable @Positive Long requestId) {
+        return ResponseEntity.ok(new ApiResponse<>(
+                true,
+                "Onboarding request retrieved successfully",
+                onboardingService.getOnboardingRequest(requestId)));
+    }
 
     @RequirePermission(PermissionCode.PLATFORM_ORGANIZATION_MANAGE)
     @PostMapping("/{requestId}/approve")

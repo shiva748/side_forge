@@ -1,5 +1,5 @@
 import React from 'react';
-import { BrowserRouter, Routes, Route } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { QueryClientProvider } from '@tanstack/react-query';
 import { queryClient } from './lib/query-client';
 import { ToastProvider } from './context/ToastContext';
@@ -9,6 +9,7 @@ import { LandingPage } from './pages/LandingPage';
 import { LoginPage } from './pages/LoginPage';
 import { RegisterPage } from './pages/RegisterPage';
 import { OnboardingStatusPage } from './pages/OnboardingStatusPage';
+import { PlatformOnboardingPage } from './pages/PlatformOnboardingPage';
 import { WorkspaceShellPlaceholder } from './pages/WorkspaceShellPlaceholder';
 import { UnauthorizedPage } from './pages/UnauthorizedPage';
 import { NotFoundPage } from './pages/NotFoundPage';
@@ -28,14 +29,40 @@ export default function App() {
               <Route path="/register" element={<RegisterPage />} />
               <Route path="/onboarding-status" element={<OnboardingStatusPage />} />
 
-              {/* Platform Administration Workspace Shell Placeholder */}
+              {/* Platform Administration: School Onboarding Requests Management */}
               <Route
-                path="/platform/*"
+                path="/platform"
+                element={
+                  <ProtectedRoute
+                    workspace="PLATFORM"
+                    requiredPermissions={['platform.organization.view']}
+                  >
+                    <PlatformOnboardingPage />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/platform/onboarding"
+                element={
+                  <ProtectedRoute
+                    workspace="PLATFORM"
+                    requiredPermissions={['platform.organization.view']}
+                  >
+                    <PlatformOnboardingPage />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/platform/context"
                 element={
                   <ProtectedRoute workspace="PLATFORM">
                     <WorkspaceShellPlaceholder workspace="PLATFORM" />
                   </ProtectedRoute>
                 }
+              />
+              <Route
+                path="/platform/*"
+                element={<Navigate to="/platform/onboarding" replace />}
               />
 
               {/* School Administration Workspace Shell Placeholder */}

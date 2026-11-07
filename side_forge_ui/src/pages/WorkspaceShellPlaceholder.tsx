@@ -77,6 +77,23 @@ export const WorkspaceShellPlaceholder: React.FC<WorkspaceShellPlaceholderProps>
             <Badge variant={workspace === 'PLATFORM' ? 'primary' : 'info'} dot>
               {workspace === 'PLATFORM' ? 'Platform Administration' : 'School Administration'}
             </Badge>
+
+            {workspace === 'PLATFORM' && (
+              <nav className="hidden md:flex items-center gap-1 ml-2">
+                <Link
+                  to="/platform/onboarding"
+                  className="px-3 py-1.5 rounded-lg text-xs font-medium text-slate-600 hover:text-slate-900 hover:bg-slate-100 transition-colors"
+                >
+                  Onboarding Requests
+                </Link>
+                <Link
+                  to="/platform/context"
+                  className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-indigo-50 text-indigo-700 border border-indigo-200/60"
+                >
+                  Workspace Context
+                </Link>
+              </nav>
+            )}
           </div>
 
           <div className="flex items-center gap-3">

@@ -149,6 +149,96 @@ export interface OnboardingRequestResponse {
   updatedAt?: string;
 }
 
+export interface PagedResponse<T> {
+  content: T[];
+  page: number;
+  size: number;
+  totalElements: number;
+  totalPages: number;
+  first: boolean;
+  last: boolean;
+}
+
+export type OnboardingBillingInterval = 'TRIAL' | 'MONTHLY' | 'YEARLY';
+
+export interface ApproveOnboardingSubscriptionRequest {
+  planId?: number | null;
+  billingInterval?: OnboardingBillingInterval | null;
+  trial?: boolean | null;
+  trialDays?: number | null;
+  startDate?: string | null;
+  remarks?: string | null;
+}
+
+export interface ApprovedOrganizationResponse {
+  id: number;
+  name: string;
+  boardAffiliation: BoardAffiliation;
+  status: 'ACTIVE' | 'SUSPENDED' | 'DEACTIVATED';
+  address: string;
+  city: string;
+  state: string;
+  postalCode: string;
+  email: string;
+  phoneNumber: string;
+  timezone?: string;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface SubscriptionPlanSummary {
+  id: number;
+  code: string;
+  name: string;
+  description?: string | null;
+  monthlyPrice: number;
+  yearlyPrice: number;
+  maxStudents: number;
+  active: boolean;
+  defaultTrialPlan: boolean;
+  defaultTrialDays?: number | null;
+  displayOrder?: number | null;
+}
+
+export interface PlatformOnboardingAuditItem {
+  id: number;
+  actorUserId: number | null;
+  actorEmail: string | null;
+  action: 'ONBOARDING_APPROVED' | 'ONBOARDING_REJECTED' | string;
+  resourceType: string;
+  resourceId: number | null;
+  organizationId: number | null;
+  organizationName: string | null;
+  summary: string | null;
+  details: string | null;
+  createdAt: string;
+}
+
+export const BOARD_AFFILIATION_LABELS: Record<BoardAffiliation, string> = {
+  CBSE: 'CBSE',
+  ICSE: 'ICSE / CISCE',
+  STATE_BOARD: 'State Board',
+  IB: 'IB (International Baccalaureate)',
+  CAMBRIDGE: 'Cambridge (IGCSE)',
+  OTHER: 'Other / Independent',
+};
+
+export const STUDENT_STRENGTH_LABELS: Record<StudentStrength, string> = {
+  BELOW_250: 'Below 250 students',
+  FROM_250_TO_500: '250 – 500 students',
+  FROM_500_TO_1000: '500 – 1,000 students',
+  FROM_1000_TO_2500: '1,000 – 2,500 students',
+  FROM_2500_TO_5000: '2,500 – 5,000 students',
+  ABOVE_5000: 'Above 5,000 students',
+};
+
+export const MANAGEMENT_SYSTEM_LABELS: Record<CurrentManagementSystem, string> = {
+  PAPER_REGISTERS: 'Paper Registers / Ledgers',
+  EXCEL_SPREADSHEETS: 'Excel / Spreadsheets',
+  DESKTOP_SOFTWARE: 'Local Desktop Software',
+  NO_EXISTING_SYSTEM: 'No Existing System',
+};
+
 export interface ApiResponse<T = unknown> {
   success: boolean;
   statusCode: number;
