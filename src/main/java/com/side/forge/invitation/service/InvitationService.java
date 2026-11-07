@@ -933,4 +933,45 @@ public class InvitationService {
 				inv.getCreatedAt()
 		);
 	}
+
+	@Transactional(noRollbackFor = IllegalStateException.class)
+	public InvitationResponse rejectInvitation(
+			RejectInvitationRequest request, Authentication authentication) {
+		if (request.token() == null || request.token().isBlank()) {
+			throw new IllegalArgumentException("Invitation token is required");
+		}
+		String tokenHash = hashToken(request.token().trim());
+		OrganizationInvitation inv = invitationRepository.findByTokenHashForUpdate(tokenHash)
+				.orElseThrow(() -> new EntityNotFoundException("Invalid invitation token"));
+
+		Instant now = Instant.now();
+		if (inv.getStatus() == InvitationStatus.PENDING && inv.getExpiresAt() != null
+				&& inv.getExpiresAt().isBefore(now)) {
+			inv.setStatus(InvitationStatus.EXPIRED);
+			invitationRepository.saveAndFlush(inv);
+		}
+
+		if (inv.getStatus() != InvitationStatus.PENDING) {
+			throw new IllegalStateException("Invitation is no longer valid (status: " + inv.getStatus() + ")");
+		}
+		if (request.email() != null && !request.email().isBlank()
+				&& !normalizeEmail(request.email()).equalsIgnoreCase(inv.getEmail())) {
+			throw new AccessDeniedException("Provided email does not match the invited recipient");
+		}
+		Long authUserId = AuthenticationUtils.getAuthenticatedUserId(authentication);
+		if (authUserId != null) {
+			Users authUser = userRepository.findById(authUserId)
+					.orElseThrow(() -> new AccessDeniedException("Authenticated user not found"));
+			if (!authUser.getEmail().equalsIgnoreCase(inv.getEmail())) {
+				throw new AccessDeniedException("Authenticated user email does not match the invited recipient");
+			}
+		}
+
+		inv.setStatus(InvitationStatus.REJECTED);
+		inv.setRevokedAt(now);
+		OrganizationInvitation saved = invitationRepository.saveAndFlush(inv);
+		String orgName = organizationRepository.findById(inv.getOrganizationId())
+				.map(Organization::getName).orElse(null);
+		return toResponse(saved, orgName);
+	}
 }

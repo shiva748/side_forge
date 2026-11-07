@@ -285,16 +285,37 @@ public class PlatformSubscriptionService {
 	@Transactional
 	public OrganizationSubscriptionResponse renewSubscription(Long organizationId, RenewSubscriptionRequest request) {
 		Organization org = requireOrganization(organizationId);
+		return executeRenewal(org, request);
+	}
+
+	@RequirePermission(PermissionCode.FEES_MANAGE)
+	@Transactional
+	public OrganizationSubscriptionResponse renewSubscriptionFromSchoolBillingPortal(
+			Long organizationId, RenewSubscriptionRequest request) {
+		Organization org = requireOrganization(organizationId);
+		if (org.getStatus() == com.side.forge.organization.entity.OrganizationStatus.SUSPENDED) {
+			org.setStatus(com.side.forge.organization.entity.OrganizationStatus.ACTIVE);
+			org = organizationRepository.saveAndFlush(org);
+		}
+		return executeRenewal(org, request);
+	}
+
+	private OrganizationSubscriptionResponse executeRenewal(Organization org, RenewSubscriptionRequest request) {
+		Long organizationId = org.getId();
 		OrganizationSubscription current = subscriptionRepository.findCurrentByOrganizationIdForUpdate(organizationId)
 				.orElseThrow(() -> new IllegalStateException("No current subscription found for organization"));
 		SubscriptionPlan plan = planService.requirePlan(current.getPlanId());
 
 		LocalDate today = entitlementService.today(org);
-		LocalDate periodStart = request != null && request.renewalStartDate() != null
-				? request.renewalStartDate()
-				: (current.getExpiryDate() != null && current.getExpiryDate().isAfter(today)
-						? current.getExpiryDate().plusDays(1)
-						: today);
+		LocalDate periodStart;
+		if (request != null && request.renewalStartDate() != null) {
+			periodStart = request.renewalStartDate();
+		} else if (current.getExpiryDate() != null && !current.isTrial()
+				&& !today.isAfter(current.getExpiryDate().plusDays(SubscriptionEntitlementService.GRACE_PERIOD_DAYS))) {
+			periodStart = current.getExpiryDate().plusDays(1);
+		} else {
+			periodStart = today;
+		}
 
 		BillingInterval interval = request != null && request.billingInterval() != null
 				? request.billingInterval()

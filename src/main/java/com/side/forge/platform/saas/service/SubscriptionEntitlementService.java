@@ -34,6 +34,7 @@ import lombok.RequiredArgsConstructor;
 public class SubscriptionEntitlementService {
 
 	private static final ZoneId DEFAULT_ZONE = ZoneId.of("Asia/Kolkata");
+	public static final int GRACE_PERIOD_DAYS = 15;
 
 	private final OrganizationRepository organizationRepository;
 	private final OrganizationSubscriptionRepository subscriptionRepository;
@@ -49,10 +50,17 @@ public class SubscriptionEntitlementService {
 			return null;
 		}
 		SubscriptionStatus status = subscription.getStatus();
-		if ((status == SubscriptionStatus.TRIAL || status == SubscriptionStatus.ACTIVE)
-				&& subscription.getExpiryDate() != null
-				&& subscription.getExpiryDate().isBefore(today)) {
-			return SubscriptionStatus.EXPIRED;
+		if (subscription.getExpiryDate() != null && subscription.getExpiryDate().isBefore(today)) {
+			if (subscription.isTrial() || status == SubscriptionStatus.TRIAL) {
+				return SubscriptionStatus.EXPIRED;
+			}
+			if (status == SubscriptionStatus.ACTIVE || status == SubscriptionStatus.PAST_DUE) {
+				LocalDate gracePeriodEnd = subscription.getExpiryDate().plusDays(GRACE_PERIOD_DAYS);
+				if (!today.isAfter(gracePeriodEnd)) {
+					return SubscriptionStatus.PAST_DUE;
+				}
+				return SubscriptionStatus.SUSPENDED;
+			}
 		}
 		return status;
 	}
@@ -61,6 +69,30 @@ public class SubscriptionEntitlementService {
 		return effectiveStatus == SubscriptionStatus.TRIAL
 				|| effectiveStatus == SubscriptionStatus.ACTIVE
 				|| effectiveStatus == SubscriptionStatus.PAST_DUE;
+	}
+
+	@Transactional(readOnly = true)
+	public void requireOrganizationOperationalAccess(Long organizationId) {
+		if (organizationId == null) {
+			return;
+		}
+		Organization org = organizationRepository.findById(organizationId)
+				.orElseThrow(() -> new EntityNotFoundException("Organization not found: " + organizationId));
+		if (org.getStatus() != OrganizationStatus.ACTIVE) {
+			throw new SubscriptionAccessException("Organization is not active: current status is " + org.getStatus());
+		}
+
+		LocalDate today = today(org);
+		Optional<OrganizationSubscription> subOpt = subscriptionRepository
+				.findByOrganizationIdAndCurrentSubscriptionTrue(organizationId);
+		if (subOpt.isPresent()) {
+			OrganizationSubscription sub = subOpt.get();
+			SubscriptionStatus effectiveStatus = resolveEffectiveStatus(sub, today);
+			if (!isSubscriptionOperational(effectiveStatus)) {
+				throw new SubscriptionAccessException(
+						"Organization subscription is " + effectiveStatus + ". Please renew or activate the subscription.");
+			}
+		}
 	}
 
 	@Transactional(readOnly = true)

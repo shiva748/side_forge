@@ -218,7 +218,7 @@ public class PlatformAdministrationService {
 
 		Long actorId = resolveCurrentUserIdSafely();
 		org.setStatus(nextStatus);
-		Organization savedOrg = organizationRepository.save(org);
+		Organization savedOrg = organizationRepository.saveAndFlush(org);
 
 		OrganizationStatusHistory hist = new OrganizationStatusHistory();
 		hist.setOrganizationId(organizationId);
@@ -226,7 +226,7 @@ public class PlatformAdministrationService {
 		hist.setNewStatus(nextStatus);
 		hist.setReason(request.reason().trim());
 		hist.setChangedBy(actorId);
-		statusHistoryRepository.save(hist);
+		statusHistoryRepository.saveAndFlush(hist);
 
 		PlatformAuditAction action = switch (nextStatus) {
 			case SUSPENDED -> PlatformAuditAction.ORGANIZATION_SUSPENDED;

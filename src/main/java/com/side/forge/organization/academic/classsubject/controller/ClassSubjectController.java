@@ -19,6 +19,8 @@ import com.side.forge.common.dto.ApiResponse;
 import com.side.forge.organization.academic.classsubject.dto.AssignClassSubjectRequest;
 import com.side.forge.organization.academic.classsubject.dto.ClassSubjectResponse;
 import com.side.forge.organization.academic.classsubject.service.ClassSubjectService;
+import com.side.forge.platform.saas.annotation.RequireFeature;
+import com.side.forge.platform.saas.enums.PlatformFeature;
 
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -28,6 +30,7 @@ import lombok.RequiredArgsConstructor;
 
 @RestController
 @Validated
+@RequireFeature(PlatformFeature.ACADEMIC_MANAGEMENT)
 @Tag(name = "Class Subjects", description = "Manage session-specific subject assignments for classes")
 @SecurityRequirement(name = "jwtCookie")
 @RequestMapping("/api/organizations/{organizationId}/academic-sessions/{sessionId}/classes/{classId}/subjects")

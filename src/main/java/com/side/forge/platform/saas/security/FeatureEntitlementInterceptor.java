@@ -38,6 +38,18 @@ public class FeatureEntitlementInterceptor implements HandlerInterceptor {
 			return true;
 		}
 
+		Long organizationId = resolveOrganizationId(request);
+		if (organizationId == null) {
+			return true;
+		}
+
+		String path = organizationIdResolver.resolvePath(request);
+		if (isSubscriptionBillingPortalPath(path, organizationId)) {
+			return true;
+		}
+
+		entitlementService.requireOrganizationOperationalAccess(organizationId);
+
 		RequireFeature classAnn = AnnotatedElementUtils.findMergedAnnotation(
 				handlerMethod.getBeanType(), RequireFeature.class);
 		RequireFeature methodAnn = AnnotatedElementUtils.findMergedAnnotation(
@@ -58,19 +70,18 @@ public class FeatureEntitlementInterceptor implements HandlerInterceptor {
 				requiredFeatures.add(f);
 			}
 		}
-		if (requiredFeatures.isEmpty()) {
-			return true;
-		}
-
-		Long organizationId = resolveOrganizationId(request);
-		if (organizationId == null) {
-			return true;
-		}
-
 		for (PlatformFeature feature : requiredFeatures) {
 			entitlementService.requireFeatureAccess(organizationId, feature);
 		}
 		return true;
+	}
+
+	private boolean isSubscriptionBillingPortalPath(String path, Long organizationId) {
+		if (path == null) {
+			return false;
+		}
+		String prefix = "/api/organizations/" + organizationId + "/subscription";
+		return path.equals(prefix) || path.startsWith(prefix + "/");
 	}
 
 	private Long resolveOrganizationId(HttpServletRequest request) {

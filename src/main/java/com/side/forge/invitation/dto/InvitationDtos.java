@@ -76,6 +76,16 @@ public final class InvitationDtos {
 	) {
 	}
 
+	public record RejectInvitationRequest(
+			@NotBlank(message = "Invitation token is required")
+			String token,
+
+			@Email(message = "Invalid email address")
+			@Size(max = 255)
+			String email
+	) {
+	}
+
 	public record InvitationResponse(
 			Long id,
 			Long organizationId,

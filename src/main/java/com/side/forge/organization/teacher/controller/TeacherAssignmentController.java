@@ -12,6 +12,8 @@ import com.side.forge.authorization.enums.PermissionCode;
 import com.side.forge.common.dto.ApiResponse;
 import com.side.forge.organization.teacher.dto.*;
 import com.side.forge.organization.teacher.service.TeacherAssignmentService;
+import com.side.forge.platform.saas.annotation.RequireFeature;
+import com.side.forge.platform.saas.enums.PlatformFeature;
 
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -21,6 +23,7 @@ import lombok.RequiredArgsConstructor;
 
 @RestController
 @Validated
+@RequireFeature(PlatformFeature.STAFF_MANAGEMENT)
 @Tag(name = "Teacher Assignments", description = "Manage session-specific teacher-class and teacher-subject assignments")
 @SecurityRequirement(name = "jwtCookie")
 @RequestMapping("/api/organizations/{organizationId}")

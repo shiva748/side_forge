@@ -21,6 +21,8 @@ import com.side.forge.organization.student.guardian.dto.GuardianResponse;
 import com.side.forge.organization.student.guardian.dto.GuardianStudentLinkResponse;
 import com.side.forge.organization.student.guardian.dto.UpdateGuardianRequest;
 import com.side.forge.organization.student.guardian.service.GuardianService;
+import com.side.forge.platform.saas.annotation.RequireFeature;
+import com.side.forge.platform.saas.enums.PlatformFeature;
 
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -30,6 +32,7 @@ import lombok.RequiredArgsConstructor;
 
 @RestController
 @Validated
+@RequireFeature(PlatformFeature.STUDENT_MANAGEMENT)
 @Tag(name = "Guardians", description = "Manage parent and guardian records within an organization")
 @SecurityRequirement(name = "jwtCookie")
 @RequestMapping("/api/organizations/{organizationId}/guardians")

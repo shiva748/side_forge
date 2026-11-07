@@ -9,7 +9,9 @@ import org.springframework.web.bind.annotation.*;
 import com.side.forge.common.dto.ApiResponse;
 import com.side.forge.invitation.dto.InvitationDtos.AcceptInvitationRequest;
 import com.side.forge.invitation.dto.InvitationDtos.InvitationAcceptanceResponse;
+import com.side.forge.invitation.dto.InvitationDtos.InvitationResponse;
 import com.side.forge.invitation.dto.InvitationDtos.InvitationVerificationResponse;
+import com.side.forge.invitation.dto.InvitationDtos.RejectInvitationRequest;
 import com.side.forge.invitation.service.InvitationService;
 
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -29,6 +31,9 @@ public class InvitationAcceptanceController {
 	@Value("${spring.application.token.expiry}")
 	private long tokenExpiry;
 
+	@Value("${forge.security.cookie-secure:true}")
+	private boolean cookieSecure;
+
 	@GetMapping("/verify")
 	public ResponseEntity<ApiResponse<InvitationVerificationResponse>> verifyInvitation(
 			@RequestParam @NotBlank String token) {
@@ -42,10 +47,19 @@ public class InvitationAcceptanceController {
 			@Valid @RequestBody AcceptInvitationRequest request,
 			Authentication authentication) {
 		InvitationAcceptanceResponse accepted = invitationService.acceptInvitation(request, authentication);
+		String secureAttr = cookieSecure ? " Secure;" : "";
 		return ResponseEntity.ok()
 				.header("Set-Cookie",
-						String.format("jwt=%s; Path=/; Max-Age=%d; HttpOnly; Secure; SameSite=Lax",
-								accepted.accessToken(), tokenExpiry))
+						String.format("jwt=%s; Path=/; Max-Age=%d; HttpOnly;%s SameSite=Lax",
+								accepted.accessToken(), tokenExpiry, secureAttr))
 				.body(new ApiResponse<>(true, "Invitation accepted and membership activated successfully", accepted));
+	}
+
+	@PostMapping("/reject")
+	public ResponseEntity<ApiResponse<InvitationResponse>> rejectInvitation(
+			@Valid @RequestBody RejectInvitationRequest request,
+			Authentication authentication) {
+		InvitationResponse rejected = invitationService.rejectInvitation(request, authentication);
+		return ResponseEntity.ok(new ApiResponse<>(true, "Invitation declined successfully", rejected));
 	}
 }

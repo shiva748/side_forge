@@ -504,6 +504,16 @@ class SaaSAdministrationIntegrationTest {
 				.andExpect(status().isForbidden())
 				.andExpect(jsonPath("$.message").value(org.hamcrest.Matchers.containsString("SUSPENDED")));
 
+		// 2b. While SUSPENDED, School Admin still retains access to restricted subscription & billing endpoints
+		mockMvc.perform(get("/api/organizations/{orgId}/subscription", orgId)
+				.with(auth(schoolAdmin)))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.data.organizationId").value(orgId));
+		mockMvc.perform(get("/api/organizations/{orgId}/subscription/billing", orgId)
+				.with(auth(schoolAdmin)))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.data.organizationId").value(orgId));
+
 		// 3. Reactivate organization -> school operations resume working immediately
 		ChangeOrganizationStatusRequest reactivateReq = new ChangeOrganizationStatusRequest(
 				OrganizationStatus.ACTIVE,
@@ -546,6 +556,105 @@ class SaaSAdministrationIntegrationTest {
 				.andExpect(status().isOk())
 				.andExpect(jsonPath("$.data.content").isArray())
 				.andExpect(jsonPath("$.data.totalElements").value(org.hamcrest.Matchers.greaterThanOrEqualTo(4)));
+
+		// 5. Verify 15-day grace period on paid subscription and post-grace suspension & renewal
+		SubscriptionPlan starterPlan = planRepository.findByCodeIgnoreCase("STARTER").orElseThrow();
+		// Assign paid monthly subscription that expired 5 days ago (within 15-day grace period)
+		AssignSubscriptionRequest graceSubReq = new AssignSubscriptionRequest(
+				starterPlan.getId(),
+				BillingInterval.MONTHLY,
+				false,
+				null,
+				LocalDate.now().minusMonths(1).minusDays(4),
+				new BigDecimal("4999.00"),
+				"Paid subscription in 15-day grace period"
+		);
+		mockMvc.perform(post("/api/platform/organizations/{orgId}/subscriptions", orgId)
+				.with(auth(systemAdmin))
+				.with(csrf())
+				.contentType(MediaType.APPLICATION_JSON)
+				.content(objectMapper.writeValueAsString(graceSubReq)))
+				.andExpect(status().isCreated())
+				.andExpect(jsonPath("$.data.effectiveStatus").value("PAST_DUE"));
+
+		// During 15-day grace period, normal school operations remain operational
+		mockMvc.perform(get("/api/organizations/{orgId}/students", orgId)
+				.with(auth(schoolAdmin)))
+				.andExpect(status().isOk());
+
+		// Assign paid monthly subscription that expired 20 days ago (past 15-day grace period -> SUSPENDED)
+		AssignSubscriptionRequest postGraceSubReq = new AssignSubscriptionRequest(
+				starterPlan.getId(),
+				BillingInterval.MONTHLY,
+				false,
+				null,
+				LocalDate.now().minusMonths(1).minusDays(20),
+				new BigDecimal("4999.00"),
+				"Paid subscription past 15-day grace period"
+		);
+		mockMvc.perform(post("/api/platform/organizations/{orgId}/subscriptions", orgId)
+				.with(auth(systemAdmin))
+				.with(csrf())
+				.contentType(MediaType.APPLICATION_JSON)
+				.content(objectMapper.writeValueAsString(postGraceSubReq)))
+				.andExpect(status().isCreated())
+				.andExpect(jsonPath("$.data.effectiveStatus").value("SUSPENDED"));
+
+		// After 15-day grace period, normal school operations are blocked
+		mockMvc.perform(get("/api/organizations/{orgId}/students", orgId)
+				.with(auth(schoolAdmin)))
+				.andExpect(status().isForbidden())
+				.andExpect(jsonPath("$.message").value(org.hamcrest.Matchers.containsString("SUSPENDED")));
+
+		// School Admin can still renew from the restricted billing endpoint -> restores active access
+		mockMvc.perform(post("/api/organizations/{orgId}/subscription/renew", orgId)
+				.with(auth(schoolAdmin))
+				.with(csrf())
+				.contentType(MediaType.APPLICATION_JSON)
+				.content("""
+						{"billingInterval": "MONTHLY", "remarks": "Self-service renewal by School Admin"}
+						"""))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.data.effectiveStatus").value("ACTIVE"));
+
+		mockMvc.perform(get("/api/organizations/{orgId}/students", orgId)
+				.with(auth(schoolAdmin)))
+				.andExpect(status().isOk());
+
+		// 6. Custom organization role management & privilege escalation protection
+		mockMvc.perform(post("/api/organizations/{orgId}/roles", orgId)
+				.with(auth(schoolAdmin))
+				.with(csrf())
+				.contentType(MediaType.APPLICATION_JSON)
+				.content("""
+						{
+						  "code": "ADMISSIONS_COORDINATOR",
+						  "name": "Admissions Coordinator",
+						  "description": "Manages student admissions",
+						  "permissions": ["student.view", "student.create"]
+						}
+						"""))
+				.andExpect(status().isCreated())
+				.andExpect(jsonPath("$.data.code").value("ADMISSIONS_COORDINATOR"));
+
+		// Cannot assign platform permission to organization role
+		mockMvc.perform(post("/api/organizations/{orgId}/roles", orgId)
+				.with(auth(schoolAdmin))
+				.with(csrf())
+				.contentType(MediaType.APPLICATION_JSON)
+				.content("""
+						{
+						  "code": "ESCALATED_ROLE",
+						  "name": "Escalated Role",
+						  "permissions": ["platform.organization.manage"]
+						}
+						"""))
+				.andExpect(status().isForbidden());
+
+		// Logout clears the JWT cookie
+		mockMvc.perform(post("/api/auth/logout"))
+				.andExpect(status().isOk())
+				.andExpect(header().string("Set-Cookie", org.hamcrest.Matchers.containsString("Max-Age=0")));
 	}
 
 	private Long enrollStudentViaApi(Long studentId, String rollNumber) throws Exception {

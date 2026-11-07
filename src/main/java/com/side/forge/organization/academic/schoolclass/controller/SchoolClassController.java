@@ -22,6 +22,8 @@ import com.side.forge.organization.academic.schoolclass.dto.CreateSchoolClassReq
 import com.side.forge.organization.academic.schoolclass.dto.SchoolClassResponse;
 import com.side.forge.organization.academic.schoolclass.dto.UpdateSchoolClassRequest;
 import com.side.forge.organization.academic.schoolclass.service.SchoolClassService;
+import com.side.forge.platform.saas.annotation.RequireFeature;
+import com.side.forge.platform.saas.enums.PlatformFeature;
 
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -31,6 +33,7 @@ import lombok.RequiredArgsConstructor;
 
 @RestController
 @Validated
+@RequireFeature(PlatformFeature.ACADEMIC_MANAGEMENT)
 @Tag(name = "Classes", description = "Manage reusable organization classes across academic sessions")
 @SecurityRequirement(name = "jwtCookie")
 @RequestMapping("/api/organizations/{organizationId}/classes")

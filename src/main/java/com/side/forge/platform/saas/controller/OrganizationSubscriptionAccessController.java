@@ -49,7 +49,7 @@ public class OrganizationSubscriptionAccessController {
 	@GetMapping
 	public ResponseEntity<ApiResponse<OrganizationSubscriptionResponse>> getCurrentSubscription(
 			@PathVariable @Positive Long organizationId) {
-		Organization org = tenantValidator.requireOrganization(organizationId);
+		Organization org = tenantValidator.requireOrganizationAllowingSuspended(organizationId);
 		OrganizationSubscriptionResponse sub = subscriptionRepository
 				.findByOrganizationIdAndCurrentSubscriptionTrue(organizationId)
 				.map(s -> subscriptionService.toResponse(s, org))
@@ -61,7 +61,7 @@ public class OrganizationSubscriptionAccessController {
 	@GetMapping("/entitlements")
 	public ResponseEntity<ApiResponse<OrganizationEntitlementsResponse>> getEntitlements(
 			@PathVariable @Positive Long organizationId) {
-		tenantValidator.requireOrganization(organizationId);
+		tenantValidator.requireOrganizationAllowingSuspended(organizationId);
 		return ResponseEntity.ok(new ApiResponse<>(
 				true,
 				"Organization feature entitlements retrieved successfully",
@@ -72,7 +72,7 @@ public class OrganizationSubscriptionAccessController {
 	@GetMapping("/usage")
 	public ResponseEntity<ApiResponse<OrganizationUsageResponse>> getUsage(
 			@PathVariable @Positive Long organizationId) {
-		tenantValidator.requireOrganization(organizationId);
+		tenantValidator.requireOrganizationAllowingSuspended(organizationId);
 		return ResponseEntity.ok(new ApiResponse<>(
 				true,
 				"Organization student and storage usage retrieved successfully",
@@ -83,11 +83,23 @@ public class OrganizationSubscriptionAccessController {
 	@GetMapping("/billing")
 	public ResponseEntity<ApiResponse<OrganizationBillingSummaryResponse>> getBillingSummary(
 			@PathVariable @Positive Long organizationId) {
-		Organization org = tenantValidator.requireOrganization(organizationId);
+		Organization org = tenantValidator.requireOrganizationAllowingSuspended(organizationId);
 		return ResponseEntity.ok(new ApiResponse<>(
 				true,
 				"Organization billing summary retrieved successfully",
 				subscriptionService.buildBillingSummaryForOrganization(org)));
+	}
+
+	@RequirePermission(PermissionCode.FEES_MANAGE)
+	@PostMapping("/renew")
+	public ResponseEntity<ApiResponse<OrganizationSubscriptionResponse>> renewSubscription(
+			@PathVariable @Positive Long organizationId,
+			@jakarta.validation.Valid @RequestBody(required = false) RenewSubscriptionRequest request) {
+		tenantValidator.requireOrganizationAllowingSuspended(organizationId);
+		return ResponseEntity.ok(new ApiResponse<>(
+				true,
+				"Organization subscription renewed successfully",
+				subscriptionService.renewSubscriptionFromSchoolBillingPortal(organizationId, request)));
 	}
 
 	@RequirePermission(PermissionCode.DASHBOARD_VIEW)
@@ -96,7 +108,7 @@ public class OrganizationSubscriptionAccessController {
 			@PathVariable @Positive Long organizationId,
 			@PathVariable @Positive Long paymentId,
 			@RequestParam(defaultValue = "PDF") ExportFormat format) {
-		Organization org = tenantValidator.requireOrganization(organizationId);
+		Organization org = tenantValidator.requireOrganizationAllowingSuspended(organizationId);
 		SubscriptionPayment payment = paymentRepository.findByIdAndOrganizationId(paymentId, organizationId)
 				.orElseThrow(() -> new EntityNotFoundException("Subscription payment not found: " + paymentId));
 		ExportDocument doc = subscriptionService.generateReceiptExportDocument(org, payment, format);

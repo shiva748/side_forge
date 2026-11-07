@@ -22,6 +22,8 @@ import com.side.forge.organization.academic.section.dto.CreateSectionRequest;
 import com.side.forge.organization.academic.section.dto.SectionResponse;
 import com.side.forge.organization.academic.section.dto.UpdateSectionRequest;
 import com.side.forge.organization.academic.section.service.SectionService;
+import com.side.forge.platform.saas.annotation.RequireFeature;
+import com.side.forge.platform.saas.enums.PlatformFeature;
 
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -31,6 +33,7 @@ import lombok.RequiredArgsConstructor;
 
 @RestController
 @Validated
+@RequireFeature(PlatformFeature.ACADEMIC_MANAGEMENT)
 @Tag(name = "Sections", description = "Manage academic-session-specific sections for reusable classes")
 @SecurityRequirement(name = "jwtCookie")
 @RequestMapping("/api/organizations/{organizationId}/academic-sessions/{sessionId}/sections")

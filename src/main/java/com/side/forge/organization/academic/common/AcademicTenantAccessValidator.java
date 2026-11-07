@@ -10,6 +10,7 @@ import com.side.forge.authorization.service.CurrentUserContext;
 import com.side.forge.organization.entity.Organization;
 import com.side.forge.organization.entity.OrganizationStatus;
 import com.side.forge.organization.repository.OrganizationRepository;
+import com.side.forge.platform.saas.exception.SubscriptionAccessException;
 
 import jakarta.persistence.EntityNotFoundException;
 import lombok.RequiredArgsConstructor;
@@ -42,7 +43,17 @@ public class AcademicTenantAccessValidator {
 		Organization org = organizationRepository.findById(organizationId)
 				.orElseThrow(() -> new EntityNotFoundException("Organization not found"));
 		if (org.getStatus() != OrganizationStatus.ACTIVE) {
-			throw new AccessDeniedException("Organization is not active: " + org.getStatus());
+			throw new SubscriptionAccessException("Organization is not active: current status is " + org.getStatus());
+		}
+		return org;
+	}
+
+	public Organization requireOrganizationAllowingSuspended(Long organizationId) {
+		verifyOrganizationContext(organizationId);
+		Organization org = organizationRepository.findById(organizationId)
+				.orElseThrow(() -> new EntityNotFoundException("Organization not found"));
+		if (org.getStatus() != OrganizationStatus.ACTIVE && org.getStatus() != OrganizationStatus.SUSPENDED) {
+			throw new SubscriptionAccessException("Organization is not accessible: current status is " + org.getStatus());
 		}
 		return org;
 	}
@@ -52,7 +63,7 @@ public class AcademicTenantAccessValidator {
 		Organization org = organizationRepository.findByIdForUpdate(organizationId)
 				.orElseThrow(() -> new EntityNotFoundException("Organization not found"));
 		if (org.getStatus() != OrganizationStatus.ACTIVE) {
-			throw new AccessDeniedException("Organization is not active: " + org.getStatus());
+			throw new SubscriptionAccessException("Organization is not active: current status is " + org.getStatus());
 		}
 		return org;
 	}

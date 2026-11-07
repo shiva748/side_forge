@@ -27,6 +27,9 @@ public class AuthController {
 	@Value("${spring.application.token.expiry}")
 	private long tokenExpiry;
 
+	@Value("${forge.security.cookie-secure:true}")
+	private boolean cookieSecure;
+
 	@PostMapping("/register")
 	public ResponseEntity<?> registerUser(@Valid @RequestBody RegisterUserRequest request) {
 		return ResponseEntity.status(HttpStatus.CREATED)
@@ -36,9 +39,19 @@ public class AuthController {
 	@PostMapping("/login")
 	public ResponseEntity<?> login(@Valid @RequestBody LoginUserRequest request) {
 		String Token = authService.loginUser(request);
+		String secureAttr = cookieSecure ? " Secure;" : "";
 		return ResponseEntity.ok()
 				.header("Set-Cookie",
-						String.format("jwt=%s; Path=/; Max-Age=%d; HttpOnly; Secure; SameSite=Lax", Token, tokenExpiry))
+						String.format("jwt=%s; Path=/; Max-Age=%d; HttpOnly;%s SameSite=Lax", Token, tokenExpiry, secureAttr))
 				.body(new ApiResponse<>(true, "login was successful."));
+	}
+
+	@PostMapping("/logout")
+	public ResponseEntity<?> logout() {
+		String secureAttr = cookieSecure ? " Secure;" : "";
+		return ResponseEntity.ok()
+				.header("Set-Cookie",
+						String.format("jwt=; Path=/; Max-Age=0; HttpOnly;%s SameSite=Lax", secureAttr))
+				.body(new ApiResponse<>(true, "Logged out successfully."));
 	}
 }

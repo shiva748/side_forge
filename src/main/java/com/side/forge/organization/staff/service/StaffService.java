@@ -32,6 +32,8 @@ import lombok.RequiredArgsConstructor;
 @RequiredArgsConstructor
 public class StaffService {
 
+	public static final String RESOURCE_STAFF_DOCUMENT = "STAFF_DOCUMENT";
+
 	private static final Set<String> ALLOWED_SORT_FIELDS = Set.of(
 			"id", "employeeId", "firstName", "lastName", "joiningDate",
 			"designation", "department", "employmentStatus", "createdAt"
@@ -42,6 +44,7 @@ public class StaffService {
 	private final StaffMapper staffMapper;
 	private final AcademicTenantAccessValidator validator;
 	private final UserRepository userRepository;
+	private final com.side.forge.storage.service.FileManagementService fileManagementService;
 
 	@RequirePermission(PermissionCode.STAFF_MANAGE)
 	@Transactional
@@ -313,5 +316,47 @@ public class StaffService {
 		}
 		Sort.Direction direction = "desc".equalsIgnoreCase(sortDir) ? Sort.Direction.DESC : Sort.Direction.ASC;
 		return PageRequest.of(page, size, Sort.by(direction, field).and(Sort.by(Sort.Direction.ASC, "id")));
+	}
+
+	@RequirePermission(PermissionCode.STAFF_MANAGE)
+	@Transactional
+	public com.side.forge.storage.dto.StorageDtos.StoredFileResponse uploadStaffDocument(
+			Long orgId, Long staffId, org.springframework.web.multipart.MultipartFile file) {
+		validator.requireOrganization(orgId);
+		Staff staff = staffRepository.findByIdAndOrganizationIdForUpdate(staffId, orgId)
+				.orElseThrow(() -> new EntityNotFoundException("Staff member not found"));
+		return fileManagementService.storeOrganizationFile(
+				orgId, com.side.forge.storage.entity.FileResourceCategory.STAFF_DOCUMENT,
+				file, RESOURCE_STAFF_DOCUMENT, staff.getId());
+	}
+
+	@RequirePermission(PermissionCode.STAFF_VIEW)
+	@Transactional(readOnly = true)
+	public java.util.List<com.side.forge.storage.dto.StorageDtos.StoredFileResponse> getStaffDocuments(
+			Long orgId, Long staffId) {
+		validator.requireOrganization(orgId);
+		Staff staff = staffRepository.findByIdAndOrganizationId(staffId, orgId)
+				.orElseThrow(() -> new EntityNotFoundException("Staff member not found"));
+		return fileManagementService.getFilesForResource(orgId, RESOURCE_STAFF_DOCUMENT, staff.getId());
+	}
+
+	@RequirePermission(PermissionCode.STAFF_VIEW)
+	@Transactional(readOnly = true)
+	public com.side.forge.storage.dto.StorageDtos.DownloadedFilePayload downloadStaffDocument(
+			Long orgId, Long staffId, Long fileId) {
+		validator.requireOrganization(orgId);
+		Staff staff = staffRepository.findByIdAndOrganizationId(staffId, orgId)
+				.orElseThrow(() -> new EntityNotFoundException("Staff member not found"));
+		return fileManagementService.downloadOrganizationFileForAuthorizedResource(
+				orgId, fileId, RESOURCE_STAFF_DOCUMENT, staff.getId());
+	}
+
+	@RequirePermission(PermissionCode.STAFF_MANAGE)
+	@Transactional
+	public void deleteStaffDocument(Long orgId, Long staffId, Long fileId) {
+		validator.requireOrganization(orgId);
+		Staff staff = staffRepository.findByIdAndOrganizationIdForUpdate(staffId, orgId)
+				.orElseThrow(() -> new EntityNotFoundException("Staff member not found"));
+		fileManagementService.deleteOrganizationFile(orgId, fileId, RESOURCE_STAFF_DOCUMENT, staff.getId());
 	}
 }

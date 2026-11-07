@@ -22,6 +22,8 @@ import com.side.forge.organization.academic.subject.dto.CreateSubjectRequest;
 import com.side.forge.organization.academic.subject.dto.SubjectResponse;
 import com.side.forge.organization.academic.subject.dto.UpdateSubjectRequest;
 import com.side.forge.organization.academic.subject.service.SubjectService;
+import com.side.forge.platform.saas.annotation.RequireFeature;
+import com.side.forge.platform.saas.enums.PlatformFeature;
 
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -31,6 +33,7 @@ import lombok.RequiredArgsConstructor;
 
 @RestController
 @Validated
+@RequireFeature(PlatformFeature.ACADEMIC_MANAGEMENT)
 @Tag(name = "Subjects", description = "Manage reusable organization subjects across academic sessions")
 @SecurityRequirement(name = "jwtCookie")
 @RequestMapping("/api/organizations/{organizationId}/subjects")

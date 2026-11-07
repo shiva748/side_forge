@@ -10,6 +10,9 @@ import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
 
+import com.side.forge.user.entity.UserStatus;
+import com.side.forge.user.repository.UserRepository;
+
 import io.jsonwebtoken.JwtException;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
@@ -21,9 +24,11 @@ import jakarta.servlet.http.HttpServletResponse;
 public class JwtFilter extends OncePerRequestFilter {
 
 	private final JwtService jwtService;
+	private final UserRepository userRepository;
 
-	public JwtFilter(JwtService jwtService) {
+	public JwtFilter(JwtService jwtService, UserRepository userRepository) {
 		this.jwtService = jwtService;
+		this.userRepository = userRepository;
 	}
 
 	@Override
@@ -44,9 +49,16 @@ public class JwtFilter extends OncePerRequestFilter {
 			try {
 				if (jwtService.validateToken(token)) {
 					Long userId = jwtService.extractUserId(token);
-					Authentication authentication = UsernamePasswordAuthenticationToken.authenticated(userId, null,
-							Collections.emptyList());
-					SecurityContextHolder.getContext().setAuthentication(authentication);
+					boolean activeUser = userRepository.findById(userId)
+							.map(u -> u.getStatus() == UserStatus.ACTIVE)
+							.orElse(false);
+					if (activeUser) {
+						Authentication authentication = UsernamePasswordAuthenticationToken.authenticated(userId, null,
+								Collections.emptyList());
+						SecurityContextHolder.getContext().setAuthentication(authentication);
+					} else {
+						SecurityContextHolder.clearContext();
+					}
 				}
 			} catch (JwtException | IllegalArgumentException exception) {
 				// Treat malformed/expired cookies as unauthenticated. Protected

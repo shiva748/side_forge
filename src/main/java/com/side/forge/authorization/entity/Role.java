@@ -54,8 +54,27 @@ public class Role {
 	public Long getOrganizationId() {
 		return organizationId;
 	}
+	public String getDescription() {
+		return description;
+	}
 	public boolean isSystemDefined() {
 		return systemDefined;
+	}
+
+	public static Role customOrganizationRole(Long organizationId, String code, String name, String description) {
+		Role role = new Role();
+		role.organizationId = organizationId;
+		role.code = code;
+		role.name = name;
+		role.description = description;
+		role.scope = RoleScope.ORGANIZATION;
+		role.systemDefined = false;
+		return role;
+	}
+
+	public void updateDetails(String name, String description) {
+		this.name = name;
+		this.description = description;
 	}
 
 	@PrePersist

@@ -242,7 +242,9 @@ public class ParentPortalService {
 		Map<Long, Guardian> guardianMap = guardianLinks.isEmpty() ? Map.of()
 				: guardianRepository.findAllById(
 						guardianLinks.stream().map(StudentGuardian::getGuardianId).collect(Collectors.toSet()))
-						.stream().collect(Collectors.toMap(Guardian::getId, Function.identity()));
+						.stream()
+						.filter(g -> orgId.equals(g.getOrganizationId()))
+						.collect(Collectors.toMap(Guardian::getId, Function.identity()));
 		List<StudentGuardianResponse> guardianDtos = new ArrayList<>();
 		for (StudentGuardian link : guardianLinks) {
 			Guardian g = guardianMap.get(link.getGuardianId());

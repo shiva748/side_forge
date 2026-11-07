@@ -117,6 +117,20 @@ public class StudentController {
 						studentService.uploadStudentPhoto(organizationId, studentId, file)));
 	}
 
+	@RequirePermission(PermissionCode.STUDENT_VIEW)
+	@GetMapping("/{studentId}/photo")
+	public ResponseEntity<byte[]> downloadStudentPhoto(
+			@PathVariable @Positive Long organizationId,
+			@PathVariable @Positive Long studentId) {
+		var payload = studentService.downloadStudentPhoto(organizationId, studentId);
+		return ResponseEntity.ok()
+				.header(org.springframework.http.HttpHeaders.CONTENT_DISPOSITION,
+						"inline; filename=\"" + payload.metadata().originalFilename() + "\"")
+				.contentType(MediaType.parseMediaType(payload.metadata().contentType()))
+				.contentLength(payload.content().length)
+				.body(payload.content());
+	}
+
 	@RequirePermission(PermissionCode.STUDENT_UPDATE)
 	@PostMapping(value = "/{studentId}/documents", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
 	public ResponseEntity<ApiResponse<StoredFileResponse>> uploadStudentDocument(
@@ -126,5 +140,39 @@ public class StudentController {
 		return ResponseEntity.status(HttpStatus.CREATED)
 				.body(new ApiResponse<>(true, "Student document uploaded successfully",
 						studentService.uploadStudentDocument(organizationId, studentId, file)));
+	}
+
+	@RequirePermission(PermissionCode.STUDENT_VIEW)
+	@GetMapping("/{studentId}/documents")
+	public ResponseEntity<ApiResponse<java.util.List<StoredFileResponse>>> getStudentDocuments(
+			@PathVariable @Positive Long organizationId,
+			@PathVariable @Positive Long studentId) {
+		return ResponseEntity.ok(new ApiResponse<>(true, "Student documents retrieved successfully",
+				studentService.getStudentDocuments(organizationId, studentId)));
+	}
+
+	@RequirePermission(PermissionCode.STUDENT_VIEW)
+	@GetMapping("/{studentId}/documents/{fileId}")
+	public ResponseEntity<byte[]> downloadStudentDocument(
+			@PathVariable @Positive Long organizationId,
+			@PathVariable @Positive Long studentId,
+			@PathVariable @Positive Long fileId) {
+		var payload = studentService.downloadStudentDocument(organizationId, studentId, fileId);
+		return ResponseEntity.ok()
+				.header(org.springframework.http.HttpHeaders.CONTENT_DISPOSITION,
+						"attachment; filename=\"" + payload.metadata().originalFilename() + "\"")
+				.contentType(MediaType.parseMediaType(payload.metadata().contentType()))
+				.contentLength(payload.content().length)
+				.body(payload.content());
+	}
+
+	@RequirePermission(PermissionCode.STUDENT_UPDATE)
+	@org.springframework.web.bind.annotation.DeleteMapping("/{studentId}/documents/{fileId}")
+	public ResponseEntity<ApiResponse<Void>> deleteStudentDocument(
+			@PathVariable @Positive Long organizationId,
+			@PathVariable @Positive Long studentId,
+			@PathVariable @Positive Long fileId) {
+		studentService.deleteStudentDocument(organizationId, studentId, fileId);
+		return ResponseEntity.ok(new ApiResponse<>(true, "Student document deleted successfully", null));
 	}
 }

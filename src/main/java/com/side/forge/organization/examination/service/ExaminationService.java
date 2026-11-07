@@ -51,6 +51,8 @@ import lombok.RequiredArgsConstructor;
 @RequiredArgsConstructor
 public class ExaminationService {
 
+	public static final String RESOURCE_EXAMINATION_DOCUMENT = "EXAMINATION_DOCUMENT";
+
 	private final GradingScaleRepository gradingScaleRepository;
 	private final GradingRuleRepository gradingRuleRepository;
 	private final ExaminationRepository examinationRepository;
@@ -72,6 +74,7 @@ public class ExaminationService {
 	private final CurrentUserContext currentUser;
 	private final NotificationService notificationService;
 	private final ParentChildAccessValidator parentChildValidator;
+	private final com.side.forge.storage.service.FileManagementService fileManagementService;
 
 	@RequirePermission(PermissionCode.EXAM_MANAGE)
 	@Transactional
@@ -850,5 +853,47 @@ public class ExaminationService {
 				sch != null ? sch.getMaxMarks() : null, sch != null ? sch.getPassingMarks() : null,
 				m.getGrade(), m.isPassed(), m.getEnteredBy(), m.getUpdatedBy(),
 				m.getRemarks(), m.getCreatedAt(), m.getUpdatedAt());
+	}
+
+	@RequirePermission(PermissionCode.EXAM_MANAGE)
+	@Transactional
+	public com.side.forge.storage.dto.StorageDtos.StoredFileResponse uploadExaminationDocument(
+			Long orgId, Long examinationId, org.springframework.web.multipart.MultipartFile file) {
+		validator.requireOrganization(orgId);
+		Examination exam = examinationRepository.findByIdAndOrganizationId(examinationId, orgId)
+				.orElseThrow(() -> new EntityNotFoundException("Examination not found"));
+		return fileManagementService.storeOrganizationFile(
+				orgId, com.side.forge.storage.entity.FileResourceCategory.GENERAL_ORGANIZATION_FILE,
+				file, RESOURCE_EXAMINATION_DOCUMENT, exam.getId());
+	}
+
+	@RequirePermission(PermissionCode.EXAM_VIEW)
+	@Transactional(readOnly = true)
+	public List<com.side.forge.storage.dto.StorageDtos.StoredFileResponse> getExaminationDocuments(
+			Long orgId, Long examinationId) {
+		validator.requireOrganization(orgId);
+		Examination exam = examinationRepository.findByIdAndOrganizationId(examinationId, orgId)
+				.orElseThrow(() -> new EntityNotFoundException("Examination not found"));
+		return fileManagementService.getFilesForResource(orgId, RESOURCE_EXAMINATION_DOCUMENT, exam.getId());
+	}
+
+	@RequirePermission(PermissionCode.EXAM_VIEW)
+	@Transactional(readOnly = true)
+	public com.side.forge.storage.dto.StorageDtos.DownloadedFilePayload downloadExaminationDocument(
+			Long orgId, Long examinationId, Long fileId) {
+		validator.requireOrganization(orgId);
+		Examination exam = examinationRepository.findByIdAndOrganizationId(examinationId, orgId)
+				.orElseThrow(() -> new EntityNotFoundException("Examination not found"));
+		return fileManagementService.downloadOrganizationFileForAuthorizedResource(
+				orgId, fileId, RESOURCE_EXAMINATION_DOCUMENT, exam.getId());
+	}
+
+	@RequirePermission(PermissionCode.EXAM_MANAGE)
+	@Transactional
+	public void deleteExaminationDocument(Long orgId, Long examinationId, Long fileId) {
+		validator.requireOrganization(orgId);
+		Examination exam = examinationRepository.findByIdAndOrganizationId(examinationId, orgId)
+				.orElseThrow(() -> new EntityNotFoundException("Examination not found"));
+		fileManagementService.deleteOrganizationFile(orgId, fileId, RESOURCE_EXAMINATION_DOCUMENT, exam.getId());
 	}
 }

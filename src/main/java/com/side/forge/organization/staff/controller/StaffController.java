@@ -114,4 +114,49 @@ public class StaffController {
 		StaffResponse updated = staffService.associateUserAccount(organizationId, staffId, request);
 		return ResponseEntity.ok(new ApiResponse<>(true, "Staff user account association updated successfully", updated));
 	}
+
+	@RequirePermission(PermissionCode.STAFF_MANAGE)
+	@PostMapping(value = "/{staffId}/documents", consumes = org.springframework.http.MediaType.MULTIPART_FORM_DATA_VALUE)
+	public ResponseEntity<ApiResponse<com.side.forge.storage.dto.StorageDtos.StoredFileResponse>> uploadStaffDocument(
+			@PathVariable @Positive Long organizationId,
+			@PathVariable @Positive Long staffId,
+			@RequestParam("file") org.springframework.web.multipart.MultipartFile file) {
+		return ResponseEntity.status(HttpStatus.CREATED)
+				.body(new ApiResponse<>(true, "Staff document uploaded successfully",
+						staffService.uploadStaffDocument(organizationId, staffId, file)));
+	}
+
+	@RequirePermission(PermissionCode.STAFF_VIEW)
+	@GetMapping("/{staffId}/documents")
+	public ResponseEntity<ApiResponse<java.util.List<com.side.forge.storage.dto.StorageDtos.StoredFileResponse>>> getStaffDocuments(
+			@PathVariable @Positive Long organizationId,
+			@PathVariable @Positive Long staffId) {
+		return ResponseEntity.ok(new ApiResponse<>(true, "Staff documents retrieved successfully",
+				staffService.getStaffDocuments(organizationId, staffId)));
+	}
+
+	@RequirePermission(PermissionCode.STAFF_VIEW)
+	@GetMapping("/{staffId}/documents/{fileId}")
+	public ResponseEntity<byte[]> downloadStaffDocument(
+			@PathVariable @Positive Long organizationId,
+			@PathVariable @Positive Long staffId,
+			@PathVariable @Positive Long fileId) {
+		var payload = staffService.downloadStaffDocument(organizationId, staffId, fileId);
+		return ResponseEntity.ok()
+				.header(org.springframework.http.HttpHeaders.CONTENT_DISPOSITION,
+						"attachment; filename=\"" + payload.metadata().originalFilename() + "\"")
+				.contentType(org.springframework.http.MediaType.parseMediaType(payload.metadata().contentType()))
+				.contentLength(payload.content().length)
+				.body(payload.content());
+	}
+
+	@RequirePermission(PermissionCode.STAFF_MANAGE)
+	@org.springframework.web.bind.annotation.DeleteMapping("/{staffId}/documents/{fileId}")
+	public ResponseEntity<ApiResponse<Void>> deleteStaffDocument(
+			@PathVariable @Positive Long organizationId,
+			@PathVariable @Positive Long staffId,
+			@PathVariable @Positive Long fileId) {
+		staffService.deleteStaffDocument(organizationId, staffId, fileId);
+		return ResponseEntity.ok(new ApiResponse<>(true, "Staff document deleted successfully", null));
+	}
 }

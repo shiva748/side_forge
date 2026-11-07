@@ -154,6 +154,20 @@ public class StudentService {
 				orgId, FileResourceCategory.STUDENT_DOCUMENT, file, RESOURCE_STUDENT_PHOTO, student.getId());
 	}
 
+	@RequirePermission(PermissionCode.STUDENT_VIEW)
+	@Transactional(readOnly = true)
+	public com.side.forge.storage.dto.StorageDtos.DownloadedFilePayload downloadStudentPhoto(Long orgId, Long studentId) {
+		validator.requireOrganization(orgId);
+		Student student = requireStudent(orgId, studentId);
+		java.util.List<StoredFileResponse> photos = fileManagementService.getFilesForResource(
+				orgId, RESOURCE_STUDENT_PHOTO, student.getId());
+		if (photos.isEmpty()) {
+			throw new EntityNotFoundException("Student profile photo not found");
+		}
+		return fileManagementService.downloadOrganizationFileForAuthorizedResource(
+				orgId, photos.getFirst().id(), RESOURCE_STUDENT_PHOTO, student.getId());
+	}
+
 	@RequirePermission(PermissionCode.STUDENT_UPDATE)
 	@Transactional
 	public StoredFileResponse uploadStudentDocument(Long orgId, Long studentId, MultipartFile file) {
@@ -161,6 +175,32 @@ public class StudentService {
 		Student student = requireStudentForUpdate(orgId, studentId);
 		return fileManagementService.storeOrganizationFile(
 				orgId, FileResourceCategory.STUDENT_DOCUMENT, file, RESOURCE_STUDENT_DOCUMENT, student.getId());
+	}
+
+	@RequirePermission(PermissionCode.STUDENT_VIEW)
+	@Transactional(readOnly = true)
+	public java.util.List<StoredFileResponse> getStudentDocuments(Long orgId, Long studentId) {
+		validator.requireOrganization(orgId);
+		Student student = requireStudent(orgId, studentId);
+		return fileManagementService.getFilesForResource(orgId, RESOURCE_STUDENT_DOCUMENT, student.getId());
+	}
+
+	@RequirePermission(PermissionCode.STUDENT_VIEW)
+	@Transactional(readOnly = true)
+	public com.side.forge.storage.dto.StorageDtos.DownloadedFilePayload downloadStudentDocument(
+			Long orgId, Long studentId, Long fileId) {
+		validator.requireOrganization(orgId);
+		Student student = requireStudent(orgId, studentId);
+		return fileManagementService.downloadOrganizationFileForAuthorizedResource(
+				orgId, fileId, RESOURCE_STUDENT_DOCUMENT, student.getId());
+	}
+
+	@RequirePermission(PermissionCode.STUDENT_UPDATE)
+	@Transactional
+	public void deleteStudentDocument(Long orgId, Long studentId, Long fileId) {
+		validator.requireOrganization(orgId);
+		Student student = requireStudentForUpdate(orgId, studentId);
+		fileManagementService.deleteOrganizationFile(orgId, fileId, RESOURCE_STUDENT_DOCUMENT, student.getId());
 	}
 
 	public Student requireStudent(Long orgId, Long studentId) {

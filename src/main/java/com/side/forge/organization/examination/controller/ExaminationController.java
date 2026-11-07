@@ -179,4 +179,49 @@ public class ExaminationController {
 		ClassExamReportResponse report = examinationService.getClassExamReport(organizationId, examinationId);
 		return ResponseEntity.ok(new ApiResponse<>(true, "Class examination report retrieved successfully", report));
 	}
+
+	@RequirePermission(PermissionCode.EXAM_MANAGE)
+	@PostMapping(value = "/examinations/{examinationId}/documents", consumes = org.springframework.http.MediaType.MULTIPART_FORM_DATA_VALUE)
+	public ResponseEntity<ApiResponse<com.side.forge.storage.dto.StorageDtos.StoredFileResponse>> uploadExaminationDocument(
+			@PathVariable @Positive Long organizationId,
+			@PathVariable @Positive Long examinationId,
+			@RequestParam("file") org.springframework.web.multipart.MultipartFile file) {
+		return ResponseEntity.status(HttpStatus.CREATED)
+				.body(new ApiResponse<>(true, "Examination document uploaded successfully",
+						examinationService.uploadExaminationDocument(organizationId, examinationId, file)));
+	}
+
+	@RequirePermission(PermissionCode.EXAM_VIEW)
+	@GetMapping("/examinations/{examinationId}/documents")
+	public ResponseEntity<ApiResponse<List<com.side.forge.storage.dto.StorageDtos.StoredFileResponse>>> getExaminationDocuments(
+			@PathVariable @Positive Long organizationId,
+			@PathVariable @Positive Long examinationId) {
+		return ResponseEntity.ok(new ApiResponse<>(true, "Examination documents retrieved successfully",
+				examinationService.getExaminationDocuments(organizationId, examinationId)));
+	}
+
+	@RequirePermission(PermissionCode.EXAM_VIEW)
+	@GetMapping("/examinations/{examinationId}/documents/{fileId}")
+	public ResponseEntity<byte[]> downloadExaminationDocument(
+			@PathVariable @Positive Long organizationId,
+			@PathVariable @Positive Long examinationId,
+			@PathVariable @Positive Long fileId) {
+		var payload = examinationService.downloadExaminationDocument(organizationId, examinationId, fileId);
+		return ResponseEntity.ok()
+				.header(org.springframework.http.HttpHeaders.CONTENT_DISPOSITION,
+						"attachment; filename=\"" + payload.metadata().originalFilename() + "\"")
+				.contentType(org.springframework.http.MediaType.parseMediaType(payload.metadata().contentType()))
+				.contentLength(payload.content().length)
+				.body(payload.content());
+	}
+
+	@RequirePermission(PermissionCode.EXAM_MANAGE)
+	@DeleteMapping("/examinations/{examinationId}/documents/{fileId}")
+	public ResponseEntity<ApiResponse<Void>> deleteExaminationDocument(
+			@PathVariable @Positive Long organizationId,
+			@PathVariable @Positive Long examinationId,
+			@PathVariable @Positive Long fileId) {
+		examinationService.deleteExaminationDocument(organizationId, examinationId, fileId);
+		return ResponseEntity.ok(new ApiResponse<>(true, "Examination document deleted successfully", null));
+	}
 }

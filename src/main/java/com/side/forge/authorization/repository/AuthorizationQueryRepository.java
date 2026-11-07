@@ -23,7 +23,7 @@ public class AuthorizationQueryRepository {
 						+ "JOIN organizations o ON o.id = m.organization_id "
 						+ "JOIN users u ON u.id = m.user_id "
 						+ "WHERE m.user_id = :userId AND m.organization_id = :organizationId "
-						+ "AND m.status = :status AND o.status = 'ACTIVE' AND u.status = 'ACTIVE'",
+						+ "AND m.status = :status AND o.status IN ('ACTIVE', 'SUSPENDED') AND u.status = 'ACTIVE'",
 				Map.of("userId", userId, "organizationId", organizationId, "status", MembershipStatus.ACTIVE.name()),
 				Integer.class);
 		return count != null && count > 0;
@@ -49,16 +49,21 @@ public class AuthorizationQueryRepository {
 	}
 
 	public Set<String> findPlatformRoles(Long userId) {
-		String sql = "SELECT DISTINCT r.code FROM platform_user_roles pur " + "JOIN roles r ON r.id = pur.role_id "
-				+ "WHERE pur.user_id = :userId AND r.scope = :scope AND r.organization_id IS NULL";
+		String sql = "SELECT DISTINCT r.code FROM platform_user_roles pur "
+				+ "JOIN roles r ON r.id = pur.role_id "
+				+ "JOIN users u ON u.id = pur.user_id "
+				+ "WHERE pur.user_id = :userId AND u.status = 'ACTIVE' AND r.scope = :scope AND r.organization_id IS NULL";
 		return Set.copyOf(
 				jdbc.queryForList(sql, Map.of("userId", userId, "scope", RoleScope.PLATFORM.name()), String.class));
 	}
 
 	public Set<String> findPlatformPermissions(Long userId) {
-		String sql = "SELECT DISTINCT p.code FROM platform_user_roles pur " + "JOIN roles r ON r.id = pur.role_id "
-				+ "JOIN role_permissions rp ON rp.role_id = r.id " + "JOIN permissions p ON p.id = rp.permission_id "
-				+ "WHERE pur.user_id = :userId AND r.scope = :scope AND r.organization_id IS NULL";
+		String sql = "SELECT DISTINCT p.code FROM platform_user_roles pur "
+				+ "JOIN roles r ON r.id = pur.role_id "
+				+ "JOIN users u ON u.id = pur.user_id "
+				+ "JOIN role_permissions rp ON rp.role_id = r.id "
+				+ "JOIN permissions p ON p.id = rp.permission_id "
+				+ "WHERE pur.user_id = :userId AND u.status = 'ACTIVE' AND r.scope = :scope AND r.organization_id IS NULL";
 		return Set.copyOf(
 				jdbc.queryForList(sql, Map.of("userId", userId, "scope", RoleScope.PLATFORM.name()), String.class));
 	}
