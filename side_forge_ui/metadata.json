@@ -1,0 +1,8 @@
+{
+  "name": "SchoolForge — Mobile School Management Platform for Indian Schools",
+  "description": "Smarter school management on mobile for Indian schools. Built for CBSE, ICSE, and State Board institutions to streamline attendance, fee collection, and parent communication.",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}
