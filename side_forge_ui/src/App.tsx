@@ -10,6 +10,7 @@ import { LoginPage } from './pages/LoginPage';
 import { RegisterPage } from './pages/RegisterPage';
 import { OnboardingStatusPage } from './pages/OnboardingStatusPage';
 import { WorkspaceSelectorPage } from './pages/WorkspaceSelectorPage';
+import { PlatformDashboardPage } from './pages/PlatformDashboardPage';
 import { PlatformOnboardingPage } from './pages/PlatformOnboardingPage';
 import { WorkspaceShellPlaceholder } from './pages/WorkspaceShellPlaceholder';
 import { UnauthorizedPage } from './pages/UnauthorizedPage';
@@ -40,15 +41,26 @@ export default function App() {
                 }
               />
 
-              {/* Platform Administration: School Onboarding Requests Management */}
+              {/* Platform Administration: Dashboard & Onboarding Management */}
               <Route
                 path="/platform"
                 element={
                   <ProtectedRoute
                     workspace="PLATFORM"
-                    requiredPermissions={['platform.organization.view']}
+                    requiredPermissions={['platform.dashboard.view']}
                   >
-                    <PlatformOnboardingPage />
+                    <PlatformDashboardPage />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/platform/dashboard"
+                element={
+                  <ProtectedRoute
+                    workspace="PLATFORM"
+                    requiredPermissions={['platform.dashboard.view']}
+                  >
+                    <PlatformDashboardPage />
                   </ProtectedRoute>
                 }
               />
@@ -73,7 +85,7 @@ export default function App() {
               />
               <Route
                 path="/platform/*"
-                element={<Navigate to="/platform/onboarding" replace />}
+                element={<Navigate to="/platform" replace />}
               />
 
               {/* School Administration Workspace Shell Placeholder */}

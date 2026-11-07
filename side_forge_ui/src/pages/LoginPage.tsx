@@ -60,7 +60,7 @@ export const LoginPage: React.FC = () => {
       return <Navigate to="/onboarding-status" replace />;
     }
     if (activeWorkspace === 'PLATFORM' && hasPlatformAccess) {
-      return <Navigate to={fromPath || '/platform/onboarding'} replace />;
+      return <Navigate to={fromPath || '/platform'} replace />;
     }
     if (activeWorkspace === 'SCHOOL' && activeOrganization) {
       return <Navigate to={fromPath || '/app'} replace />;

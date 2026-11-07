@@ -54,7 +54,7 @@ export const WorkspaceSelectorPage: React.FC = () => {
       const only = availableWorkspaces[0];
       if (only.workspaceType === 'PLATFORM') {
         activatePlatformWorkspace();
-        navigate('/platform/onboarding', { replace: true });
+        navigate('/platform', { replace: true });
       } else if (only.organizationId) {
         selectOrganization(only.organizationId);
         navigate('/app', { replace: true });
@@ -92,7 +92,7 @@ export const WorkspaceSelectorPage: React.FC = () => {
       );
       const fromPath = locState.from?.pathname;
       const target =
-        fromPath && fromPath.startsWith('/platform') ? fromPath : '/platform/onboarding';
+        fromPath && fromPath.startsWith('/platform') ? fromPath : '/platform';
       navigate(target, { replace: true });
       return;
     }

@@ -25,7 +25,7 @@ export const UnauthorizedPage: React.FC = () => {
 
   const defaultWorkspacePath =
     activeWorkspace === 'PLATFORM' && hasPlatformAccess
-      ? '/platform/onboarding'
+      ? '/platform'
       : activeMemberships.length > 0
       ? '/app'
       : '/workspaces';

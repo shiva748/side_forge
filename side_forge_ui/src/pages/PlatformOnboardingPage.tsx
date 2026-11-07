@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import {
   Building2,
   CheckCircle2,
@@ -58,6 +59,7 @@ const STATUS_FILTER_OPTIONS: { value: OnboardingStatus | ''; label: string }[] =
 export const PlatformOnboardingPage: React.FC = () => {
   const { platformPermissions } = useAuth();
   const toast = useToast();
+  const [searchParams, setSearchParams] = useSearchParams();
 
   // Strictly check platform-scoped permissions (never organization-scoped SCHOOL_ADMIN)
   const canViewOnboarding = platformPermissions.has('platform.organization.view');
@@ -65,8 +67,15 @@ export const PlatformOnboardingPage: React.FC = () => {
   const canViewPlans = platformPermissions.has('platform.plan.view');
   const canViewAuditLogs = platformPermissions.has('platform.audit.view');
 
+  const initialStatusParam = searchParams.get('status') as OnboardingStatus | null;
+  const validInitialStatus: OnboardingStatus | '' =
+    initialStatusParam &&
+    ['PENDING', 'UNDER_REVIEW', 'APPROVED', 'REJECTED'].includes(initialStatusParam)
+      ? initialStatusParam
+      : '';
+
   // Filter, search & pagination state
-  const [statusFilter, setStatusFilter] = useState<OnboardingStatus | ''>('');
+  const [statusFilter, setStatusFilter] = useState<OnboardingStatus | ''>(validInitialStatus);
   const [searchInput, setSearchInput] = useState<string>('');
   const [appliedSearch, setAppliedSearch] = useState<string>('');
   const [page, setPage] = useState<number>(0);
@@ -191,6 +200,39 @@ export const PlatformOnboardingPage: React.FC = () => {
   useEffect(() => {
     void fetchSupportingData();
   }, [fetchSupportingData]);
+
+  // Open request details modal automatically when navigated with `?requestId=<id>`
+  useEffect(() => {
+    const reqIdParam = Number(searchParams.get('requestId'));
+    if (!reqIdParam || Number.isNaN(reqIdParam) || !canViewOnboarding) return;
+    let cancelled = false;
+    setIsDetailsModalOpen(true);
+    setIsLoadingDetails(true);
+    platformOnboardingApi
+      .getRequestById(reqIdParam)
+      .then((fresh) => {
+        if (!cancelled) {
+          setSelectedRequest(fresh);
+        }
+      })
+      .catch((err) => {
+        if (!cancelled && err instanceof ApiError) {
+          toast.error('Could not load onboarding request', err.message);
+          setIsDetailsModalOpen(false);
+        }
+      })
+      .finally(() => {
+        if (!cancelled) {
+          setIsLoadingDetails(false);
+          const nextParams = new URLSearchParams(searchParams);
+          nextParams.delete('requestId');
+          setSearchParams(nextParams, { replace: true });
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [canViewOnboarding, searchParams, setSearchParams, toast]);
 
   const handleOpenDetails = async (row: OnboardingRequestResponse) => {
     setSelectedRequest(row);

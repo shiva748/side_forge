@@ -240,7 +240,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             localStorage.setItem(ACTIVE_WORKSPACE_STORAGE_KEY, 'PLATFORM');
             localStorage.removeItem(ACTIVE_ORG_STORAGE_KEY);
             await loadOrganizationContext(null);
-            return { profile, defaultRoute: '/platform/onboarding' };
+            return { profile, defaultRoute: '/platform' };
           }
 
           const singleOrg = activeOrgs[0];
@@ -277,7 +277,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           setActiveOrganizationId(null);
           localStorage.removeItem(ACTIVE_ORG_STORAGE_KEY);
           await loadOrganizationContext(null);
-          return { profile, defaultRoute: '/platform/onboarding' };
+          return { profile, defaultRoute: '/platform' };
         }
 
         if (storedWorkspace === 'SCHOOL' && matchedStoredOrg) {

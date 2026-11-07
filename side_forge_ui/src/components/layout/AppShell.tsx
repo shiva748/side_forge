@@ -120,13 +120,22 @@ export const AppShell: React.FC<AppShellProps> = ({
   const navGroups = useMemo<NavGroupConfig[]>(() => {
     if (activeWorkspace === 'PLATFORM') {
       const opsItems: NavItemConfig[] = [];
+      if (hasPermission('platform.dashboard.view')) {
+        opsItems.push({
+          id: 'platform-dashboard',
+          label: 'Dashboard',
+          to: '/platform',
+          icon: <LayoutDashboard className="w-4 h-4 shrink-0" />,
+          matchPaths: ['/platform', '/platform/dashboard'],
+        });
+      }
       if (hasPermission('platform.organization.view')) {
         opsItems.push({
           id: 'platform-onboarding',
           label: 'Onboarding Requests',
           to: '/platform/onboarding',
           icon: <ClipboardCheck className="w-4 h-4 shrink-0" />,
-          matchPaths: ['/platform', '/platform/onboarding'],
+          matchPaths: ['/platform/onboarding'],
         });
       }
 
@@ -189,7 +198,7 @@ export const AppShell: React.FC<AppShellProps> = ({
         'Workspace switched',
         `Activated Platform Administration (${option.roles.map(formatRoleLabel).join(', ')}).`
       );
-      navigate('/platform/onboarding');
+      navigate('/platform');
       return;
     }
     if (option.workspaceType === 'SCHOOL' && option.organizationId) {
