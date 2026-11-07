@@ -26,6 +26,8 @@ import com.side.forge.organization.student.profile.dto.UpdateStudentRequest;
 import com.side.forge.organization.student.profile.entity.Gender;
 import com.side.forge.organization.student.profile.entity.StudentStatus;
 import com.side.forge.organization.student.profile.service.StudentService;
+import com.side.forge.platform.saas.annotation.RequireFeature;
+import com.side.forge.platform.saas.enums.PlatformFeature;
 import com.side.forge.storage.dto.StorageDtos.StoredFileResponse;
 
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
@@ -36,6 +38,7 @@ import lombok.RequiredArgsConstructor;
 
 @RestController
 @Validated
+@RequireFeature(PlatformFeature.STUDENT_MANAGEMENT)
 @Tag(name = "Students", description = "Manage organization student profiles and student directory")
 @SecurityRequirement(name = "jwtCookie")
 @RequestMapping("/api/organizations/{organizationId}/students")

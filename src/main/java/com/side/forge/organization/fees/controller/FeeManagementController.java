@@ -16,6 +16,8 @@ import com.side.forge.organization.fees.dto.GenerateFeeDemandsRequest.*;
 import com.side.forge.organization.fees.dto.RecordFeePaymentRequest.*;
 import com.side.forge.organization.fees.dto.StudentFinancialProfileResponse.SessionFeeDashboardReportResponse;
 import com.side.forge.organization.fees.service.FeeManagementService;
+import com.side.forge.platform.saas.annotation.RequireFeature;
+import com.side.forge.platform.saas.enums.PlatformFeature;
 
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -25,6 +27,7 @@ import lombok.RequiredArgsConstructor;
 
 @RestController
 @Validated
+@RequireFeature(PlatformFeature.FEES_AND_FINANCE)
 @Tag(name = "Fees & Finance", description = "Configure class fee structures, manage student fee demands, concessions, manual payments, receipts, reversals/refunds, and financial reports")
 @SecurityRequirement(name = "jwtCookie")
 @RequestMapping("/api/organizations/{organizationId}")

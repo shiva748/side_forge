@@ -14,6 +14,8 @@ import com.side.forge.common.dto.ApiResponse;
 import com.side.forge.organization.teacher.dto.TeacherResponse;
 import com.side.forge.organization.timetable.dto.*;
 import com.side.forge.organization.timetable.service.TimetableService;
+import com.side.forge.platform.saas.annotation.RequireFeature;
+import com.side.forge.platform.saas.enums.PlatformFeature;
 
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -23,6 +25,7 @@ import lombok.RequiredArgsConstructor;
 
 @RestController
 @Validated
+@RequireFeature(PlatformFeature.TIMETABLE)
 @Tag(name = "Timetable Management", description = "Configure school timetable structures, periods, class schedules, and teacher timetables")
 @SecurityRequirement(name = "jwtCookie")
 @RequestMapping("/api/organizations/{organizationId}")

@@ -8,6 +8,8 @@ import com.side.forge.authorization.enums.PermissionCode;
 import com.side.forge.common.utils.AuthenticationUtils;
 import com.side.forge.organization.entity.Organization;
 import com.side.forge.organization.onboarding.service.OrganizationOnboardingService;
+import com.side.forge.platform.saas.dto.SaaSDtos.ApproveOnboardingSubscriptionRequest;
+import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Positive;
 import jakarta.validation.constraints.Size;
@@ -32,9 +34,10 @@ public class PlatformOnboardingController {
     @PostMapping("/{requestId}/approve")
     public ResponseEntity<Organization> approve(
             @PathVariable @Positive Long requestId,
+            @Valid @RequestBody(required = false) ApproveOnboardingSubscriptionRequest subscriptionRequest,
             Authentication authentication) {
         Long reviewedBy = AuthenticationUtils.getAuthenticatedUserId(authentication);
-        return ResponseEntity.ok(onboardingService.approveOnboardingRequest(requestId, reviewedBy));
+        return ResponseEntity.ok(onboardingService.approveOnboardingRequest(requestId, reviewedBy, subscriptionRequest));
     }
 
     @RequirePermission(PermissionCode.PLATFORM_ORGANIZATION_MANAGE)

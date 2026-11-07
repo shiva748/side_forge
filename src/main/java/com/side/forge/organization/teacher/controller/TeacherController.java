@@ -13,6 +13,8 @@ import com.side.forge.organization.staff.entity.EmploymentStatus;
 import com.side.forge.organization.staff.entity.EmploymentType;
 import com.side.forge.organization.teacher.dto.*;
 import com.side.forge.organization.teacher.service.TeacherService;
+import com.side.forge.platform.saas.annotation.RequireFeature;
+import com.side.forge.platform.saas.enums.PlatformFeature;
 
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -22,6 +24,7 @@ import lombok.RequiredArgsConstructor;
 
 @RestController
 @Validated
+@RequireFeature(PlatformFeature.STAFF_MANAGEMENT)
 @Tag(name = "Teachers", description = "Manage teacher profiles, professional qualifications, and teacher directory")
 @SecurityRequirement(name = "jwtCookie")
 @RequestMapping("/api/organizations/{organizationId}/teachers")

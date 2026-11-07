@@ -8,6 +8,7 @@ import org.springframework.stereotype.Component;
 
 import com.side.forge.authorization.service.CurrentUserContext;
 import com.side.forge.organization.entity.Organization;
+import com.side.forge.organization.entity.OrganizationStatus;
 import com.side.forge.organization.repository.OrganizationRepository;
 
 import jakarta.persistence.EntityNotFoundException;
@@ -38,14 +39,22 @@ public class AcademicTenantAccessValidator {
 
 	public Organization requireOrganization(Long organizationId) {
 		verifyOrganizationContext(organizationId);
-		return organizationRepository.findById(organizationId)
+		Organization org = organizationRepository.findById(organizationId)
 				.orElseThrow(() -> new EntityNotFoundException("Organization not found"));
+		if (org.getStatus() != OrganizationStatus.ACTIVE) {
+			throw new AccessDeniedException("Organization is not active: " + org.getStatus());
+		}
+		return org;
 	}
 
 	public Organization requireOrganizationForUpdate(Long organizationId) {
 		verifyOrganizationContext(organizationId);
-		return organizationRepository.findByIdForUpdate(organizationId)
+		Organization org = organizationRepository.findByIdForUpdate(organizationId)
 				.orElseThrow(() -> new EntityNotFoundException("Organization not found"));
+		if (org.getStatus() != OrganizationStatus.ACTIVE) {
+			throw new AccessDeniedException("Organization is not active: " + org.getStatus());
+		}
+		return org;
 	}
 
 	public ZoneId resolveZoneId(Organization organization) {

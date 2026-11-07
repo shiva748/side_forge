@@ -23,6 +23,8 @@ import com.side.forge.organization.academic.session.dto.CreateAcademicSessionReq
 import com.side.forge.organization.academic.session.dto.UpdateAcademicSessionRequest;
 import com.side.forge.organization.academic.session.entity.AcademicSessionStatus;
 import com.side.forge.organization.academic.session.service.AcademicSessionService;
+import com.side.forge.platform.saas.annotation.RequireFeature;
+import com.side.forge.platform.saas.enums.PlatformFeature;
 
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -32,6 +34,7 @@ import lombok.RequiredArgsConstructor;
 
 @RestController
 @Validated
+@RequireFeature(PlatformFeature.ACADEMIC_MANAGEMENT)
 @Tag(name = "Academic Sessions", description = "Manage organization academic sessions and lifecycle")
 @SecurityRequirement(name = "jwtCookie")
 @RequestMapping("/api/organizations/{organizationId}/academic-sessions")

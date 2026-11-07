@@ -14,6 +14,8 @@ import com.side.forge.common.dto.ApiResponse;
 import com.side.forge.organization.attendance.dto.*;
 import com.side.forge.organization.attendance.entity.AttendanceAuditLog.TargetType;
 import com.side.forge.organization.attendance.service.AttendanceService;
+import com.side.forge.platform.saas.annotation.RequireFeature;
+import com.side.forge.platform.saas.enums.PlatformFeature;
 
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -25,6 +27,7 @@ import lombok.RequiredArgsConstructor;
 
 @RestController
 @Validated
+@RequireFeature(PlatformFeature.ATTENDANCE)
 @Tag(name = "Attendance Management", description = "Track daily and bulk student/staff attendance, corrections, audit history, and reports")
 @SecurityRequirement(name = "jwtCookie")
 @RequestMapping("/api/organizations/{organizationId}")

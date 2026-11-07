@@ -17,6 +17,7 @@ import org.springframework.web.multipart.MaxUploadSizeExceededException;
 import org.springframework.web.multipart.support.MissingServletRequestPartException;
 
 import com.side.forge.common.dto.ApiResponse;
+import com.side.forge.platform.saas.exception.SubscriptionAccessException;
 
 import jakarta.persistence.EntityNotFoundException;
 import jakarta.validation.ConstraintViolationException;
@@ -42,6 +43,13 @@ public class GlobalExceptionHandler {
 	public ResponseEntity<?> handleMaxUploadSize(MaxUploadSizeExceededException ex) {
 		return ResponseEntity.badRequest()
 				.body(new ApiResponse<>(false, "Uploaded file exceeds the maximum allowed size"));
+	}
+
+	@ExceptionHandler(SubscriptionAccessException.class)
+	public ResponseEntity<?> handleSubscriptionAccessDenied(SubscriptionAccessException ex) {
+		log.warn("Subscription/entitlement access denied: {}", ex.getMessage());
+		return ResponseEntity.status(HttpStatus.FORBIDDEN)
+				.body(new ApiResponse<>(false, ex.getMessage()));
 	}
 
 	@ExceptionHandler(AccessDeniedException.class)

@@ -15,6 +15,12 @@ import com.side.forge.organization.entity.OrganizationStatus;
 import com.side.forge.organization.onboarding.mapper.OnboardingMapper;
 import com.side.forge.organization.onboarding.repository.OnboardingRequestRepository;
 import com.side.forge.organization.repository.OrganizationRepository;
+import com.side.forge.platform.saas.dto.SaaSDtos.ApproveOnboardingSubscriptionRequest;
+import com.side.forge.platform.saas.entity.OrganizationStatusHistory;
+import com.side.forge.platform.saas.enums.PlatformAuditAction;
+import com.side.forge.platform.saas.repository.OrganizationStatusHistoryRepository;
+import com.side.forge.platform.saas.service.PlatformAuditService;
+import com.side.forge.platform.saas.service.PlatformSubscriptionService;
 
 import jakarta.persistence.EntityNotFoundException;
 import lombok.RequiredArgsConstructor;
@@ -28,6 +34,9 @@ public class OrganizationOnboardingService {
 	private final OnboardingMapper onboardingMapper;
 	private final OrganizationAdminProvisioningService adminProvisioningService;
 	private final InvitationService invitationService;
+	private final PlatformSubscriptionService platformSubscriptionService;
+	private final OrganizationStatusHistoryRepository statusHistoryRepository;
+	private final PlatformAuditService platformAuditService;
 
 	@Transactional
 	public OnboardingRequest submitOnboardingRequest(OnboardingRequestDto dto, Long requestedBy) {
@@ -40,12 +49,27 @@ public class OrganizationOnboardingService {
 	@RequirePermission(PermissionCode.PLATFORM_ORGANIZATION_MANAGE)
 	@Transactional
 	public Organization approveOnboardingRequest(Long requestId, Long reviewedBy) {
+		return approveOnboardingRequest(requestId, reviewedBy, null);
+	}
+
+	@RequirePermission(PermissionCode.PLATFORM_ORGANIZATION_MANAGE)
+	@Transactional
+	public Organization approveOnboardingRequest(
+			Long requestId, Long reviewedBy, ApproveOnboardingSubscriptionRequest subscriptionRequest) {
 		OnboardingRequest request = getRequest(requestId);
 		validateRequestStatus(request);
 
 		Organization organization = onboardingMapper.toOrganization(request);
 		organization.setStatus(OrganizationStatus.ACTIVE);
 		organization = organizationRepository.save(organization);
+
+		OrganizationStatusHistory initialStatus = new OrganizationStatusHistory();
+		initialStatus.setOrganizationId(organization.getId());
+		initialStatus.setPreviousStatus(null);
+		initialStatus.setNewStatus(OrganizationStatus.ACTIVE);
+		initialStatus.setReason("Organization created and activated upon onboarding approval");
+		initialStatus.setChangedBy(reviewedBy);
+		statusHistoryRepository.save(initialStatus);
 
 		// Authenticated applicants become the initial school administrator.
 		// Anonymous onboarding requests automatically receive an initial SCHOOL_ADMIN invitation.
@@ -55,8 +79,21 @@ public class OrganizationOnboardingService {
 			invitationService.createInitialSchoolAdminInvitationOnApproval(organization, request, reviewedBy);
 		}
 
+		platformSubscriptionService.provisionDefaultSubscriptionOnOnboardingApproval(
+				organization, reviewedBy, subscriptionRequest);
+
 		request.setStatus(OnboardingStatus.APPROVED);
 		request.setReviewedBy(reviewedBy);
+
+		platformAuditService.recordAction(
+				reviewedBy,
+				PlatformAuditAction.ONBOARDING_APPROVED,
+				"ONBOARDING_REQUEST",
+				request.getId(),
+				organization.getId(),
+				"Approved onboarding request for " + organization.getName(),
+				"requestedBy=" + request.getRequestedBy() + ", orgId=" + organization.getId());
+
 		return organization;
 	}
 
@@ -68,6 +105,15 @@ public class OrganizationOnboardingService {
 		request.setStatus(OnboardingStatus.REJECTED);
 		request.setReviewedBy(reviewedBy);
 		request.setRejectionReason(rejectionReason);
+
+		platformAuditService.recordAction(
+				reviewedBy,
+				PlatformAuditAction.ONBOARDING_REJECTED,
+				"ONBOARDING_REQUEST",
+				request.getId(),
+				null,
+				"Rejected onboarding request for " + request.getSchoolName(),
+				"reason=" + rejectionReason);
 	}
 
 	private OnboardingRequest getRequest(Long requestId) {

@@ -9,6 +9,8 @@ import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
 import com.side.forge.common.dto.ApiResponse;
+import com.side.forge.platform.saas.annotation.RequireFeature;
+import com.side.forge.platform.saas.enums.PlatformFeature;
 import com.side.forge.storage.dto.StorageDtos.DownloadedFilePayload;
 import com.side.forge.storage.dto.StorageDtos.StoredFileResponse;
 import com.side.forge.storage.entity.FileResourceCategory;
@@ -22,6 +24,7 @@ import lombok.RequiredArgsConstructor;
 
 @RestController
 @Validated
+@RequireFeature(PlatformFeature.FILE_STORAGE)
 @Tag(name = "Organization File Storage", description = "Tenant-isolated file upload, metadata, download, and cleanup operations")
 @SecurityRequirement(name = "jwtCookie")
 @RequestMapping("/api/organizations/{organizationId}/files")

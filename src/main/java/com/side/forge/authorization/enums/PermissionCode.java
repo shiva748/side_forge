@@ -21,6 +21,22 @@ public enum PermissionCode {
 
 	PLATFORM_AUDIT_VIEW("platform.audit.view"),
 
+	PLATFORM_DASHBOARD_VIEW("platform.dashboard.view"),
+
+	PLATFORM_PLAN_VIEW("platform.plan.view"),
+
+	PLATFORM_PLAN_MANAGE("platform.plan.manage"),
+
+	PLATFORM_SUBSCRIPTION_VIEW("platform.subscription.view"),
+
+	PLATFORM_SUBSCRIPTION_MANAGE("platform.subscription.manage"),
+
+	PLATFORM_BILLING_VIEW("platform.billing.view"),
+
+	PLATFORM_BILLING_MANAGE("platform.billing.manage"),
+
+	PLATFORM_ENTITLEMENT_MANAGE("platform.entitlement.manage"),
+
 	// School
 	SCHOOL_VIEW("school.view"),
 

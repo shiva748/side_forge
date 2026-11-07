@@ -29,6 +29,8 @@ import com.side.forge.organization.parentportal.service.ParentPortalService;
 import com.side.forge.organization.reporting.dto.ReportDtos.ExportFormat;
 import com.side.forge.organization.reporting.service.ReportExportGenerator.ExportDocument;
 import com.side.forge.organization.timetable.dto.ClassTimetableResponse;
+import com.side.forge.platform.saas.annotation.RequireFeature;
+import com.side.forge.platform.saas.enums.PlatformFeature;
 import com.side.forge.storage.dto.StorageDtos.DownloadedFilePayload;
 import com.side.forge.storage.dto.StorageDtos.StoredFileResponse;
 
@@ -40,6 +42,7 @@ import lombok.RequiredArgsConstructor;
 
 @RestController
 @Validated
+@RequireFeature(PlatformFeature.PARENT_PORTAL)
 @Tag(name = "Parent Portal", description = "Dedicated parent-facing APIs for linked children, dashboard, attendance, homework, exams, fees, timetable, and announcements")
 @SecurityRequirement(name = "jwtCookie")
 @RequiredArgsConstructor

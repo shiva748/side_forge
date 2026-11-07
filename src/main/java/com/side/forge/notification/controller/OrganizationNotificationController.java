@@ -11,6 +11,8 @@ import com.side.forge.notification.dto.NotificationDtos.*;
 import com.side.forge.notification.entity.NotificationCategory;
 import com.side.forge.notification.entity.NotificationType;
 import com.side.forge.notification.service.NotificationService;
+import com.side.forge.platform.saas.annotation.RequireFeature;
+import com.side.forge.platform.saas.enums.PlatformFeature;
 
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -20,6 +22,7 @@ import lombok.RequiredArgsConstructor;
 
 @RestController
 @Validated
+@RequireFeature(PlatformFeature.COMMUNICATION_AND_NOTIFICATIONS)
 @Tag(name = "Notifications & Preferences", description = "In-app notification inbox, unread counts, read status, and category preferences")
 @SecurityRequirement(name = "jwtCookie")
 @RequestMapping("/api/organizations/{organizationId}")

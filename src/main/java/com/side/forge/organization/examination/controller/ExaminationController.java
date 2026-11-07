@@ -19,6 +19,8 @@ import com.side.forge.organization.examination.dto.ExaminationResponse.ReportCar
 import com.side.forge.organization.examination.dto.ScheduleExamSubjectRequest.ExamScheduleResponse;
 import com.side.forge.organization.examination.service.ExaminationService;
 import com.side.forge.organization.student.profile.dto.StudentResponse;
+import com.side.forge.platform.saas.annotation.RequireFeature;
+import com.side.forge.platform.saas.enums.PlatformFeature;
 
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -28,6 +30,7 @@ import lombok.RequiredArgsConstructor;
 
 @RestController
 @Validated
+@RequireFeature(PlatformFeature.EXAMINATION_AND_RESULTS)
 @Tag(name = "Examinations & Results", description = "Configure grading scales, examinations, schedules, marks entry, results, and report cards")
 @SecurityRequirement(name = "jwtCookie")
 @RequestMapping("/api/organizations/{organizationId}")

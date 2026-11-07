@@ -18,6 +18,8 @@ import com.side.forge.common.dto.ApiResponse;
 import com.side.forge.organization.communication.dto.AnnouncementDtos.*;
 import com.side.forge.organization.communication.entity.AnnouncementStatus;
 import com.side.forge.organization.communication.service.AnnouncementService;
+import com.side.forge.platform.saas.annotation.RequireFeature;
+import com.side.forge.platform.saas.enums.PlatformFeature;
 import com.side.forge.storage.dto.StorageDtos.DownloadedFilePayload;
 import com.side.forge.storage.dto.StorageDtos.StoredFileResponse;
 
@@ -29,6 +31,7 @@ import lombok.RequiredArgsConstructor;
 
 @RestController
 @Validated
+@RequireFeature(PlatformFeature.COMMUNICATION_AND_NOTIFICATIONS)
 @Tag(name = "Announcements & Circulars", description = "Create, edit, publish, delete, and view targeted school announcements and attachments")
 @SecurityRequirement(name = "jwtCookie")
 @RequestMapping("/api/organizations/{organizationId}/announcements")

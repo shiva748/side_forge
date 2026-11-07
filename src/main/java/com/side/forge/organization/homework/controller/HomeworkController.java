@@ -17,6 +17,8 @@ import com.side.forge.authorization.enums.PermissionCode;
 import com.side.forge.common.dto.ApiResponse;
 import com.side.forge.organization.homework.dto.HomeworkDtos.*;
 import com.side.forge.organization.homework.service.HomeworkService;
+import com.side.forge.platform.saas.annotation.RequireFeature;
+import com.side.forge.platform.saas.enums.PlatformFeature;
 import com.side.forge.storage.dto.StorageDtos.DownloadedFilePayload;
 import com.side.forge.storage.dto.StorageDtos.StoredFileResponse;
 
@@ -28,6 +30,7 @@ import lombok.RequiredArgsConstructor;
 
 @RestController
 @Validated
+@RequireFeature(PlatformFeature.HOMEWORK_AND_ASSIGNMENTS)
 @Tag(name = "Homework & Assignments", description = "Create, assign, submit, evaluate, and track homework assignments")
 @SecurityRequirement(name = "jwtCookie")
 @RequestMapping("/api/organizations/{organizationId}")

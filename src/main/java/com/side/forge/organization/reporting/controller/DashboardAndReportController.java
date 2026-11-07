@@ -35,6 +35,8 @@ import com.side.forge.organization.reporting.dto.ReportDtos.FinancialReportRespo
 import com.side.forge.organization.reporting.dto.ReportDtos.StudentEnrollmentReportResponse;
 import com.side.forge.organization.reporting.service.DashboardAndReportService;
 import com.side.forge.organization.reporting.service.ReportExportGenerator.ExportDocument;
+import com.side.forge.platform.saas.annotation.RequireFeature;
+import com.side.forge.platform.saas.enums.PlatformFeature;
 
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -43,6 +45,7 @@ import lombok.RequiredArgsConstructor;
 
 @RestController
 @Validated
+@RequireFeature(PlatformFeature.DASHBOARD_AND_REPORTS)
 @Tag(name = "Dashboards & Reports", description = "Role-based school dashboards, analytical reports, notices, and CSV/Excel/PDF exports")
 @SecurityRequirement(name = "jwtCookie")
 @RequestMapping("/api/organizations/{organizationId}")
@@ -197,6 +200,7 @@ public class DashboardAndReportController {
 						datePreset, startDate, endDate, selectedMonth, classId, studentId, page, size)));
 	}
 
+	@RequireFeature(PlatformFeature.REPORT_EXPORTS)
 	@RequirePermission(PermissionCode.REPORT_EXPORT)
 	@GetMapping("/reports/{reportType}/export")
 	public ResponseEntity<byte[]> exportReport(

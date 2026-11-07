@@ -10,6 +10,7 @@ import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
 import com.side.forge.authorization.enums.PermissionCode;
+import com.side.forge.platform.saas.service.SubscriptionPlanService;
 
 import lombok.RequiredArgsConstructor;
 
@@ -22,6 +23,7 @@ import lombok.RequiredArgsConstructor;
 public class AcademicDatabaseInitializer implements ApplicationRunner {
 
 	private final NamedParameterJdbcTemplate jdbc;
+	private final SubscriptionPlanService subscriptionPlanService;
 
 	private record PermissionSeed(PermissionCode code, String name, String module, String description) {
 	}
@@ -113,7 +115,33 @@ public class AcademicDatabaseInitializer implements ApplicationRunner {
 			new PermissionSeed(PermissionCode.PARENT_CHILD_VIEW, "View child records", "PARENT",
 					"View linked child academic, attendance, fee, and homework records"),
 			new PermissionSeed(PermissionCode.PARENT_CHILD_COMMUNICATION, "Parent communication", "PARENT",
-					"Communicate regarding linked student records")
+					"Communicate regarding linked student records"),
+			new PermissionSeed(PermissionCode.PLATFORM_DASHBOARD_VIEW, "View platform dashboard", "PLATFORM",
+					"View platform-wide SaaS metrics, revenue, and subscription summaries"),
+			new PermissionSeed(PermissionCode.PLATFORM_ORGANIZATION_VIEW, "View all organizations", "PLATFORM",
+					"View and search all organizations across the platform"),
+			new PermissionSeed(PermissionCode.PLATFORM_ORGANIZATION_MANAGE, "Manage organizations", "PLATFORM",
+					"Approve onboarding, suspend, reactivate, and deactivate organizations"),
+			new PermissionSeed(PermissionCode.PLATFORM_USER_MANAGE, "Manage platform users", "PLATFORM",
+					"Manage platform users"),
+			new PermissionSeed(PermissionCode.PLATFORM_ROLE_MANAGE, "Manage platform user roles", "PLATFORM",
+					"Assign and revoke platform administrator roles"),
+			new PermissionSeed(PermissionCode.PLATFORM_AUDIT_VIEW, "View platform audit logs", "PLATFORM",
+					"View platform administration and authorization audit logs"),
+			new PermissionSeed(PermissionCode.PLATFORM_PLAN_VIEW, "View subscription plans", "PLATFORM",
+					"View SaaS subscription plans and feature matrices"),
+			new PermissionSeed(PermissionCode.PLATFORM_PLAN_MANAGE, "Manage subscription plans", "PLATFORM",
+					"Create, update, and activate/deactivate SaaS subscription plans"),
+			new PermissionSeed(PermissionCode.PLATFORM_SUBSCRIPTION_VIEW, "View organization subscriptions", "PLATFORM",
+					"View organization subscription status, limits, and lifecycle history"),
+			new PermissionSeed(PermissionCode.PLATFORM_SUBSCRIPTION_MANAGE, "Manage organization subscriptions", "PLATFORM",
+					"Assign, upgrade, downgrade, renew, and cancel organization subscriptions"),
+			new PermissionSeed(PermissionCode.PLATFORM_BILLING_VIEW, "View subscription billing", "PLATFORM",
+					"View organization subscription payments, invoices, and billing summaries"),
+			new PermissionSeed(PermissionCode.PLATFORM_BILLING_MANAGE, "Manage subscription billing", "PLATFORM",
+					"Record manual subscription payments and generate receipts"),
+			new PermissionSeed(PermissionCode.PLATFORM_ENTITLEMENT_MANAGE, "Manage organization entitlements", "PLATFORM",
+					"Configure organization-level feature overrides and student limit overrides")
 	);
 
 	private static final Map<String, List<PermissionCode>> ROLE_PERMISSION_MAPPINGS = Map.of(
@@ -205,12 +233,46 @@ public class AcademicDatabaseInitializer implements ApplicationRunner {
 					PermissionCode.HOMEWORK_SUBMIT)
 	);
 
+	private static final Map<String, List<PermissionCode>> PLATFORM_ROLE_PERMISSION_MAPPINGS = Map.of(
+			"SYSTEM_ADMIN", List.of(
+					PermissionCode.PLATFORM_DASHBOARD_VIEW, PermissionCode.PLATFORM_USER_MANAGE,
+					PermissionCode.PLATFORM_ORGANIZATION_VIEW, PermissionCode.PLATFORM_ORGANIZATION_MANAGE,
+					PermissionCode.PLATFORM_ROLE_MANAGE, PermissionCode.PLATFORM_AUDIT_VIEW,
+					PermissionCode.PLATFORM_PLAN_VIEW, PermissionCode.PLATFORM_PLAN_MANAGE,
+					PermissionCode.PLATFORM_SUBSCRIPTION_VIEW, PermissionCode.PLATFORM_SUBSCRIPTION_MANAGE,
+					PermissionCode.PLATFORM_BILLING_VIEW, PermissionCode.PLATFORM_BILLING_MANAGE,
+					PermissionCode.PLATFORM_ENTITLEMENT_MANAGE),
+			"PLATFORM_ADMIN", List.of(
+					PermissionCode.PLATFORM_DASHBOARD_VIEW, PermissionCode.PLATFORM_USER_MANAGE,
+					PermissionCode.PLATFORM_ORGANIZATION_VIEW, PermissionCode.PLATFORM_ORGANIZATION_MANAGE,
+					PermissionCode.PLATFORM_ROLE_MANAGE, PermissionCode.PLATFORM_AUDIT_VIEW,
+					PermissionCode.PLATFORM_PLAN_VIEW, PermissionCode.PLATFORM_PLAN_MANAGE,
+					PermissionCode.PLATFORM_SUBSCRIPTION_VIEW, PermissionCode.PLATFORM_SUBSCRIPTION_MANAGE,
+					PermissionCode.PLATFORM_BILLING_VIEW, PermissionCode.PLATFORM_BILLING_MANAGE,
+					PermissionCode.PLATFORM_ENTITLEMENT_MANAGE),
+			"PLATFORM_SUPPORT", List.of(
+					PermissionCode.PLATFORM_DASHBOARD_VIEW,
+					PermissionCode.PLATFORM_ORGANIZATION_VIEW,
+					PermissionCode.PLATFORM_PLAN_VIEW,
+					PermissionCode.PLATFORM_SUBSCRIPTION_VIEW,
+					PermissionCode.PLATFORM_BILLING_VIEW,
+					PermissionCode.PLATFORM_AUDIT_VIEW),
+			"PLATFORM_FINANCE", List.of(
+					PermissionCode.PLATFORM_DASHBOARD_VIEW,
+					PermissionCode.PLATFORM_ORGANIZATION_VIEW,
+					PermissionCode.PLATFORM_PLAN_VIEW,
+					PermissionCode.PLATFORM_SUBSCRIPTION_VIEW, PermissionCode.PLATFORM_SUBSCRIPTION_MANAGE,
+					PermissionCode.PLATFORM_BILLING_VIEW, PermissionCode.PLATFORM_BILLING_MANAGE)
+	);
+
 	@Override
 	@Transactional
 	public void run(ApplicationArguments args) {
 		ensureRolePermissionsTable();
 		seedAcademicPermissions();
 		seedDefaultRolePermissions();
+		seedPlatformRolesAndPermissions();
+		subscriptionPlanService.seedDefaultPlansIfMissing();
 		ensureCompositeForeignKeys();
 	}
 
@@ -286,6 +348,45 @@ public class AcademicDatabaseInitializer implements ApplicationRunner {
 				  AND r.scope = 'ORGANIZATION'
 				  AND r.code NOT IN ('SCHOOL_ADMIN', 'PRINCIPAL')
 				""", Map.of("permCode", PermissionCode.FEES_MANAGE.getValue()));
+	}
+
+	private void seedPlatformRolesAndPermissions() {
+		seedPlatformRoleIfMissing("SYSTEM_ADMIN", "System Administrator", "Full platform and SaaS administration access");
+		seedPlatformRoleIfMissing("PLATFORM_ADMIN", "Platform Administrator", "Platform operations, onboarding, plans, subscriptions, and entitlements");
+		seedPlatformRoleIfMissing("PLATFORM_SUPPORT", "Platform Support", "Read-only platform support and troubleshooting access");
+		seedPlatformRoleIfMissing("PLATFORM_FINANCE", "Platform Finance", "Subscription billing, payment recording, and invoice management");
+
+		String sql = """
+				INSERT INTO role_permissions (role_id, permission_id)
+				SELECT r.id, p.id
+				FROM roles r
+				JOIN permissions p ON p.code = :permissionCode
+				WHERE r.code = :roleCode
+				  AND r.scope = 'PLATFORM'
+				  AND r.organization_id IS NULL
+				  AND NOT EXISTS (
+				      SELECT 1 FROM role_permissions rp
+				      WHERE rp.role_id = r.id AND rp.permission_id = p.id
+				  )
+				""";
+		for (Map.Entry<String, List<PermissionCode>> entry : PLATFORM_ROLE_PERMISSION_MAPPINGS.entrySet()) {
+			String roleCode = entry.getKey();
+			for (PermissionCode permissionCode : entry.getValue()) {
+				jdbc.update(sql, Map.of(
+						"roleCode", roleCode,
+						"permissionCode", permissionCode.getValue()));
+			}
+		}
+	}
+
+	private void seedPlatformRoleIfMissing(String code, String name, String description) {
+		jdbc.update("""
+				INSERT INTO roles (code, name, scope, organization_id, description, is_system_defined, created_at, updated_at)
+				SELECT :code, :name, 'PLATFORM', NULL, :description, 1, CURRENT_TIMESTAMP(6), CURRENT_TIMESTAMP(6)
+				WHERE NOT EXISTS (
+				    SELECT 1 FROM roles WHERE code = :code AND scope = 'PLATFORM' AND organization_id IS NULL
+				)
+				""", Map.of("code", code, "name", name, "description", description));
 	}
 
 	private void ensureCompositeForeignKeys() {
@@ -455,6 +556,20 @@ public class AcademicDatabaseInitializer implements ApplicationRunner {
 				"ALTER TABLE announcement_target_classes ADD CONSTRAINT fk_ann_target_classes_ann FOREIGN KEY (announcement_id, organization_id) REFERENCES announcements (id, organization_id) ON DELETE CASCADE");
 		addForeignKeyIfAbsent("announcement_target_students", "fk_ann_target_students_ann",
 				"ALTER TABLE announcement_target_students ADD CONSTRAINT fk_ann_target_students_ann FOREIGN KEY (announcement_id, organization_id) REFERENCES announcements (id, organization_id) ON DELETE CASCADE");
+		addForeignKeyIfAbsent("organization_subscriptions", "fk_org_subs_org",
+				"ALTER TABLE organization_subscriptions ADD CONSTRAINT fk_org_subs_org FOREIGN KEY (organization_id) REFERENCES organizations (id) ON DELETE CASCADE");
+		addForeignKeyIfAbsent("organization_subscriptions", "fk_org_subs_plan",
+				"ALTER TABLE organization_subscriptions ADD CONSTRAINT fk_org_subs_plan FOREIGN KEY (plan_id) REFERENCES subscription_plans (id)");
+		addForeignKeyIfAbsent("organization_subscription_history", "fk_org_sub_hist_org",
+				"ALTER TABLE organization_subscription_history ADD CONSTRAINT fk_org_sub_hist_org FOREIGN KEY (organization_id) REFERENCES organizations (id) ON DELETE CASCADE");
+		addForeignKeyIfAbsent("subscription_payments", "fk_sub_payments_org",
+				"ALTER TABLE subscription_payments ADD CONSTRAINT fk_sub_payments_org FOREIGN KEY (organization_id) REFERENCES organizations (id) ON DELETE CASCADE");
+		addForeignKeyIfAbsent("subscription_payments", "fk_sub_payments_sub",
+				"ALTER TABLE subscription_payments ADD CONSTRAINT fk_sub_payments_sub FOREIGN KEY (subscription_id) REFERENCES organization_subscriptions (id) ON DELETE CASCADE");
+		addForeignKeyIfAbsent("organization_feature_entitlements", "fk_org_feat_ent_org",
+				"ALTER TABLE organization_feature_entitlements ADD CONSTRAINT fk_org_feat_ent_org FOREIGN KEY (organization_id) REFERENCES organizations (id) ON DELETE CASCADE");
+		addForeignKeyIfAbsent("organization_status_history", "fk_org_status_hist_org",
+				"ALTER TABLE organization_status_history ADD CONSTRAINT fk_org_status_hist_org FOREIGN KEY (organization_id) REFERENCES organizations (id) ON DELETE CASCADE");
 	}
 
 	private void addForeignKeyIfAbsent(String tableName, String constraintName, String alterSql) {

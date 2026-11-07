@@ -39,6 +39,7 @@ import com.side.forge.organization.student.profile.entity.StudentStatus;
 import com.side.forge.organization.student.profile.mapper.StudentMapper;
 import com.side.forge.organization.student.profile.repository.StudentRepository;
 import com.side.forge.organization.student.profile.service.StudentService;
+import com.side.forge.platform.saas.service.SubscriptionEntitlementService;
 
 import jakarta.persistence.EntityNotFoundException;
 import lombok.RequiredArgsConstructor;
@@ -61,6 +62,7 @@ public class StudentEnrollmentService {
 	private final SchoolClassRepository classRepository;
 	private final FeeManagementService feeManagementService;
 	private final AcademicTenantAccessValidator validator;
+	private final SubscriptionEntitlementService subscriptionEntitlementService;
 
 	@RequirePermission(PermissionCode.STUDENT_ENROLLMENT_MANAGE)
 	@Transactional
@@ -82,6 +84,8 @@ public class StudentEnrollmentService {
 				orgId, session.getId(), student.getId())) {
 			throw new IllegalStateException("Student is already enrolled in this academic session");
 		}
+
+		subscriptionEntitlementService.validateStudentEnrollmentCapacity(orgId, student.getId());
 
 		LocalDate enrollmentDate = request.enrollmentDate() != null
 				? request.enrollmentDate()

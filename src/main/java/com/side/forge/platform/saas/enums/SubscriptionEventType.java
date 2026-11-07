@@ -1,0 +1,17 @@
+package com.side.forge.platform.saas.enums;
+
+public enum SubscriptionEventType {
+	TRIAL_STARTED,
+	ASSIGNED,
+	ACTIVATED,
+	UPGRADED,
+	DOWNGRADED,
+	RENEWED,
+	PAST_DUE,
+	SUSPENDED,
+	REACTIVATED,
+	CANCELLED,
+	EXPIRED,
+	LIMIT_OVERRIDDEN,
+	LIMIT_OVERRIDE_CLEARED
+}

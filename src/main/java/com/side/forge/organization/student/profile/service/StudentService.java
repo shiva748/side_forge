@@ -29,6 +29,7 @@ import com.side.forge.organization.student.profile.entity.StudentStatus;
 import com.side.forge.organization.student.profile.mapper.StudentMapper;
 import com.side.forge.organization.student.profile.repository.StudentRepository;
 import com.side.forge.organization.student.profile.repository.StudentSpecifications;
+import com.side.forge.platform.saas.service.SubscriptionEntitlementService;
 import com.side.forge.storage.dto.StorageDtos.StoredFileResponse;
 import com.side.forge.storage.entity.FileResourceCategory;
 import com.side.forge.storage.service.FileManagementService;
@@ -55,6 +56,7 @@ public class StudentService {
 	private final SchoolClassService classService;
 	private final UserRepository userRepository;
 	private final FileManagementService fileManagementService;
+	private final SubscriptionEntitlementService subscriptionEntitlementService;
 
 	@RequirePermission(PermissionCode.STUDENT_CREATE)
 	@Transactional
@@ -135,6 +137,9 @@ public class StudentService {
 	public StudentResponse changeStudentStatus(Long orgId, Long studentId, ChangeStudentStatusRequest request) {
 		validator.requireOrganization(orgId);
 		Student student = requireStudent(orgId, studentId);
+		if (student.getStatus() != StudentStatus.ACTIVE && request.status() == StudentStatus.ACTIVE) {
+			subscriptionEntitlementService.validateStudentReactivationCapacity(orgId, student.getId());
+		}
 		student.setStatus(request.status());
 		return studentMapper.toResponse(studentRepository.save(student));
 	}

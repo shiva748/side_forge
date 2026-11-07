@@ -25,6 +25,8 @@ import com.side.forge.organization.staff.dto.UpdateStaffRequest;
 import com.side.forge.organization.staff.entity.EmploymentStatus;
 import com.side.forge.organization.staff.entity.EmploymentType;
 import com.side.forge.organization.staff.service.StaffService;
+import com.side.forge.platform.saas.annotation.RequireFeature;
+import com.side.forge.platform.saas.enums.PlatformFeature;
 
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -34,6 +36,7 @@ import lombok.RequiredArgsConstructor;
 
 @RestController
 @Validated
+@RequireFeature(PlatformFeature.STAFF_MANAGEMENT)
 @Tag(name = "Staff", description = "Manage organization employees, staff directory, and employment lifecycle")
 @SecurityRequirement(name = "jwtCookie")
 @RequestMapping("/api/organizations/{organizationId}/staff")
