@@ -432,14 +432,6 @@ export const SchoolDashboardPage: React.FC = () => {
       icon: React.ReactNode;
     }[] = [];
 
-    if (hasStaffFeature && hasPermission('staff.manage')) {
-      items.push({
-        id: 'add-staff',
-        label: 'Add Staff',
-        permissionHint: 'Staff Management (Upcoming)',
-        icon: <PlusCircle className="w-3.5 h-3.5" />,
-      });
-    }
     if (
       hasAttendanceFeature &&
       (hasPermission('attendance.mark') ||
@@ -753,6 +745,21 @@ export const SchoolDashboardPage: React.FC = () => {
                       leftIcon={<UserPlus className="w-3.5 h-3.5" />}
                     >
                       Student Management
+                    </Button>
+                  )}
+
+                {hasStaffFeature &&
+                  (hasPermission('staff.view') ||
+                    hasPermission('staff.manage') ||
+                    hasPermission('teacher.view') ||
+                    hasPermission('teacher.manage')) && (
+                    <Button
+                      variant="primary"
+                      size="sm"
+                      onClick={() => navigate('/app/staff')}
+                      leftIcon={<Users className="w-3.5 h-3.5" />}
+                    >
+                      Staff &amp; Teachers
                     </Button>
                   )}
 
@@ -1279,8 +1286,15 @@ export const SchoolDashboardPage: React.FC = () => {
                         <h2 className="text-sm font-semibold text-slate-900">
                           Recently Added Staff &amp; Teachers
                         </h2>
+                        <CounterLabel count={recentStaff.length} />
                       </div>
-                      <CounterLabel count={recentStaff.length} />
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => navigate('/app/staff')}
+                      >
+                        Manage Staff →
+                      </Button>
                     </div>
 
                     <div className="flex-1 divide-y divide-slate-100">

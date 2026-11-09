@@ -18,6 +18,7 @@ import {
   EnrollmentFormModal,
   EnrollmentStatusModal,
   GuardianFormModal,
+  GuardianInvitationModal,
   LinkGuardianModal,
   StudentFormModal,
   StudentStatusModal,
@@ -29,6 +30,11 @@ import {
 import { academicManagementApi } from '../services/academicManagementApi';
 import { studentManagementApi } from '../services/studentManagementApi';
 import { classifyOrganizationAccessError } from '../types/auth';
+import type {
+  CreateInvitationRequest,
+  InvitationDispatchResponse,
+  InvitationResponse,
+} from '../types/staffManagement';
 import {
   getSessionStatusBadgeMeta,
   type AcademicSessionResponse,
@@ -215,6 +221,11 @@ type ActiveStudentDialog =
       kind: 'GUARDIAN_STUDENTS';
       guardian: GuardianResponse;
     }
+  | {
+      kind: 'INVITE_GUARDIAN';
+      guardian: GuardianResponse;
+      returnToDetail?: ReturnToDetailContext;
+    }
   | null;
 
 function formatDate(iso: string | null | undefined): string {
@@ -261,6 +272,9 @@ export const SchoolStudentsPage: React.FC = () => {
   const [sessions, setSessions] = useState<AcademicSessionResponse[]>([]);
   const [classes, setClasses] = useState<SchoolClassResponse[]>([]);
   const [guardians, setGuardians] = useState<GuardianResponse[]>([]);
+  const [guardianInvitations, setGuardianInvitations] = useState<
+    InvitationResponse[]
+  >([]);
 
   // Student directory paginated state
   const [students, setStudents] = useState<StudentResponse[]>([]);
@@ -354,6 +368,7 @@ export const SchoolStudentsPage: React.FC = () => {
     setEnrollmentTotalPages(0);
     setEnrollmentsLoaded(false);
     setGuardians([]);
+    setGuardianInvitations([]);
     setGuardiansLoaded(false);
     setSessions([]);
     setClasses([]);
@@ -392,16 +407,20 @@ export const SchoolStudentsPage: React.FC = () => {
     }
     setLoadingReference(true);
     try {
-      const [sessionList, classList, guardianList] = await Promise.all([
+      const [sessionList, classList, guardianList, invList] = await Promise.all([
         academicManagementApi.getSessions(orgId),
         academicManagementApi.getClasses(orgId),
         canViewStudents
           ? studentManagementApi.listOrganizationGuardians(orgId)
           : Promise.resolve([]),
+        canViewStudents || canManageGuardian
+          ? studentManagementApi.listGuardianInvitations(orgId).catch(() => [])
+          : Promise.resolve([]),
       ]);
       setSessions(sessionList);
       setClasses(classList);
       setGuardians(guardianList);
+      setGuardianInvitations(invList);
       setGuardiansLoaded(canViewStudents);
     } catch (err) {
       await handleApiException(
@@ -416,6 +435,7 @@ export const SchoolStudentsPage: React.FC = () => {
     isOrganizationDeactivated,
     isOrganizationSuspended,
     canViewStudents,
+    canManageGuardian,
     handleApiException,
   ]);
 
@@ -781,6 +801,61 @@ export const SchoolStudentsPage: React.FC = () => {
     } finally {
       setLoadingGuardianStudents(false);
     }
+  };
+
+  const refreshGuardianInvitations = useCallback(async () => {
+    if (!orgId) return;
+    try {
+      const list = await studentManagementApi.listGuardianInvitations(orgId);
+      setGuardianInvitations(list);
+    } catch {
+      // Non-fatal
+    }
+  }, [orgId]);
+
+  const handleSendGuardianInvitation = async (
+    payload: CreateInvitationRequest
+  ): Promise<InvitationDispatchResponse> => {
+    if (!orgId) throw new Error('Organization context is required.');
+    const res = await studentManagementApi.inviteGuardian(orgId, payload);
+    setFeedback({
+      type: 'success',
+      message: `Sent Parent Portal invitation to ${res.invitation.email}.`,
+    });
+    await refreshGuardianInvitations();
+    return res;
+  };
+
+  const handleResendGuardianInvitation = async (
+    invitationId: number
+  ): Promise<InvitationDispatchResponse> => {
+    if (!orgId) throw new Error('Organization context is required.');
+    const res = await studentManagementApi.resendGuardianInvitation(
+      orgId,
+      invitationId
+    );
+    setFeedback({
+      type: 'success',
+      message: `Resent Parent Portal invitation to ${res.invitation.email}.`,
+    });
+    await refreshGuardianInvitations();
+    return res;
+  };
+
+  const handleRevokeGuardianInvitation = async (
+    invitationId: number
+  ): Promise<InvitationResponse> => {
+    if (!orgId) throw new Error('Organization context is required.');
+    const res = await studentManagementApi.revokeGuardianInvitation(
+      orgId,
+      invitationId
+    );
+    setFeedback({
+      type: 'success',
+      message: `Revoked pending Parent Portal invitation for ${res.email}.`,
+    });
+    await refreshGuardianInvitations();
+    return res;
   };
 
   const filteredGuardians = useMemo(() => {
@@ -1167,43 +1242,90 @@ export const SchoolStudentsPage: React.FC = () => {
     },
     {
       key: 'status',
-      header: 'Status',
-      render: (row) => (
-        <Badge variant={row.active ? 'success' : 'neutral'} dot>
-          {row.active ? 'Active' : 'Inactive'}
-        </Badge>
-      ),
+      header: 'Status & Portal Access',
+      render: (row) => {
+        const hasPendingInvite = guardianInvitations.some(
+          (inv) =>
+            inv.status === 'PENDING' &&
+            (inv.targetProfileId === row.id ||
+              (row.email &&
+                inv.email.toLowerCase() === row.email.toLowerCase()))
+        );
+        return (
+          <div className="flex flex-col items-start gap-1">
+            <Badge variant={row.active ? 'success' : 'neutral'} dot>
+              {row.active ? 'Active' : 'Inactive'}
+            </Badge>
+            {row.userId ? (
+              <span className="text-[11px] font-medium text-emerald-700">
+                Portal Linked (#{row.userId})
+              </span>
+            ) : hasPendingInvite ? (
+              <span className="text-[11px] font-medium text-amber-700">
+                Portal Invite Pending
+              </span>
+            ) : (
+              <span className="text-[11px] text-slate-400">
+                No Portal Account
+              </span>
+            )}
+          </div>
+        );
+      },
     },
     {
       key: 'actions',
       header: 'Actions',
       align: 'right',
-      render: (row) => (
-        <div className="flex items-center justify-end gap-1.5">
-          <Button
-            size="sm"
-            variant="outline"
-            onClick={() => void handleOpenGuardianStudents(row)}
-          >
-            Linked Students
-          </Button>
-          {canManageGuardian && (
+      render: (row) => {
+        const hasPendingInvite = guardianInvitations.some(
+          (inv) =>
+            inv.status === 'PENDING' &&
+            (inv.targetProfileId === row.id ||
+              (row.email &&
+                inv.email.toLowerCase() === row.email.toLowerCase()))
+        );
+        return (
+          <div className="flex items-center justify-end gap-1.5">
             <Button
               size="sm"
-              variant="ghost"
-              onClick={() =>
-                setActiveDialog({
-                  kind: 'GUARDIAN_FORM',
-                  mode: 'edit',
-                  guardian: row,
-                })
-              }
+              variant="outline"
+              onClick={() => void handleOpenGuardianStudents(row)}
             >
-              Edit
+              Linked Students
             </Button>
-          )}
-        </div>
-      ),
+            {canManageGuardian && row.active && !row.userId && (
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() =>
+                  setActiveDialog({
+                    kind: 'INVITE_GUARDIAN',
+                    guardian: row,
+                  })
+                }
+              >
+                {hasPendingInvite ? 'Manage Invite' : 'Invite Parent'}
+              </Button>
+            )}
+            {canManageGuardian && (
+              <Button
+                size="sm"
+                variant="ghost"
+                onClick={() =>
+                  setActiveDialog({
+                    kind: 'GUARDIAN_FORM',
+                    mode: 'edit',
+                    guardian: row,
+                  })
+                }
+              >
+                Edit
+              </Button>
+            )}
+          </div>
+        );
+      },
     },
   ];
 
@@ -1925,6 +2047,26 @@ export const SchoolStudentsPage: React.FC = () => {
           onSubmit={handleSaveGuardianLink}
         />
 
+        <GuardianInvitationModal
+          open={activeDialog?.kind === 'INVITE_GUARDIAN'}
+          guardian={
+            activeDialog?.kind === 'INVITE_GUARDIAN'
+              ? activeDialog.guardian
+              : null
+          }
+          existingInvitations={guardianInvitations}
+          onClose={() =>
+            closeOrReturnDialog(
+              activeDialog?.kind === 'INVITE_GUARDIAN'
+                ? activeDialog.returnToDetail
+                : undefined
+            )
+          }
+          onSubmit={handleSendGuardianInvitation}
+          onResend={handleResendGuardianInvitation}
+          onRevoke={handleRevokeGuardianInvitation}
+        />
+
         {activeDialog?.kind === 'GUARDIAN_STUDENTS' && (
           <Dialog
             open={true}
@@ -2018,6 +2160,7 @@ export const SchoolStudentsPage: React.FC = () => {
                 : null
             }
             sessions={sessions}
+            guardianInvitations={guardianInvitations}
             initialTab={
               activeDialog?.kind === 'STUDENT_DETAIL'
                 ? activeDialog.initialTab
@@ -2077,6 +2220,13 @@ export const SchoolStudentsPage: React.FC = () => {
                 student: st,
                 initialLink: link,
                 linkedGuardianIds: [],
+                returnToDetail: { student: st, tab: returnTab },
+              })
+            }
+            onInviteGuardian={(guardian, st, returnTab) =>
+              setActiveDialog({
+                kind: 'INVITE_GUARDIAN',
+                guardian,
                 returnToDetail: { student: st, tab: returnTab },
               })
             }

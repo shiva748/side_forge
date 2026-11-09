@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import {
   ArrowLeftRight,
+  Briefcase,
   Building2,
   Check,
   ChevronDown,
@@ -269,6 +270,27 @@ export const AppShell: React.FC<AppShellProps> = ({
           to: '/app/students',
           icon: <Users className="w-4 h-4 shrink-0" />,
           matchPaths: ['/app/students'],
+          restricted: isOrganizationRestricted,
+        });
+      }
+
+      const hasStaffRolePerms =
+        hasPermission('staff.view') ||
+        hasPermission('staff.manage') ||
+        hasPermission('teacher.view') ||
+        hasPermission('teacher.manage');
+
+      const canAccessStaff =
+        hasStaffRolePerms &&
+        (hasFeature('STAFF_MANAGEMENT') || isOrganizationRestricted);
+
+      if (canAccessStaff) {
+        schoolOpsItems.push({
+          id: 'school-staff',
+          label: 'Staff & Teachers',
+          to: '/app/staff',
+          icon: <Briefcase className="w-4 h-4 shrink-0" />,
+          matchPaths: ['/app/staff'],
           restricted: isOrganizationRestricted,
         });
       }

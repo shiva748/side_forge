@@ -46,11 +46,13 @@ import {
   formatStudentInitials,
   getEnrollmentStatusBadge,
   getStudentStatusBadge,
+  type GuardianResponse,
   type StoredFileResponse,
   type StudentEnrollmentResponse,
   type StudentGuardianResponse,
   type StudentResponse,
 } from '../../types/studentManagement';
+import type { InvitationResponse } from '../../types/staffManagement';
 
 export type StudentDetailTab = 'profile' | 'enrollments' | 'guardians' | 'documents';
 
@@ -60,6 +62,7 @@ interface StudentDetailModalProps {
   organizationId: number;
   student: StudentResponse | null;
   sessions?: AcademicSessionResponse[];
+  guardianInvitations?: InvitationResponse[];
   initialTab?: StudentDetailTab;
   canUpdateStudent: boolean;
   canManageEnrollment: boolean;
@@ -90,6 +93,11 @@ interface StudentDetailModalProps {
     link: StudentGuardianResponse,
     returnTab: StudentDetailTab
   ) => void;
+  onInviteGuardian?: (
+    guardian: GuardianResponse,
+    student: StudentResponse,
+    returnTab: StudentDetailTab
+  ) => void;
 }
 
 function formatDate(iso: string | null | undefined): string {
@@ -117,6 +125,7 @@ export const StudentDetailModal: React.FC<StudentDetailModalProps> = ({
   organizationId,
   student,
   sessions = [],
+  guardianInvitations = [],
   initialTab = 'profile',
   canUpdateStudent,
   canManageEnrollment,
@@ -131,6 +140,7 @@ export const StudentDetailModal: React.FC<StudentDetailModalProps> = ({
   onChangeEnrollmentStatus,
   onLinkGuardian,
   onEditGuardianLink,
+  onInviteGuardian,
 }) => {
   const [activeTab, setActiveTab] = useState<StudentDetailTab>(initialTab);
   const [liveStudent, setLiveStudent] = useState<StudentResponse | null>(student);
@@ -814,6 +824,24 @@ export const StudentDetailModal: React.FC<StudentDetailModalProps> = ({
                         {g.receiveNotifications && (
                           <Badge variant="neutral">Notifications</Badge>
                         )}
+                        {g.guardian?.userId ? (
+                          <Badge variant="success" dot>
+                            Portal Linked (#{g.guardian.userId})
+                          </Badge>
+                        ) : guardianInvitations.some(
+                            (inv) =>
+                              inv.status === 'PENDING' &&
+                              (inv.targetProfileId === g.guardianId ||
+                                (g.guardian?.email &&
+                                  inv.email.toLowerCase() ===
+                                    g.guardian.email.toLowerCase()))
+                          ) ? (
+                          <Badge variant="warning" dot>
+                            Portal Invite Pending
+                          </Badge>
+                        ) : (
+                          <Badge variant="neutral">No Portal Account</Badge>
+                        )}
                       </div>
                       <p className="text-slate-600">
                         Phone:{' '}
@@ -859,6 +887,33 @@ export const StudentDetailModal: React.FC<StudentDetailModalProps> = ({
                           </>
                         ) : (
                           <>
+                            {g.guardian &&
+                              g.guardian.active &&
+                              !g.guardian.userId &&
+                              onInviteGuardian && (
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  onClick={() =>
+                                    onInviteGuardian(
+                                      g.guardian!,
+                                      currentStudent,
+                                      'guardians'
+                                    )
+                                  }
+                                >
+                                  {guardianInvitations.some(
+                                    (inv) =>
+                                      inv.status === 'PENDING' &&
+                                      (inv.targetProfileId === g.guardianId ||
+                                        (g.guardian?.email &&
+                                          inv.email.toLowerCase() ===
+                                            g.guardian.email.toLowerCase()))
+                                  )
+                                    ? 'Manage Invite'
+                                    : 'Invite Parent'}
+                                </Button>
+                              )}
                             <Button
                               size="sm"
                               variant="outline"

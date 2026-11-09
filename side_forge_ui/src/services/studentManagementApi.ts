@@ -1,6 +1,11 @@
 import { apiClient, buildUrl } from '../lib/api-client';
 import type { PagedResponse } from '../types/onboarding';
 import type {
+  CreateInvitationRequest,
+  InvitationDispatchResponse,
+  InvitationResponse,
+} from '../types/staffManagement';
+import type {
   ChangeEnrollmentStatusRequest,
   ChangeStudentStatusRequest,
   CreateEnrollmentRequest,
@@ -312,6 +317,45 @@ export const studentManagementApi = {
   ): Promise<void> {
     return apiClient.delete<void>(
       `/api/organizations/${organizationId}/students/${studentId}/guardians/${guardianId}`
+    );
+  },
+
+  // =========================================================================
+  // Guardian / Parent Portal Invitations
+  // =========================================================================
+  listGuardianInvitations(
+    organizationId: number
+  ): Promise<InvitationResponse[]> {
+    return apiClient.get<InvitationResponse[]>(
+      `/api/organizations/${organizationId}/invitations?targetType=GUARDIAN`
+    );
+  },
+
+  inviteGuardian(
+    organizationId: number,
+    payload: CreateInvitationRequest
+  ): Promise<InvitationDispatchResponse> {
+    return apiClient.post<InvitationDispatchResponse>(
+      `/api/organizations/${organizationId}/invitations`,
+      payload
+    );
+  },
+
+  resendGuardianInvitation(
+    organizationId: number,
+    invitationId: number
+  ): Promise<InvitationDispatchResponse> {
+    return apiClient.post<InvitationDispatchResponse>(
+      `/api/organizations/${organizationId}/invitations/${invitationId}/resend`
+    );
+  },
+
+  revokeGuardianInvitation(
+    organizationId: number,
+    invitationId: number
+  ): Promise<InvitationResponse> {
+    return apiClient.post<InvitationResponse>(
+      `/api/organizations/${organizationId}/invitations/${invitationId}/revoke`
     );
   },
 };

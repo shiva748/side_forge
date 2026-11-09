@@ -75,6 +75,12 @@ import type {
   SchoolClassResponse,
 } from '../../types/academicManagement';
 import {
+  getInvitationStatusBadge,
+  type CreateInvitationRequest,
+  type InvitationDispatchResponse,
+  type InvitationResponse,
+} from '../../types/staffManagement';
+import {
   ENROLLMENT_STATUS_META,
   GENDER_LABELS,
   GUARDIAN_RELATIONSHIP_LABELS,
@@ -1979,6 +1985,379 @@ export const LinkGuardianModal: React.FC<LinkGuardianModalProps> = ({
     </Modal>
   );
 };
+
+// ============================================================================
+// 7. Guardian / Parent Portal Invitation Modal
+// ============================================================================
+
+interface GuardianInvitationModalProps {
+  open: boolean;
+  guardian: GuardianResponse | null;
+  existingInvitations: InvitationResponse[];
+  onClose: () => void;
+  onSubmit: (
+    payload: CreateInvitationRequest
+  ) => Promise<InvitationDispatchResponse>;
+  onResend: (invitationId: number) => Promise<InvitationDispatchResponse>;
+  onRevoke: (invitationId: number) => Promise<InvitationResponse>;
+}
+
+export const GuardianInvitationModal: React.FC<
+  GuardianInvitationModalProps
+> = ({
+  open,
+  guardian,
+  existingInvitations,
+  onClose,
+  onSubmit,
+  onResend,
+  onRevoke,
+}) => {
+  const [email, setEmail] = useState('');
+  const [firstName, setFirstName] = useState('');
+  const [lastName, setLastName] = useState('');
+  const [phoneNumber, setPhoneNumber] = useState('');
+  const [expiryHours, setExpiryHours] = useState('168');
+
+  const [dispatched, setDispatched] =
+    useState<InvitationDispatchResponse | null>(null);
+  const [copied, setCopied] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [resendingId, setResendingId] = useState<number | null>(null);
+  const [revokingId, setRevokingId] = useState<number | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!open || !guardian) return;
+    setError(null);
+    setDispatched(null);
+    setCopied(false);
+    setEmail(guardian.email || '');
+    setFirstName(guardian.firstName || '');
+    setLastName(guardian.lastName || '');
+    setPhoneNumber((guardian.phoneNumber || '').replace(/\s+/g, ''));
+    setExpiryHours('168');
+  }, [open, guardian]);
+
+  if (!guardian) return null;
+
+  const pendingInvitation = existingInvitations.find(
+    (inv) =>
+      inv.status === 'PENDING' &&
+      (inv.targetProfileId === guardian.id ||
+        (guardian.email &&
+          inv.email.toLowerCase() === guardian.email.toLowerCase()))
+  );
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError(null);
+
+    if (!email.trim()) {
+      setError('Parent/Guardian email address is required to send an invitation.');
+      return;
+    }
+    const cleanPhone = phoneNumber.trim().replace(/\s+/g, '');
+    if (cleanPhone && !/^(\+91)?[6-9]\d{9}$/.test(cleanPhone)) {
+      setError(
+        'Phone number must be a valid 10-digit Indian mobile number (optionally prefixed with +91).'
+      );
+      return;
+    }
+    const hours = expiryHours.trim() ? Number(expiryHours) : 168;
+    if (Number.isNaN(hours) || hours < 1 || hours > 720) {
+      setError('Expiry hours must be between 1 and 720.');
+      return;
+    }
+
+    setSubmitting(true);
+    try {
+      const result = await onSubmit({
+        email: email.trim(),
+        roleCode: 'PARENT',
+        targetType: 'GUARDIAN',
+        targetProfileId: guardian.id,
+        firstName: firstName.trim() || null,
+        lastName: lastName.trim() || null,
+        phoneNumber: cleanPhone || null,
+        expiryHours: hours,
+      });
+      setDispatched(result);
+    } catch (err) {
+      const info = extractErrorInfo(err);
+      setError(info.message);
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handleResend = async (invitationId: number) => {
+    setResendingId(invitationId);
+    setError(null);
+    try {
+      const result = await onResend(invitationId);
+      setDispatched(result);
+    } catch (err) {
+      const info = extractErrorInfo(err);
+      setError(info.message);
+    } finally {
+      setResendingId(null);
+    }
+  };
+
+  const handleRevoke = async (invitationId: number) => {
+    setRevokingId(invitationId);
+    setError(null);
+    try {
+      await onRevoke(invitationId);
+      onClose();
+    } catch (err) {
+      const info = extractErrorInfo(err);
+      setError(info.message);
+    } finally {
+      setRevokingId(null);
+    }
+  };
+
+  const handleCopyLink = async () => {
+    if (!dispatched) return;
+    try {
+      await navigator.clipboard.writeText(dispatched.invitationLink);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2500);
+    } catch {
+      // Clipboard fallback ignored
+    }
+  };
+
+  return (
+    <Modal
+      open={open}
+      onClose={onClose}
+      title={
+        dispatched
+          ? 'Parent Portal Invitation Dispatched'
+          : `Invite ${formatGuardianFullName(guardian)} to Parent Portal`
+      }
+      description={
+        dispatched
+          ? 'Share this single-use invitation link with the parent/guardian. Once accepted, their account will be linked to their guardian profile with the PARENT role.'
+          : 'Send a single-use invitation link so this parent/guardian can activate their login account and access their linked children in the Parent Portal.'
+      }
+      size="md"
+      footer={
+        dispatched ? (
+          <Button onClick={onClose}>Done</Button>
+        ) : pendingInvitation ? (
+          <>
+            <Button variant="outline" onClick={onClose}>
+              Close
+            </Button>
+            <Button
+              variant="danger"
+              disabled={revokingId === pendingInvitation.id}
+              onClick={() => void handleRevoke(pendingInvitation.id)}
+            >
+              {revokingId === pendingInvitation.id
+                ? 'Revoking...'
+                : 'Revoke Invitation'}
+            </Button>
+            <Button
+              disabled={resendingId === pendingInvitation.id}
+              onClick={() => void handleResend(pendingInvitation.id)}
+            >
+              {resendingId === pendingInvitation.id
+                ? 'Resending...'
+                : 'Resend & Generate New Link'}
+            </Button>
+          </>
+        ) : (
+          <>
+            <Button variant="outline" onClick={onClose} disabled={submitting}>
+              Cancel
+            </Button>
+            <Button
+              type="submit"
+              form="guardian-invitation-form"
+              isLoading={submitting}
+            >
+              Send Parent Invitation
+            </Button>
+          </>
+        )
+      }
+    >
+      {dispatched ? (
+        <div className="space-y-4 text-xs">
+          <AlertBanner
+            variant="success"
+            message={`Parent Portal invitation sent to ${dispatched.invitation.email}.`}
+          />
+
+          <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 space-y-2">
+            <div className="flex items-center justify-between">
+              <span className="text-slate-500">Guardian Name:</span>
+              <span className="font-semibold text-slate-900">
+                {formatGuardianFullName(guardian)}
+              </span>
+            </div>
+            <div className="flex items-center justify-between">
+              <span className="text-slate-500">Recipient Email:</span>
+              <span className="font-semibold text-slate-900">
+                {dispatched.invitation.email}
+              </span>
+            </div>
+            <div className="flex items-center justify-between">
+              <span className="text-slate-500">Assigned Role:</span>
+              <Badge variant="info">{dispatched.invitation.roleCode}</Badge>
+            </div>
+            <div className="pt-2 border-t border-slate-200 space-y-1.5">
+              <p className="font-medium text-slate-700">
+                Single-Use Invitation Link:
+              </p>
+              <div className="flex items-center gap-2">
+                <input
+                  type="text"
+                  readOnly
+                  value={dispatched.invitationLink}
+                  className="flex-1 rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 font-mono text-[11px] text-slate-700"
+                />
+                <Button size="sm" variant="outline" onClick={handleCopyLink}>
+                  {copied ? 'Copied!' : 'Copy Link'}
+                </Button>
+              </div>
+            </div>
+          </div>
+        </div>
+      ) : pendingInvitation ? (
+        <div className="space-y-4 text-xs">
+          {error && <AlertBanner variant="error" message={error} />}
+          <AlertBanner
+            variant="info"
+            message="An active pending Parent Portal invitation already exists for this guardian. You can resend it to generate a fresh single-use link or revoke it."
+          />
+          <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 space-y-2">
+            <div className="flex items-center justify-between">
+              <span className="text-slate-500">Guardian:</span>
+              <span className="font-semibold text-slate-900">
+                {formatGuardianFullName(guardian)}
+              </span>
+            </div>
+            <div className="flex items-center justify-between">
+              <span className="text-slate-500">Invited Email:</span>
+              <span className="font-semibold text-slate-900">
+                {pendingInvitation.email}
+              </span>
+            </div>
+            <div className="flex items-center justify-between">
+              <span className="text-slate-500">Status:</span>
+              <Badge
+                variant={
+                  getInvitationStatusBadge(pendingInvitation.status).variant
+                }
+              >
+                {getInvitationStatusBadge(pendingInvitation.status).label}
+              </Badge>
+            </div>
+            <div className="flex items-center justify-between">
+              <span className="text-slate-500">Expires At:</span>
+              <span className="text-slate-800">
+                {new Date(pendingInvitation.expiresAt).toLocaleString()}
+              </span>
+            </div>
+          </div>
+        </div>
+      ) : (
+        <form
+          id="guardian-invitation-form"
+          onSubmit={handleSubmit}
+          className="space-y-4"
+        >
+          {error && <AlertBanner variant="error" message={error} />}
+
+          <div className="rounded-xl border border-indigo-200 bg-indigo-50/50 p-3.5 text-xs space-y-1">
+            <div className="flex items-center justify-between">
+              <span className="font-semibold text-slate-900">
+                Guardian Profile: {formatGuardianFullName(guardian)}
+              </span>
+              <Badge variant="info">Role: PARENT</Badge>
+            </div>
+            <p className="text-slate-600">
+              Phone: {guardian.phoneNumber}
+              {guardian.occupation ? ` • ${guardian.occupation}` : ''}
+            </p>
+          </div>
+
+          <FormField
+            label="Parent / Guardian Email Address"
+            htmlFor="gi-email"
+            required
+          >
+            <TextInput
+              id="gi-email"
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              placeholder="parent@example.com"
+              maxLength={255}
+              required
+            />
+          </FormField>
+
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <FormField label="First Name" htmlFor="gi-first">
+              <TextInput
+                id="gi-first"
+                value={firstName}
+                onChange={(e) => setFirstName(e.target.value)}
+                maxLength={100}
+              />
+            </FormField>
+
+            <FormField label="Last Name" htmlFor="gi-last">
+              <TextInput
+                id="gi-last"
+                value={lastName}
+                onChange={(e) => setLastName(e.target.value)}
+                maxLength={100}
+              />
+            </FormField>
+
+            <FormField
+              label="Mobile Number (10-digit Indian)"
+              htmlFor="gi-phone"
+            >
+              <TextInput
+                id="gi-phone"
+                value={phoneNumber}
+                onChange={(e) => setPhoneNumber(e.target.value)}
+                placeholder="9876543210"
+                maxLength={13}
+              />
+            </FormField>
+
+            <FormField
+              label="Invitation Expiry (Hours)"
+              htmlFor="gi-expiry"
+            >
+              <TextInput
+                id="gi-expiry"
+                type="number"
+                min={1}
+                max={720}
+                value={expiryHours}
+                onChange={(e) => setExpiryHours(e.target.value)}
+              />
+            </FormField>
+          </div>
+        </form>
+      )}
+    </Modal>
+  );
+};
+
+
+
 
 
 

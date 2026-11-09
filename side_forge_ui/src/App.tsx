@@ -17,6 +17,7 @@ import { PlatformSubscriptionsPage } from './pages/PlatformSubscriptionsPage';
 import { SchoolDashboardPage } from './pages/SchoolDashboardPage';
 import { SchoolAcademicPage } from './pages/SchoolAcademicPage';
 import { SchoolStudentsPage } from './pages/SchoolStudentsPage';
+import { SchoolStaffPage } from './pages/SchoolStaffPage';
 import { WorkspaceShellPlaceholder } from './pages/WorkspaceShellPlaceholder';
 import { UnauthorizedPage } from './pages/UnauthorizedPage';
 import { NotFoundPage } from './pages/NotFoundPage';
@@ -151,6 +152,17 @@ export default function App() {
                     requiredFeature="STUDENT_MANAGEMENT"
                   >
                     <SchoolStudentsPage />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/app/staff"
+                element={
+                  <ProtectedRoute
+                    workspace="SCHOOL"
+                    requiredFeature="STAFF_MANAGEMENT"
+                  >
+                    <SchoolStaffPage />
                   </ProtectedRoute>
                 }
               />
