@@ -58,7 +58,7 @@ export interface RequestOptions extends Omit<RequestInit, 'body'> {
   timeoutMs?: number;
 }
 
-function buildUrl(
+export function buildUrl(
   endpoint: string,
   params?: Record<string, string | number | boolean | undefined | null>
 ): string {
@@ -110,6 +110,14 @@ function extractErrorDetails(status: number, payload: unknown) {
     } else if (obj.fieldErrors && typeof obj.fieldErrors === 'object') {
       for (const [k, v] of Object.entries(obj.fieldErrors as Record<string, unknown>)) {
         if (typeof v === 'string') fieldErrors[k] = v;
+      }
+    }
+
+    // Spring Boot GlobalExceptionHandler formats MethodArgumentNotValidException as "fieldName: message"
+    if (Object.keys(fieldErrors).length === 0 && message) {
+      const match = message.match(/^([a-zA-Z][a-zA-Z0-9_]*):\s+(.+)$/);
+      if (match) {
+        fieldErrors[match[1]] = match[2];
       }
     }
   }

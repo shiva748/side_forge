@@ -13,6 +13,9 @@ export interface DialogProps {
   maxWidthClass?: string;
 }
 
+let activeDialogCount = 0;
+let savedBodyOverflow = '';
+
 export const Dialog: React.FC<DialogProps> = ({
   open,
   onClose,
@@ -27,16 +30,32 @@ export const Dialog: React.FC<DialogProps> = ({
   useEffect(() => {
     if (!open) return;
 
-    const previousOverflow = document.body.style.overflow;
-    document.body.style.overflow = 'hidden';
+    if (activeDialogCount === 0) {
+      savedBodyOverflow = document.body.style.overflow;
+      document.body.style.overflow = 'hidden';
+    }
+    activeDialogCount += 1;
+
+    return () => {
+      activeDialogCount = Math.max(0, activeDialogCount - 1);
+      if (activeDialogCount === 0) {
+        document.body.style.overflow = savedBodyOverflow;
+      }
+    };
+  }, [open]);
+
+  useEffect(() => {
+    if (!open) return;
 
     const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') onClose();
+      if (event.key === 'Escape' && !event.defaultPrevented) {
+        event.stopPropagation();
+        onClose();
+      }
     };
     window.addEventListener('keydown', handleKeyDown);
 
     return () => {
-      document.body.style.overflow = previousOverflow;
       window.removeEventListener('keydown', handleKeyDown);
     };
   }, [open, onClose]);

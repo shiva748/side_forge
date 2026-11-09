@@ -21,6 +21,7 @@ import {
   Shield,
   ShieldCheck,
   User,
+  Users,
   X,
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
@@ -246,6 +247,28 @@ export const AppShell: React.FC<AppShellProps> = ({
           to: '/app/academics',
           icon: <Layers className="w-4 h-4 shrink-0" />,
           matchPaths: ['/app/academics'],
+          restricted: isOrganizationRestricted,
+        });
+      }
+
+      const hasStudentRolePerms =
+        hasPermission('student.view') ||
+        hasPermission('student.create') ||
+        hasPermission('student.update') ||
+        hasPermission('student.enrollment.manage') ||
+        hasPermission('student.guardian.manage');
+
+      const canAccessStudents =
+        hasStudentRolePerms &&
+        (hasFeature('STUDENT_MANAGEMENT') || isOrganizationRestricted);
+
+      if (canAccessStudents) {
+        schoolOpsItems.push({
+          id: 'school-students',
+          label: 'Student Management',
+          to: '/app/students',
+          icon: <Users className="w-4 h-4 shrink-0" />,
+          matchPaths: ['/app/students'],
           restricted: isOrganizationRestricted,
         });
       }

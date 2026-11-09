@@ -432,14 +432,6 @@ export const SchoolDashboardPage: React.FC = () => {
       icon: React.ReactNode;
     }[] = [];
 
-    if (hasStudentFeature && hasPermission('student.create')) {
-      items.push({
-        id: 'add-student',
-        label: 'Add Student',
-        permissionHint: 'Student Management (Upcoming)',
-        icon: <UserPlus className="w-3.5 h-3.5" />,
-      });
-    }
     if (hasStaffFeature && hasPermission('staff.manage')) {
       items.push({
         id: 'add-staff',
@@ -749,6 +741,20 @@ export const SchoolDashboardPage: React.FC = () => {
                     Academic Management
                   </Button>
                 )}
+
+                {hasStudentFeature &&
+                  (hasPermission('student.view') ||
+                    hasPermission('student.create') ||
+                    hasPermission('student.update')) && (
+                    <Button
+                      variant="primary"
+                      size="sm"
+                      onClick={() => navigate('/app/students')}
+                      leftIcon={<UserPlus className="w-3.5 h-3.5" />}
+                    >
+                      Student Management
+                    </Button>
+                  )}
 
                 <Button
                   variant="outline"
@@ -1209,8 +1215,15 @@ export const SchoolDashboardPage: React.FC = () => {
                         <h2 className="text-sm font-semibold text-slate-900">
                           Recently Added Students
                         </h2>
+                        <CounterLabel count={recentStudents.length} />
                       </div>
-                      <CounterLabel count={recentStudents.length} />
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => navigate('/app/students')}
+                      >
+                        Manage Students →
+                      </Button>
                     </div>
 
                     <div className="flex-1 divide-y divide-slate-100">
