@@ -23,7 +23,7 @@ const loginSchema = z.object({
 type LoginFormValues = z.infer<typeof loginSchema>;
 
 interface LoginLocationState {
-  from?: { pathname?: string };
+  from?: { pathname?: string; search?: string };
   registeredEmail?: string;
   registeredNotice?: string;
 }
@@ -57,15 +57,24 @@ export const LoginPage: React.FC = () => {
   });
 
   if (isAuthenticated && !isLoading && !isOrgContextLoading && !isSubmitting) {
-    const fromPath = locState.from?.pathname;
+    const fromPathname = locState.from?.pathname;
+    const fromSearch = locState.from?.search || '';
+    const fullFromUrl = fromPathname ? `${fromPathname}${fromSearch}` : undefined;
+    if (
+      fullFromUrl &&
+      (fullFromUrl.startsWith('/invitations/accept') ||
+        fullFromUrl.startsWith('/api/invitations/accept'))
+    ) {
+      return <Navigate to={fullFromUrl} replace />;
+    }
     if (availableWorkspaces.length === 0) {
       return <Navigate to="/onboarding-status" replace />;
     }
     if (activeWorkspace === 'PLATFORM' && hasPlatformAccess) {
-      return <Navigate to={fromPath || '/platform'} replace />;
+      return <Navigate to={fullFromUrl || '/platform'} replace />;
     }
     if (activeWorkspace === 'SCHOOL' && activeOrganization) {
-      return <Navigate to={fromPath || '/app'} replace />;
+      return <Navigate to={fullFromUrl || '/app'} replace />;
     }
     return <Navigate to="/workspaces" replace />;
   }
@@ -78,10 +87,23 @@ export const LoginPage: React.FC = () => {
         password: values.password,
       });
       toast.success('Signed in successfully', 'Welcome back to SchoolForge.');
+      const fromObj = (
+        location.state as { from?: { pathname?: string; search?: string } }
+      )?.from;
+      const fullFromUrl = fromObj?.pathname
+        ? `${fromObj.pathname}${fromObj.search || ''}`
+        : undefined;
+      if (
+        fullFromUrl &&
+        (fullFromUrl.startsWith('/invitations/accept') ||
+          fullFromUrl.startsWith('/api/invitations/accept'))
+      ) {
+        navigate(fullFromUrl, { replace: true });
+        return;
+      }
       // When multiple workspaces exist (`defaultRoute === '/workspaces'`), always route to `/workspaces` first
-      const fromPath = (location.state as { from?: { pathname?: string } })?.from?.pathname;
       const targetRoute =
-        defaultRoute === '/workspaces' ? '/workspaces' : fromPath || defaultRoute;
+        defaultRoute === '/workspaces' ? '/workspaces' : fullFromUrl || defaultRoute;
       navigate(targetRoute, { replace: true });
     } catch (err) {
       if (err instanceof ApiError) {

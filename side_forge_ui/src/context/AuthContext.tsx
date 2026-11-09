@@ -14,8 +14,10 @@ import {
   OrgStatusRestrictedEventDetail,
 } from '../lib/api-client';
 import { queryClient } from '../lib/query-client';
+import { accountAndInvitationApi } from '../services/accountAndInvitationApi';
 import { authApi } from '../services/authApi';
 import { platformDashboardApi } from '../services/platformDashboardApi';
+import type { InvitationResponse } from '../types/accountAndInvitations';
 import {
   LoginUserRequest,
   OrganizationEntitlementsResponse,
@@ -71,6 +73,12 @@ export interface AuthContextValue {
   hasPermission: (permission: string | string[]) => boolean;
   hasRole: (role: string | string[]) => boolean;
   hasFeature: (feature: PlatformFeature) => boolean;
+  profilePhotoBlobUrl: string | null;
+  refreshProfilePhoto: () => Promise<void>;
+  updateCurrentUserProfile: (updated: UserProfile) => void;
+  pendingInvitations: InvitationResponse[];
+  pendingInvitationsCount: number;
+  refreshPendingInvitations: () => Promise<InvitationResponse[]>;
 }
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
@@ -79,6 +87,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [user, setUser] = useState<UserProfile | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [isOrgContextLoading, setIsOrgContextLoading] = useState<boolean>(false);
+  const [profilePhotoBlobUrl, setProfilePhotoBlobUrl] = useState<string | null>(null);
+  const profilePhotoObjectUrlRef = useRef<string | null>(null);
+  const [pendingInvitations, setPendingInvitations] = useState<InvitationResponse[]>([]);
 
   const [hasPlatformAccess, setHasPlatformAccess] = useState<boolean>(false);
   const [platformRoles, setPlatformRoles] = useState<string[]>([]);
@@ -215,6 +226,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const clearAuthState = useCallback(() => {
     setUser(null);
     setHasPlatformAccess(false);
+    setPendingInvitations([]);
+    if (profilePhotoObjectUrlRef.current) {
+      URL.revokeObjectURL(profilePhotoObjectUrlRef.current);
+      profilePhotoObjectUrlRef.current = null;
+    }
+    setProfilePhotoBlobUrl(null);
     setPlatformRoles([]);
     setPlatformPermissions(new Set());
     setActiveWorkspace(null);
@@ -897,9 +914,77 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   }, [clearAuthState]);
 
+  const refreshProfilePhoto = useCallback(async () => {
+    try {
+      const blob = await accountAndInvitationApi.fetchProfilePhotoBlob();
+      if (profilePhotoObjectUrlRef.current) {
+        URL.revokeObjectURL(profilePhotoObjectUrlRef.current);
+        profilePhotoObjectUrlRef.current = null;
+      }
+      if (blob && blob.size > 0) {
+        const nextUrl = URL.createObjectURL(blob);
+        profilePhotoObjectUrlRef.current = nextUrl;
+        setProfilePhotoBlobUrl(nextUrl);
+      } else {
+        setProfilePhotoBlobUrl(null);
+      }
+    } catch {
+      if (profilePhotoObjectUrlRef.current) {
+        URL.revokeObjectURL(profilePhotoObjectUrlRef.current);
+        profilePhotoObjectUrlRef.current = null;
+      }
+      setProfilePhotoBlobUrl(null);
+    }
+  }, []);
+
+  const refreshPendingInvitations = useCallback(async (): Promise<InvitationResponse[]> => {
+    try {
+      const list = await accountAndInvitationApi.getMyPendingInvitations();
+      const safeList = Array.isArray(list) ? list : [];
+      setPendingInvitations(safeList);
+      return safeList;
+    } catch {
+      return [];
+    }
+  }, []);
+
+  const updateCurrentUserProfile = useCallback((updated: UserProfile) => {
+    setUser((prev) => {
+      if (!prev) return updated;
+      return {
+        ...prev,
+        ...updated,
+        organizations: updated.organizations ?? prev.organizations,
+      };
+    });
+  }, []);
+
+  // Automatically load or clear profile photo blob URL when user.profilePhotoFileId changes
+  useEffect(() => {
+    if (!user?.id || !user?.profilePhotoFileId) {
+      if (profilePhotoObjectUrlRef.current) {
+        URL.revokeObjectURL(profilePhotoObjectUrlRef.current);
+        profilePhotoObjectUrlRef.current = null;
+      }
+      setProfilePhotoBlobUrl(null);
+      return;
+    }
+    void refreshProfilePhoto();
+  }, [user?.id, user?.profilePhotoFileId, refreshProfilePhoto]);
+
+  // Load pending invitations when authenticated user changes
+  useEffect(() => {
+    if (!user?.id) {
+      setPendingInvitations([]);
+      return;
+    }
+    void refreshPendingInvitations();
+  }, [user?.id, refreshPendingInvitations]);
+
   const refreshSession = useCallback(async () => {
     await hydrateUserSession({ isFreshLogin: false });
-  }, [hydrateUserSession]);
+    void refreshPendingInvitations();
+  }, [hydrateUserSession, refreshPendingInvitations]);
 
   const activatePlatformWorkspace = useCallback(() => {
     if (!hasPlatformAccessRef.current) return;
@@ -1057,6 +1142,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       hasPermission,
       hasRole,
       hasFeature,
+      profilePhotoBlobUrl,
+      refreshProfilePhoto,
+      updateCurrentUserProfile,
+      pendingInvitations,
+      pendingInvitationsCount: pendingInvitations.length,
+      refreshPendingInvitations,
     }),
     [
       user,
@@ -1094,6 +1185,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       hasPermission,
       hasRole,
       hasFeature,
+      profilePhotoBlobUrl,
+      refreshProfilePhoto,
+      updateCurrentUserProfile,
+      pendingInvitations,
+      refreshPendingInvitations,
     ]
   );
 

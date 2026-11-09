@@ -8,6 +8,7 @@ import { ProtectedRoute } from './components/auth/ProtectedRoute';
 import { LandingPage } from './pages/LandingPage';
 import { LoginPage } from './pages/LoginPage';
 import { RegisterPage } from './pages/RegisterPage';
+import { InvitationAcceptPage } from './pages/InvitationAcceptPage';
 import { OnboardingStatusPage } from './pages/OnboardingStatusPage';
 import { WorkspaceSelectorPage } from './pages/WorkspaceSelectorPage';
 import { PlatformDashboardPage } from './pages/PlatformDashboardPage';
@@ -35,6 +36,8 @@ export default function App() {
               {/* Authentication & Registration */}
               <Route path="/login" element={<LoginPage />} />
               <Route path="/register" element={<RegisterPage />} />
+              <Route path="/invitations/accept" element={<InvitationAcceptPage />} />
+              <Route path="/api/invitations/accept" element={<InvitationAcceptPage />} />
               <Route path="/onboarding-status" element={<OnboardingStatusPage />} />
 
               {/* Multi-Workspace & Role Context Selection */}

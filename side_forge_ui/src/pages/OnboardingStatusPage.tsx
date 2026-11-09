@@ -11,9 +11,14 @@ import {
   Mail,
   Phone,
   RefreshCw,
+  Settings,
   ShieldAlert,
   UserCheck,
 } from 'lucide-react';
+import {
+  AccountSettingsModal,
+  type AccountSettingsTab,
+} from '../components/account/AccountSettingsModal';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 import {
@@ -33,12 +38,16 @@ export const OnboardingStatusPage: React.FC = () => {
     activeMemberships,
     refreshSession,
     logout,
+    pendingInvitationsCount,
   } = useAuth();
   const toast = useToast();
   const navigate = useNavigate();
 
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [localSubmissions, setLocalSubmissions] = useState<StoredOnboardingSubmission[]>([]);
+  const [accountModalOpen, setAccountModalOpen] = useState(false);
+  const [accountModalTab, setAccountModalTab] =
+    useState<AccountSettingsTab>('profile');
 
   useEffect(() => {
     const all = getSubmittedOnboardingRequests();
@@ -111,6 +120,22 @@ export const OnboardingStatusPage: React.FC = () => {
           <Button
             variant="outline"
             size="sm"
+            onClick={() => {
+              setAccountModalTab(pendingInvitationsCount > 0 ? 'invitations' : 'profile');
+              setAccountModalOpen(true);
+            }}
+            leftIcon={<Settings className="w-3.5 h-3.5" />}
+          >
+            <span>My Profile &amp; Invitations</span>
+            {pendingInvitationsCount > 0 && (
+              <span className="ml-1.5 inline-flex items-center justify-center rounded-full bg-amber-100 text-amber-800 px-1.5 py-0.2 text-[10px] font-bold">
+                {pendingInvitationsCount}
+              </span>
+            )}
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
             onClick={handleLogout}
             leftIcon={<LogOut className="w-3.5 h-3.5" />}
           >
@@ -120,6 +145,35 @@ export const OnboardingStatusPage: React.FC = () => {
       </div>
 
       <div className="max-w-3xl w-full mx-auto my-8 space-y-6">
+        {pendingInvitationsCount > 0 && (
+          <div className="rounded-2xl border border-amber-200 bg-amber-50/90 p-4 flex items-center justify-between gap-4 flex-wrap shadow-2xs">
+            <div className="flex items-center gap-3 text-xs text-amber-950">
+              <div className="w-8 h-8 rounded-xl bg-amber-100 text-amber-700 flex items-center justify-center shrink-0">
+                <Mail className="w-4 h-4" />
+              </div>
+              <div>
+                <p className="font-bold">
+                  You have {pendingInvitationsCount} pending organization invitation
+                  {pendingInvitationsCount === 1 ? '' : 's'}
+                </p>
+                <p className="text-amber-800 mt-0.5">
+                  Accepting an invitation will activate your school membership immediately.
+                </p>
+              </div>
+            </div>
+            <Button
+              size="sm"
+              variant="primary"
+              onClick={() => {
+                setAccountModalTab('invitations');
+                setAccountModalOpen(true);
+              }}
+            >
+              View &amp; Accept Invitations
+            </Button>
+          </div>
+        )}
+
         <div className="rounded-2xl border border-slate-200/90 bg-white p-6 sm:p-8 shadow-sm">
           <div className="flex flex-wrap items-start justify-between gap-4 pb-6 border-b border-slate-100">
             <div className="space-y-1.5 min-w-0">
@@ -341,6 +395,12 @@ export const OnboardingStatusPage: React.FC = () => {
       <div className="text-center text-xs text-slate-400">
         <span>SchoolForge Multi-Tenant SaaS Platform • Role &amp; Tenant Isolation Enforced</span>
       </div>
+
+      <AccountSettingsModal
+        open={accountModalOpen}
+        onClose={() => setAccountModalOpen(false)}
+        initialTab={accountModalTab}
+      />
     </div>
   );
 };

@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { ApiError } from '../../lib/api-client';
 import { academicManagementApi } from '../../services/academicManagementApi';
 import { staffManagementApi } from '../../services/staffManagementApi';
+import { normalizeInvitationLinkForFrontend } from '../../types/accountAndInvitations';
 import type {
   AcademicSessionResponse,
   ClassSubjectResponse,
@@ -2492,7 +2493,9 @@ export const StaffInvitationModal: React.FC<StaffInvitationModalProps> = ({
   const handleCopyLink = async () => {
     if (!dispatched) return;
     try {
-      await navigator.clipboard.writeText(dispatched.invitationLink);
+      await navigator.clipboard.writeText(
+        normalizeInvitationLinkForFrontend(dispatched.invitationLink)
+      );
       setCopied(true);
       setTimeout(() => setCopied(false), 2500);
     } catch {
@@ -2568,7 +2571,9 @@ export const StaffInvitationModal: React.FC<StaffInvitationModalProps> = ({
                 <input
                   type="text"
                   readOnly
-                  value={dispatched.invitationLink}
+                  value={normalizeInvitationLinkForFrontend(
+                    dispatched.invitationLink
+                  )}
                   className="flex-1 rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 font-mono text-[11px] text-slate-700"
                 />
                 <Button size="sm" variant="outline" onClick={handleCopyLink}>

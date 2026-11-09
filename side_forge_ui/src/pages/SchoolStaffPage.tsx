@@ -30,6 +30,7 @@ import { EmptyState, InlineAlert } from '../components/ui/StateViews';
 import { useAuth } from '../context/AuthContext';
 import { academicManagementApi } from '../services/academicManagementApi';
 import { staffManagementApi } from '../services/staffManagementApi';
+import { normalizeInvitationLinkForFrontend } from '../types/accountAndInvitations';
 import type {
   AcademicSessionResponse,
   SchoolClassResponse,
@@ -1036,7 +1037,7 @@ export const SchoolStaffPage: React.FC = () => {
       const res = await staffManagementApi.resendInvitation(orgId, inv.id);
       setResentInvitationInfo({
         email: inv.email,
-        link: res.invitationLink,
+        link: normalizeInvitationLinkForFrontend(res.invitationLink),
       });
       setFeedback({
         type: 'success',

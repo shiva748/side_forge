@@ -13,12 +13,14 @@ import {
   LayoutDashboard,
   Lock,
   LogOut,
+  Mail,
   Menu,
   PanelLeftClose,
   PanelLeftOpen,
   PauseCircle,
   PowerOff,
   RefreshCw,
+  Settings,
   Shield,
   ShieldCheck,
   User,
@@ -29,6 +31,11 @@ import { useAuth } from '../../context/AuthContext';
 import { useToast } from '../../context/ToastContext';
 import { cn } from '../../lib/utils';
 import { formatRoleLabel, WorkspaceContextOption } from '../../types/auth';
+import {
+  AccountSettingsModal,
+  type AccountSettingsTab,
+} from '../account/AccountSettingsModal';
+import { UserAvatar } from '../account/UserAvatar';
 import {
   OrganizationDeactivatedScreen,
   OrganizationSuspendedBanner,
@@ -83,6 +90,7 @@ export const AppShell: React.FC<AppShellProps> = ({
     logout,
     hasPermission,
     hasFeature,
+    pendingInvitationsCount,
   } = useAuth();
   const toast = useToast();
   const location = useLocation();
@@ -99,6 +107,9 @@ export const AppShell: React.FC<AppShellProps> = ({
   const [isWorkspaceMenuOpen, setIsWorkspaceMenuOpen] = useState<boolean>(false);
   const [isUserMenuOpen, setIsUserMenuOpen] = useState<boolean>(false);
   const [isRefreshing, setIsRefreshing] = useState<boolean>(false);
+  const [accountModalOpen, setAccountModalOpen] = useState<boolean>(false);
+  const [accountModalTab, setAccountModalTab] =
+    useState<AccountSettingsTab>('profile');
 
   const workspaceMenuRef = useRef<HTMLDivElement>(null);
   const userMenuRef = useRef<HTMLDivElement>(null);
@@ -372,12 +383,6 @@ export const AppShell: React.FC<AppShellProps> = ({
   };
 
   const fullName = [user?.firstName, user?.lastName].filter(Boolean).join(' ') || user?.email || 'User';
-  const initials = useMemo(() => {
-    const first = user?.firstName?.trim()?.[0] || '';
-    const last = user?.lastName?.trim()?.[0] || '';
-    const combined = (first + last).toUpperCase();
-    return combined || (user?.email?.[0]?.toUpperCase() ?? 'U');
-  }, [user]);
 
   const workspaceDisplayName =
     activeWorkspace === 'PLATFORM'
@@ -852,30 +857,41 @@ export const AppShell: React.FC<AppShellProps> = ({
                   aria-expanded={isUserMenuOpen}
                   aria-haspopup="true"
                 >
-                  <div className="w-6 h-6 rounded-lg bg-indigo-600 text-white font-bold text-[11px] flex items-center justify-center shrink-0">
-                    {initials}
-                  </div>
+                  <UserAvatar size="xs" />
                   <TruncatedText
                     text={fullName}
                     maxWidthClass="max-w-[130px]"
                     className="hidden sm:inline-block font-medium text-slate-800"
                   />
+                  {pendingInvitationsCount > 0 && (
+                    <span
+                      title={`${pendingInvitationsCount} pending invitation(s)`}
+                      className="inline-flex items-center justify-center rounded-full bg-amber-100 text-amber-800 px-1.5 py-0.2 text-[10px] font-bold"
+                    >
+                      {pendingInvitationsCount}
+                    </span>
+                  )}
                   <ChevronDown className="w-3.5 h-3.5 text-slate-400 shrink-0" />
                 </button>
 
                 {isUserMenuOpen && (
                   <div className="absolute right-0 mt-2 w-64 rounded-2xl border border-slate-200/90 bg-white shadow-xl p-2 z-50 space-y-1.5">
-                    <div className="px-3 py-2 border-b border-slate-100 space-y-0.5">
-                      <TruncatedText
-                        text={fullName}
-                        as="p"
-                        className="text-xs font-semibold text-slate-900"
-                      />
-                      <TruncatedText
-                        text={user?.email}
-                        as="p"
-                        className="text-[11px] font-mono text-slate-500"
-                      />
+                    <div className="px-3 py-2 border-b border-slate-100 space-y-1">
+                      <div className="flex items-center gap-2.5">
+                        <UserAvatar size="sm" />
+                        <div className="min-w-0 flex-1">
+                          <TruncatedText
+                            text={fullName}
+                            as="p"
+                            className="text-xs font-semibold text-slate-900"
+                          />
+                          <TruncatedText
+                            text={user?.email}
+                            as="p"
+                            className="text-[11px] font-mono text-slate-500"
+                          />
+                        </div>
+                      </div>
                       <div className="pt-1 flex flex-wrap gap-1">
                         {activeRoleCodes.map((rc) => (
                           <RoleTag key={rc} label={formatRoleLabel(rc)} />
@@ -884,6 +900,35 @@ export const AppShell: React.FC<AppShellProps> = ({
                     </div>
 
                     <div className="space-y-0.5 py-0.5">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setIsUserMenuOpen(false);
+                          setAccountModalTab('profile');
+                          setAccountModalOpen(true);
+                        }}
+                        className="w-full flex items-center gap-2.5 rounded-xl px-3 py-2 text-xs font-medium text-slate-700 hover:bg-slate-50 transition-colors cursor-pointer"
+                      >
+                        <Settings className="w-3.5 h-3.5 text-slate-400" />
+                        <span>My Profile &amp; Account Settings</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setIsUserMenuOpen(false);
+                          setAccountModalTab('invitations');
+                          setAccountModalOpen(true);
+                        }}
+                        className="w-full flex items-center justify-between gap-2 rounded-xl px-3 py-2 text-xs font-medium text-slate-700 hover:bg-slate-50 transition-colors cursor-pointer"
+                      >
+                        <span className="flex items-center gap-2.5">
+                          <Mail className="w-3.5 h-3.5 text-slate-400" />
+                          <span>Pending Invitations</span>
+                        </span>
+                        <CounterLabel count={pendingInvitationsCount} />
+                      </button>
+
                       <Link
                         to="/workspaces?stay=1"
                         onClick={() => setIsUserMenuOpen(false)}
@@ -937,6 +982,12 @@ export const AppShell: React.FC<AppShellProps> = ({
             children
           )}
         </main>
+
+        <AccountSettingsModal
+          open={accountModalOpen}
+          onClose={() => setAccountModalOpen(false)}
+          initialTab={accountModalTab}
+        />
       </div>
     </div>
   );

@@ -459,6 +459,25 @@ export const INVITATION_STATUS_META: Record<
   REVOKED: { label: 'Revoked', variant: 'danger' },
 };
 
+export const INVITATION_TARGET_TYPE_LABELS: Record<InvitationTargetType, string> = {
+  SCHOOL_ADMIN: 'School Administrator',
+  STAFF: 'Staff Profile',
+  TEACHER: 'Teacher Faculty Profile',
+  GUARDIAN: 'Guardian / Parent Profile',
+  STUDENT: 'Student Profile',
+  MEMBER: 'Organization Member',
+};
+
+export function getInvitationTargetTypeLabel(
+  targetType: InvitationTargetType | string | null | undefined
+): string {
+  if (!targetType) return 'Organization Member';
+  return (
+    INVITATION_TARGET_TYPE_LABELS[targetType as InvitationTargetType] ||
+    targetType
+  );
+}
+
 export function isTerminalEmploymentStatus(
   status: EmploymentStatus | null | undefined
 ): boolean {

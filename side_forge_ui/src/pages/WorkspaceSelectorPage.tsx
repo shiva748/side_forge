@@ -7,10 +7,16 @@ import {
   Clock,
   Layers,
   LogOut,
+  Mail,
   RefreshCw,
+  Settings,
   Shield,
-  UserCheck,
 } from 'lucide-react';
+import {
+  AccountSettingsModal,
+  type AccountSettingsTab,
+} from '../components/account/AccountSettingsModal';
+import { UserAvatar } from '../components/account/UserAvatar';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 import { formatRoleLabel, WorkspaceContextOption } from '../types/auth';
@@ -39,12 +45,16 @@ export const WorkspaceSelectorPage: React.FC = () => {
     revalidateAllOrganizationsStatuses,
     refreshSession,
     logout,
+    pendingInvitationsCount,
   } = useAuth();
   const toast = useToast();
   const navigate = useNavigate();
   const location = useLocation();
   const [searchParams] = useSearchParams();
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [accountModalOpen, setAccountModalOpen] = useState(false);
+  const [accountModalTab, setAccountModalTab] =
+    useState<AccountSettingsTab>('profile');
 
   const locState = (location.state as WorkspaceSelectorLocationState) || {};
   const stayOnSelector = searchParams.get('stay') === '1';
@@ -161,8 +171,15 @@ export const WorkspaceSelectorPage: React.FC = () => {
         </Link>
 
         <div className="flex items-center gap-2.5 min-w-0">
-          <div className="hidden sm:flex items-center gap-2 text-xs text-slate-600 bg-white px-3 py-1.5 rounded-lg border border-slate-200/80 shadow-2xs min-w-0">
-            <UserCheck className="w-3.5 h-3.5 text-indigo-600 shrink-0" />
+          <button
+            type="button"
+            onClick={() => {
+              setAccountModalTab('profile');
+              setAccountModalOpen(true);
+            }}
+            className="hidden sm:flex items-center gap-2 text-xs text-slate-600 bg-white hover:bg-slate-50 px-3 py-1.5 rounded-lg border border-slate-200/80 shadow-2xs min-w-0 transition-colors cursor-pointer"
+          >
+            <UserAvatar size="xs" />
             <TruncatedText
               text={fullName}
               maxWidthClass="max-w-[140px]"
@@ -174,7 +191,24 @@ export const WorkspaceSelectorPage: React.FC = () => {
               maxWidthClass="max-w-[180px]"
               className="font-mono text-slate-500"
             />
-          </div>
+          </button>
+
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => {
+              setAccountModalTab(pendingInvitationsCount > 0 ? 'invitations' : 'profile');
+              setAccountModalOpen(true);
+            }}
+            leftIcon={<Settings className="w-3.5 h-3.5" />}
+          >
+            <span>Account</span>
+            {pendingInvitationsCount > 0 && (
+              <span className="ml-1.5 inline-flex items-center justify-center rounded-full bg-amber-100 text-amber-800 px-1.5 py-0.2 text-[10px] font-bold">
+                {pendingInvitationsCount}
+              </span>
+            )}
+          </Button>
 
           <Button
             variant="outline"
@@ -199,6 +233,35 @@ export const WorkspaceSelectorPage: React.FC = () => {
 
       {/* Main Selector Container */}
       <div className="max-w-3xl w-full mx-auto my-8 space-y-6">
+        {pendingInvitationsCount > 0 && (
+          <div className="rounded-2xl border border-amber-200 bg-amber-50/90 p-4 flex items-center justify-between gap-4 flex-wrap shadow-2xs">
+            <div className="flex items-center gap-3 text-xs text-amber-950">
+              <div className="w-8 h-8 rounded-xl bg-amber-100 text-amber-700 flex items-center justify-center shrink-0">
+                <Mail className="w-4 h-4" />
+              </div>
+              <div>
+                <p className="font-bold">
+                  You have {pendingInvitationsCount} pending organization invitation
+                  {pendingInvitationsCount === 1 ? '' : 's'}
+                </p>
+                <p className="text-amber-800 mt-0.5">
+                  Review and accept your pending school or staff invitations to unlock additional workspaces.
+                </p>
+              </div>
+            </div>
+            <Button
+              size="sm"
+              variant="primary"
+              onClick={() => {
+                setAccountModalTab('invitations');
+                setAccountModalOpen(true);
+              }}
+            >
+              Review Invitations
+            </Button>
+          </div>
+        )}
+
         <div className="rounded-2xl border border-slate-200/80 bg-white p-6 sm:p-8 shadow-sm space-y-6">
           <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3 border-b border-slate-100 pb-5">
             <div className="space-y-1 min-w-0">
@@ -456,6 +519,12 @@ export const WorkspaceSelectorPage: React.FC = () => {
           Enforcement
         </span>
       </div>
+
+      <AccountSettingsModal
+        open={accountModalOpen}
+        onClose={() => setAccountModalOpen(false)}
+        initialTab={accountModalTab}
+      />
     </div>
   );
 };

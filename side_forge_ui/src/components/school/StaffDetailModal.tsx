@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ApiError } from '../../lib/api-client';
 import { staffManagementApi } from '../../services/staffManagementApi';
+import { normalizeInvitationLinkForFrontend } from '../../types/accountAndInvitations';
 import type { AcademicSessionResponse } from '../../types/academicManagement';
 import {
   EMPLOYMENT_STATUS_META,
@@ -488,7 +489,7 @@ export const StaffDetailModal: React.FC<StaffDetailModalProps> = ({
         organizationId,
         inv.id
       );
-      setResentLink(res.invitationLink);
+      setResentLink(normalizeInvitationLinkForFrontend(res.invitationLink));
       setFeedback({
         type: 'success',
         message: `Resent invitation to ${inv.email}.`,

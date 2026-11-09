@@ -80,6 +80,7 @@ import {
   type InvitationDispatchResponse,
   type InvitationResponse,
 } from '../../types/staffManagement';
+import { normalizeInvitationLinkForFrontend } from '../../types/accountAndInvitations';
 import {
   ENROLLMENT_STATUS_META,
   GENDER_LABELS,
@@ -2122,7 +2123,9 @@ export const GuardianInvitationModal: React.FC<
   const handleCopyLink = async () => {
     if (!dispatched) return;
     try {
-      await navigator.clipboard.writeText(dispatched.invitationLink);
+      await navigator.clipboard.writeText(
+        normalizeInvitationLinkForFrontend(dispatched.invitationLink)
+      );
       setCopied(true);
       setTimeout(() => setCopied(false), 2500);
     } catch {
@@ -2219,7 +2222,9 @@ export const GuardianInvitationModal: React.FC<
                 <input
                   type="text"
                   readOnly
-                  value={dispatched.invitationLink}
+                  value={normalizeInvitationLinkForFrontend(
+                    dispatched.invitationLink
+                  )}
                   className="flex-1 rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 font-mono text-[11px] text-slate-700"
                 />
                 <Button size="sm" variant="outline" onClick={handleCopyLink}>
