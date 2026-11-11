@@ -375,6 +375,7 @@ public class AcademicDatabaseInitializer implements ApplicationRunner {
 			seedPlatformRolesAndPermissions();
 			seedDefaultSubscriptionPlans();
 			seedInitialPlatformAdministrator();
+			ensureSectionAndTimetableSchema();
 			ensureCompositeForeignKeys();
 			log.info("Automatic database initialization completed successfully.");
 		} catch (Exception ex) {
@@ -697,6 +698,8 @@ public class AcademicDatabaseInitializer implements ApplicationRunner {
 				"ALTER TABLE student_enrollments ADD CONSTRAINT fk_student_enrollments_session_org FOREIGN KEY (academic_session_id, organization_id) REFERENCES academic_sessions (id, organization_id)");
 		addForeignKeyIfAbsent("student_enrollments", "fk_student_enrollments_class_org",
 				"ALTER TABLE student_enrollments ADD CONSTRAINT fk_student_enrollments_class_org FOREIGN KEY (class_id, organization_id) REFERENCES classes (id, organization_id)");
+		addForeignKeyIfAbsent("student_enrollments", "fk_student_enrollments_section_org",
+				"ALTER TABLE student_enrollments ADD CONSTRAINT fk_student_enrollments_section_org FOREIGN KEY (organization_id, academic_session_id, class_id, section_id) REFERENCES sections (organization_id, academic_session_id, class_id, id)");
 		addForeignKeyIfAbsent("staff", "fk_staff_org",
 				"ALTER TABLE staff ADD CONSTRAINT fk_staff_org FOREIGN KEY (organization_id) REFERENCES organizations (id)");
 		addForeignKeyIfAbsent("staff", "fk_staff_user",
@@ -731,10 +734,14 @@ public class AcademicDatabaseInitializer implements ApplicationRunner {
 				"ALTER TABLE class_timetables ADD CONSTRAINT fk_class_tt_session_org FOREIGN KEY (academic_session_id, organization_id) REFERENCES academic_sessions (id, organization_id)");
 		addForeignKeyIfAbsent("class_timetables", "fk_class_tt_class_org",
 				"ALTER TABLE class_timetables ADD CONSTRAINT fk_class_tt_class_org FOREIGN KEY (class_id, organization_id) REFERENCES classes (id, organization_id)");
+		addForeignKeyIfAbsent("class_timetables", "fk_class_tt_section_org",
+				"ALTER TABLE class_timetables ADD CONSTRAINT fk_class_tt_section_org FOREIGN KEY (organization_id, academic_session_id, class_id, section_id) REFERENCES sections (organization_id, academic_session_id, class_id, id)");
 		addForeignKeyIfAbsent("class_timetables", "fk_class_tt_config_org",
 				"ALTER TABLE class_timetables ADD CONSTRAINT fk_class_tt_config_org FOREIGN KEY (timetable_config_id, organization_id) REFERENCES timetable_configs (id, organization_id)");
 		addForeignKeyIfAbsent("timetable_slots", "fk_tt_slots_timetable_org",
 				"ALTER TABLE timetable_slots ADD CONSTRAINT fk_tt_slots_timetable_org FOREIGN KEY (class_timetable_id, organization_id) REFERENCES class_timetables (id, organization_id)");
+		addForeignKeyIfAbsent("timetable_slots", "fk_tt_slots_section_org",
+				"ALTER TABLE timetable_slots ADD CONSTRAINT fk_tt_slots_section_org FOREIGN KEY (organization_id, academic_session_id, class_id, section_id) REFERENCES sections (organization_id, academic_session_id, class_id, id)");
 		addForeignKeyIfAbsent("timetable_slots", "fk_tt_slots_period_org",
 				"ALTER TABLE timetable_slots ADD CONSTRAINT fk_tt_slots_period_org FOREIGN KEY (period_id, organization_id) REFERENCES timetable_periods (id, organization_id)");
 		addForeignKeyIfAbsent("timetable_slots", "fk_tt_slots_subject_org",
@@ -835,6 +842,73 @@ public class AcademicDatabaseInitializer implements ApplicationRunner {
 				"ALTER TABLE organization_feature_entitlements ADD CONSTRAINT fk_org_feat_ent_org FOREIGN KEY (organization_id) REFERENCES organizations (id) ON DELETE CASCADE");
 		addForeignKeyIfAbsent("organization_status_history", "fk_org_status_hist_org",
 				"ALTER TABLE organization_status_history ADD CONSTRAINT fk_org_status_hist_org FOREIGN KEY (organization_id) REFERENCES organizations (id) ON DELETE CASCADE");
+	}
+
+	private void ensureSectionAndTimetableSchema() {
+		addColumnIfAbsent("student_enrollments", "section_id",
+				"ALTER TABLE student_enrollments ADD COLUMN section_id BIGINT NULL AFTER class_id");
+		addColumnIfAbsent("class_timetables", "section_id",
+				"ALTER TABLE class_timetables ADD COLUMN section_id BIGINT NULL AFTER class_id");
+		addColumnIfAbsent("timetable_slots", "section_id",
+				"ALTER TABLE timetable_slots ADD COLUMN section_id BIGINT NULL AFTER class_id");
+
+		addIndexIfAbsent("sections", "uk_sections_org_session_class_id",
+				"ALTER TABLE sections ADD CONSTRAINT uk_sections_org_session_class_id UNIQUE (organization_id, academic_session_id, class_id, id)");
+		addIndexIfAbsent("student_enrollments", "idx_student_enrollments_org_session_class_section",
+				"CREATE INDEX idx_student_enrollments_org_session_class_section ON student_enrollments (organization_id, academic_session_id, class_id, section_id)");
+
+		addIndexIfAbsent("class_timetables", "uk_class_timetables_org_session_class_section",
+				"ALTER TABLE class_timetables ADD CONSTRAINT uk_class_timetables_org_session_class_section UNIQUE (organization_id, academic_session_id, class_id, section_id)");
+		dropIndexIfPresent("class_timetables", "uk_class_timetables_org_session_class");
+
+		addIndexIfAbsent("timetable_slots", "uk_timetable_slots_timetable_day_period",
+				"ALTER TABLE timetable_slots ADD CONSTRAINT uk_timetable_slots_timetable_day_period UNIQUE (organization_id, class_timetable_id, day_of_week, period_id)");
+		dropIndexIfPresent("timetable_slots", "uk_timetable_slots_class_day_period");
+	}
+
+	private void addColumnIfAbsent(String tableName, String columnName, String alterSql) {
+		Integer count = jdbc.queryForObject("""
+				SELECT COUNT(*)
+				FROM information_schema.COLUMNS
+				WHERE TABLE_SCHEMA = DATABASE()
+				  AND TABLE_NAME = :tableName
+				  AND COLUMN_NAME = :columnName
+				""",
+				Map.of("tableName", tableName, "columnName", columnName),
+				Integer.class);
+		if (count != null && count == 0) {
+			jdbc.getJdbcTemplate().execute(alterSql);
+		}
+	}
+
+	private void addIndexIfAbsent(String tableName, String indexName, String alterSql) {
+		Integer count = jdbc.queryForObject("""
+				SELECT COUNT(*)
+				FROM information_schema.STATISTICS
+				WHERE TABLE_SCHEMA = DATABASE()
+				  AND TABLE_NAME = :tableName
+				  AND INDEX_NAME = :indexName
+				""",
+				Map.of("tableName", tableName, "indexName", indexName),
+				Integer.class);
+		if (count != null && count == 0) {
+			jdbc.getJdbcTemplate().execute(alterSql);
+		}
+	}
+
+	private void dropIndexIfPresent(String tableName, String indexName) {
+		Integer count = jdbc.queryForObject("""
+				SELECT COUNT(*)
+				FROM information_schema.STATISTICS
+				WHERE TABLE_SCHEMA = DATABASE()
+				  AND TABLE_NAME = :tableName
+				  AND INDEX_NAME = :indexName
+				""",
+				Map.of("tableName", tableName, "indexName", indexName),
+				Integer.class);
+		if (count != null && count > 0) {
+			jdbc.getJdbcTemplate().execute("ALTER TABLE " + tableName + " DROP INDEX " + indexName);
+		}
 	}
 
 	private void addForeignKeyIfAbsent(String tableName, String constraintName, String alterSql) {

@@ -22,6 +22,9 @@ public interface TimetableSlotRepository extends JpaRepository<TimetableSlot, Lo
 	List<TimetableSlot> findAllByOrganizationIdAndClassTimetableIdAndDayOfWeekOrderByStartTimeAsc(
 			Long organizationId, Long classTimetableId, DayOfWeek dayOfWeek);
 
+	List<TimetableSlot> findAllByOrganizationIdAndClassTimetableIdAndDayOfWeek(
+			Long organizationId, Long classTimetableId, DayOfWeek dayOfWeek);
+
 	List<TimetableSlot> findAllByOrganizationIdAndAcademicSessionIdAndClassIdAndDayOfWeek(
 			Long organizationId, Long academicSessionId, Long classId, DayOfWeek dayOfWeek);
 

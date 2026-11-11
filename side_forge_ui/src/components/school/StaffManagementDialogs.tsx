@@ -1864,14 +1864,17 @@ export const AssignTeacherSubjectModal: React.FC<
           return !sub || sub.active;
         });
         setClassSubjects(activeAssigned);
+        const firstActiveSchoolSub = subjects.find((s) => s.active);
         setSubjectId((prev) => {
           if (
             prev !== '' &&
-            activeAssigned.some((cs) => cs.subjectId === Number(prev))
+            (activeAssigned.some((cs) => cs.subjectId === Number(prev)) ||
+              subjects.some((s) => s.active && s.id === Number(prev)))
           ) {
             return prev;
           }
-          return activeAssigned.length > 0 ? activeAssigned[0].subjectId : '';
+          if (activeAssigned.length > 0) return activeAssigned[0].subjectId;
+          return firstActiveSchoolSub ? firstActiveSchoolSub.id : '';
         });
       })
       .catch(() => {
@@ -2280,11 +2283,15 @@ export const AssignTeacherSubjectModal: React.FC<
             <FormField
               label="4. Curriculum Subject"
               required
-              hint="Subjects assigned to the selected class in this session."
+              hint="Pick an assigned class subject or any active school subject (auto-links to class)."
             >
               <SelectInput
                 value={subjectId}
-                disabled={loadingClassSubjects || classSubjects.length === 0}
+                disabled={
+                  loadingClassSubjects ||
+                  (classSubjects.length === 0 &&
+                    subjects.filter((s) => s.active).length === 0)
+                }
                 onChange={(e) =>
                   setSubjectId(e.target.value ? Number(e.target.value) : '')
                 }
@@ -2293,21 +2300,45 @@ export const AssignTeacherSubjectModal: React.FC<
                 <option value="">
                   {loadingClassSubjects
                     ? 'Loading subjects...'
-                    : classSubjects.length === 0
-                      ? 'No subjects assigned to class'
+                    : classSubjects.length === 0 &&
+                        subjects.filter((s) => s.active).length === 0
+                      ? 'No active subjects in school'
                       : 'Select subject'}
                 </option>
-                {classSubjects.map((cs) => {
-                  const sub = subjectById.get(cs.subjectId);
-                  return (
-                    <option key={cs.subjectId} value={cs.subjectId}>
-                      {sub
-                        ? `${sub.name} (${sub.code})`
-                        : `Subject #${cs.subjectId}`}
-                      {cs.compulsory ? ' — Compulsory' : ' — Optional'}
-                    </option>
-                  );
-                })}
+                {classSubjects.length > 0 && (
+                  <optgroup label="★ Assigned to Selected Class">
+                    {classSubjects.map((cs) => {
+                      const sub = subjectById.get(cs.subjectId);
+                      return (
+                        <option key={cs.subjectId} value={cs.subjectId}>
+                          {sub
+                            ? `${sub.name} (${sub.code})`
+                            : `Subject #${cs.subjectId}`}
+                          {cs.compulsory ? ' — Compulsory' : ' — Optional'}
+                        </option>
+                      );
+                    })}
+                  </optgroup>
+                )}
+                {subjects.filter(
+                  (s) =>
+                    s.active &&
+                    !classSubjects.some((cs) => cs.subjectId === s.id)
+                ).length > 0 && (
+                  <optgroup label="All School Subjects (Auto-links to Class)">
+                    {subjects
+                      .filter(
+                        (s) =>
+                          s.active &&
+                          !classSubjects.some((cs) => cs.subjectId === s.id)
+                      )
+                      .map((sub) => (
+                        <option key={sub.id} value={sub.id}>
+                          {sub.name} ({sub.code}) — Auto-link to class
+                        </option>
+                      ))}
+                  </optgroup>
+                )}
               </SelectInput>
             </FormField>
           </div>
@@ -2317,10 +2348,11 @@ export const AssignTeacherSubjectModal: React.FC<
           !loadingClassSubjects &&
           academicSessionId &&
           classId &&
-          classSubjects.length === 0 && (
+          classSubjects.length === 0 &&
+          subjects.filter((s) => s.active).length > 0 && (
             <AlertBanner
-              variant="warning"
-              message="No subjects are assigned to the selected class in this academic session yet. Configure class-subject assignments in Academic Management first."
+              variant="info"
+              message="Selected subject will be automatically linked to this class for the academic session when you save."
             />
           )}
 

@@ -11,6 +11,8 @@ public record TimetableSlotResponse(
 		Long classTimetableId,
 		Long classId,
 		String className,
+		Long sectionId,
+		String sectionName,
 		DayOfWeek dayOfWeek,
 		Long periodId,
 		String periodName,

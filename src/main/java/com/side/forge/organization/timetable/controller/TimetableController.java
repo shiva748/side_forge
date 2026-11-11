@@ -138,9 +138,10 @@ public class TimetableController {
 			@PathVariable @Positive Long organizationId,
 			@PathVariable @Positive Long sessionId,
 			@PathVariable @Positive Long classId,
+			@RequestParam(required = false) @Positive Long sectionId,
 			@RequestParam(required = false) DayOfWeek dayOfWeek) {
 		ClassTimetableResponse timetable = timetableService.getClassTimetableBySessionAndClass(
-				organizationId, sessionId, classId, dayOfWeek);
+				organizationId, sessionId, classId, sectionId, dayOfWeek);
 		return ResponseEntity.ok(new ApiResponse<>(true, "Class timetable retrieved successfully", timetable));
 	}
 

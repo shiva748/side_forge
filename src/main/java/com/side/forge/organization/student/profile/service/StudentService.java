@@ -85,6 +85,16 @@ public class StudentService {
 	public PagedResponse<StudentResponse> getStudents(
 			Long orgId, String search, String admissionNumber, StudentStatus status, Gender gender,
 			Long academicSessionId, Long classId, int page, int size, String sortBy, String sortDir) {
+		return getStudents(
+				orgId, search, admissionNumber, status, gender,
+				academicSessionId, classId, null, page, size, sortBy, sortDir);
+	}
+
+	@RequirePermission(PermissionCode.STUDENT_VIEW)
+	@Transactional(readOnly = true)
+	public PagedResponse<StudentResponse> getStudents(
+			Long orgId, String search, String admissionNumber, StudentStatus status, Gender gender,
+			Long academicSessionId, Long classId, Long sectionId, int page, int size, String sortBy, String sortDir) {
 		validator.requireOrganization(orgId);
 		if (academicSessionId != null) {
 			sessionService.requireSession(orgId, academicSessionId);
@@ -95,7 +105,7 @@ public class StudentService {
 
 		Pageable pageable = buildPageable(page, size, sortBy, sortDir);
 		Specification<Student> spec = StudentSpecifications.withFilters(
-				orgId, search, admissionNumber, status, gender, academicSessionId, classId);
+				orgId, search, admissionNumber, status, gender, academicSessionId, classId, sectionId);
 		Page<StudentResponse> result = studentRepository.findAll(spec, pageable).map(studentMapper::toResponse);
 		return PagedResponse.from(result);
 	}

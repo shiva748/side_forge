@@ -69,10 +69,12 @@ const CheckboxField: React.FC<{
   </label>
 );
 import { ApiError } from '../../lib/api-client';
+import { academicManagementApi } from '../../services/academicManagementApi';
 import { studentManagementApi } from '../../services/studentManagementApi';
 import type {
   AcademicSessionResponse,
   SchoolClassResponse,
+  SectionResponse,
 } from '../../types/academicManagement';
 import {
   getInvitationStatusBadge,
@@ -741,6 +743,11 @@ export const EnrollmentFormModal: React.FC<EnrollmentFormModalProps> = ({
 
   const [academicSessionId, setAcademicSessionId] = useState<string>('');
   const [classId, setClassId] = useState<string>('');
+  const [sectionId, setSectionId] = useState<string>('');
+  const [availableSections, setAvailableSections] = useState<SectionResponse[]>(
+    []
+  );
+  const [loadingSections, setLoadingSections] = useState(false);
   const [rollNumber, setRollNumber] = useState('');
   const [enrollmentDate, setEnrollmentDate] = useState(todayIso);
   const [remarks, setRemarks] = useState('');
@@ -852,6 +859,7 @@ export const EnrollmentFormModal: React.FC<EnrollmentFormModalProps> = ({
       setSelectedStudent(initialData.student || null);
       setAcademicSessionId(String(initialData.academicSessionId));
       setClassId(String(initialData.classId));
+      setSectionId(initialData.sectionId ? String(initialData.sectionId) : '');
       setRollNumber(initialData.rollNumber || '');
       setEnrollmentDate(
         initialData.enrollmentDate ? initialData.enrollmentDate.slice(0, 10) : todayIso
@@ -868,12 +876,54 @@ export const EnrollmentFormModal: React.FC<EnrollmentFormModalProps> = ({
             : '';
       setAcademicSessionId(initialSession);
       setClassId(activeClasses[0] ? String(activeClasses[0].id) : '');
+      setSectionId('');
       setRollNumber('');
       setEnrollmentDate(todayIso);
       setRemarks('');
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, initialData?.id, preselectedStudent?.id, defaultSessionId]);
+
+  // Load sections for the selected (academicSessionId, classId)
+  useEffect(() => {
+    if (!open || !organizationId || !academicSessionId || !classId) {
+      setAvailableSections([]);
+      return;
+    }
+    let cancelled = false;
+    setLoadingSections(true);
+    academicManagementApi
+      .getSections(organizationId, Number(academicSessionId), {
+        classId: Number(classId),
+        active: true,
+      })
+      .then((list) => {
+        if (cancelled) return;
+        const sorted = [...(list || [])].sort((a, b) =>
+          a.name.localeCompare(b.name)
+        );
+        setAvailableSections(sorted);
+        setSectionId((prev) => {
+          if (prev && sorted.some((sec) => String(sec.id) === prev)) {
+            return prev;
+          }
+          return '';
+        });
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setAvailableSections([]);
+        }
+      })
+      .finally(() => {
+        if (!cancelled) {
+          setLoadingSections(false);
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [open, organizationId, academicSessionId, classId]);
 
   const conflictingEnrollment = React.useMemo(() => {
     if (isEdit || !academicSessionId) return null;
@@ -920,6 +970,7 @@ export const EnrollmentFormModal: React.FC<EnrollmentFormModalProps> = ({
       if (isEdit) {
         const updatePayload: UpdateEnrollmentRequest = {
           classId: Number(classId),
+          sectionId: sectionId ? Number(sectionId) : null,
           rollNumber: cleanOptional(rollNumber),
           enrollmentDate: enrollmentDate || null,
           remarks: cleanOptional(remarks),
@@ -930,6 +981,7 @@ export const EnrollmentFormModal: React.FC<EnrollmentFormModalProps> = ({
           studentId: effectiveStudent!.id,
           academicSessionId: Number(academicSessionId),
           classId: Number(classId),
+          sectionId: sectionId ? Number(sectionId) : null,
           rollNumber: cleanOptional(rollNumber),
           enrollmentDate: enrollmentDate || null,
           remarks: cleanOptional(remarks),
@@ -1247,7 +1299,7 @@ export const EnrollmentFormModal: React.FC<EnrollmentFormModalProps> = ({
           </FormField>
         )}
 
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
           <FormField
             label="School Class"
             htmlFor="enr-class"
@@ -1257,13 +1309,49 @@ export const EnrollmentFormModal: React.FC<EnrollmentFormModalProps> = ({
             <SelectInput
               id="enr-class"
               value={classId}
-              onChange={(e) => setClassId(e.target.value)}
+              onChange={(e) => {
+                setClassId(e.target.value);
+                setSectionId('');
+              }}
               hasError={Boolean(fieldErrors.classId)}
             >
               <option value="">Select class...</option>
               {activeClasses.map((c) => (
                 <option key={c.id} value={c.id}>
                   {c.name} ({c.code})
+                </option>
+              ))}
+            </SelectInput>
+          </FormField>
+
+          <FormField
+            label="Section"
+            htmlFor="enr-section"
+            error={fieldErrors.sectionId}
+            hint={
+              loadingSections
+                ? 'Loading sections...'
+                : availableSections.length === 0
+                  ? 'No sections configured (class-wide)'
+                  : `${availableSections.length} section(s) available`
+            }
+          >
+            <SelectInput
+              id="enr-section"
+              value={sectionId}
+              onChange={(e) => setSectionId(e.target.value)}
+              hasError={Boolean(fieldErrors.sectionId)}
+              disabled={!classId || loadingSections || availableSections.length === 0}
+            >
+              <option value="">
+                {availableSections.length === 0
+                  ? 'Class-wide (No section)'
+                  : 'All / Unassigned Section'}
+              </option>
+              {availableSections.map((sec) => (
+                <option key={sec.id} value={sec.id}>
+                  Section {sec.name}
+                  {sec.capacity ? ` (Cap: ${sec.capacity})` : ''}
                 </option>
               ))}
             </SelectInput>
@@ -2360,6 +2448,416 @@ export const GuardianInvitationModal: React.FC<
     </Modal>
   );
 };
+
+// ============================================================================
+// 8. Student Login Invitation Modal (`InvitationTargetType.STUDENT`, role `STUDENT`)
+// ============================================================================
+
+interface StudentInvitationModalProps {
+  open: boolean;
+  student: StudentResponse | null;
+  existingInvitations: InvitationResponse[];
+  onClose: () => void;
+  onSubmit: (
+    payload: CreateInvitationRequest
+  ) => Promise<InvitationDispatchResponse>;
+  onResend: (invitationId: number) => Promise<InvitationDispatchResponse>;
+  onRevoke: (invitationId: number) => Promise<InvitationResponse>;
+}
+
+export const StudentInvitationModal: React.FC<StudentInvitationModalProps> = ({
+  open,
+  student,
+  existingInvitations,
+  onClose,
+  onSubmit,
+  onResend,
+  onRevoke,
+}) => {
+  const [email, setEmail] = useState('');
+  const [firstName, setFirstName] = useState('');
+  const [lastName, setLastName] = useState('');
+  const [phoneNumber, setPhoneNumber] = useState('');
+  const [expiryHours, setExpiryHours] = useState('168');
+  const [submitting, setSubmitting] = useState(false);
+  const [resendingId, setResendingId] = useState<number | null>(null);
+  const [revokingId, setRevokingId] = useState<number | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [dispatched, setDispatched] =
+    useState<InvitationDispatchResponse | null>(null);
+  const [copied, setCopied] = useState(false);
+
+  useEffect(() => {
+    if (!open || !student) return;
+    setError(null);
+    setDispatched(null);
+    setCopied(false);
+    setEmail(student.email || '');
+    setFirstName(student.firstName || '');
+    setLastName(student.lastName || '');
+    setPhoneNumber((student.phoneNumber || '').replace(/\s+/g, ''));
+    setExpiryHours('168');
+  }, [open, student]);
+
+  if (!student) return null;
+
+  const isEligibleStatus = student.status === 'ACTIVE';
+  const isAlreadyLinked = student.userId !== null && student.userId !== undefined;
+
+  const pendingInvitation = existingInvitations.find(
+    (inv) =>
+      inv.status === 'PENDING' &&
+      inv.targetType === 'STUDENT' &&
+      (inv.targetProfileId === student.id ||
+        (student.email &&
+          inv.email.toLowerCase() === student.email.toLowerCase()))
+  );
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (submitting || !isEligibleStatus || isAlreadyLinked) return;
+    setError(null);
+
+    if (!email.trim()) {
+      setError('Student email address is required to dispatch a login invitation.');
+      return;
+    }
+    const cleanPhone = phoneNumber.trim().replace(/\s+/g, '');
+    if (cleanPhone && !/^(\+91)?[6-9]\d{9}$/.test(cleanPhone)) {
+      setError(
+        'Phone number must be a valid 10-digit Indian mobile number (optionally prefixed with +91).'
+      );
+      return;
+    }
+    const hours = expiryHours.trim() ? Number(expiryHours) : 168;
+    if (Number.isNaN(hours) || hours < 1 || hours > 720) {
+      setError('Expiry hours must be between 1 and 720.');
+      return;
+    }
+
+    setSubmitting(true);
+    try {
+      const result = await onSubmit({
+        email: email.trim(),
+        roleCode: 'STUDENT',
+        targetType: 'STUDENT',
+        targetProfileId: student.id,
+        firstName: firstName.trim() || null,
+        lastName: lastName.trim() || null,
+        phoneNumber: cleanPhone || null,
+        expiryHours: hours,
+      });
+      setDispatched(result);
+    } catch (err) {
+      const info = extractErrorInfo(err);
+      setError(info.message);
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handleResend = async (invitationId: number) => {
+    if (resendingId !== null) return;
+    setResendingId(invitationId);
+    setError(null);
+    try {
+      const result = await onResend(invitationId);
+      setDispatched(result);
+    } catch (err) {
+      const info = extractErrorInfo(err);
+      setError(info.message);
+    } finally {
+      setResendingId(null);
+    }
+  };
+
+  const handleRevoke = async (invitationId: number) => {
+    if (revokingId !== null) return;
+    setRevokingId(invitationId);
+    setError(null);
+    try {
+      await onRevoke(invitationId);
+      onClose();
+    } catch (err) {
+      const info = extractErrorInfo(err);
+      setError(info.message);
+    } finally {
+      setRevokingId(null);
+    }
+  };
+
+  const handleCopyLink = async () => {
+    if (!dispatched) return;
+    try {
+      await navigator.clipboard.writeText(
+        normalizeInvitationLinkForFrontend(dispatched.invitationLink)
+      );
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2500);
+    } catch {
+      // Clipboard fallback ignored
+    }
+  };
+
+  return (
+    <Modal
+      open={open}
+      onClose={onClose}
+      title={
+        dispatched
+          ? 'Student Login Invitation Dispatched'
+          : `Invite ${formatStudentFullName(student)} to Student Portal`
+      }
+      description={
+        dispatched
+          ? 'Share this single-use invitation link with the student. Once accepted, their user account will be linked to their student profile with the STUDENT role.'
+          : 'Send an invitation link so this student can activate their own login account and participate in academic and homework workflows.'
+      }
+      size="md"
+      footer={
+        dispatched ? (
+          <Button onClick={onClose}>Done</Button>
+        ) : isAlreadyLinked || !isEligibleStatus ? (
+          <Button variant="outline" onClick={onClose}>
+            Close
+          </Button>
+        ) : pendingInvitation ? (
+          <>
+            <Button variant="outline" onClick={onClose}>
+              Close
+            </Button>
+            <Button
+              variant="danger"
+              disabled={revokingId === pendingInvitation.id}
+              onClick={() => void handleRevoke(pendingInvitation.id)}
+            >
+              {revokingId === pendingInvitation.id
+                ? 'Revoking...'
+                : 'Revoke Invitation'}
+            </Button>
+            <Button
+              disabled={resendingId === pendingInvitation.id}
+              onClick={() => void handleResend(pendingInvitation.id)}
+            >
+              {resendingId === pendingInvitation.id
+                ? 'Resending...'
+                : 'Resend & Generate New Link'}
+            </Button>
+          </>
+        ) : (
+          <>
+            <Button variant="outline" onClick={onClose} disabled={submitting}>
+              Cancel
+            </Button>
+            <Button
+              type="submit"
+              form="student-invitation-form"
+              isLoading={submitting}
+            >
+              Send Student Invitation
+            </Button>
+          </>
+        )
+      }
+    >
+      {dispatched ? (
+        <div className="space-y-4 text-xs">
+          <AlertBanner
+            variant="success"
+            message={`Student login invitation sent to ${dispatched.invitation.email}.`}
+          />
+
+          <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 space-y-2">
+            <div className="flex items-center justify-between">
+              <span className="text-slate-500">Student Name:</span>
+              <span className="font-semibold text-slate-900">
+                {formatStudentFullName(student)}
+              </span>
+            </div>
+            <div className="flex items-center justify-between">
+              <span className="text-slate-500">Admission Number:</span>
+              <span className="font-mono font-semibold text-slate-900">
+                {student.admissionNumber}
+              </span>
+            </div>
+            <div className="flex items-center justify-between">
+              <span className="text-slate-500">Recipient Email:</span>
+              <span className="font-semibold text-slate-900">
+                {dispatched.invitation.email}
+              </span>
+            </div>
+            <div className="flex items-center justify-between">
+              <span className="text-slate-500">Assigned Role &amp; Target:</span>
+              <div className="flex items-center gap-1.5">
+                <Badge variant="info">{dispatched.invitation.roleCode}</Badge>
+                <span className="font-mono text-[11px] text-slate-500">
+                  (Profile #{student.id})
+                </span>
+              </div>
+            </div>
+            <div className="pt-2 border-t border-slate-200 space-y-1.5">
+              <p className="font-medium text-slate-700">
+                Single-Use Invitation Link:
+              </p>
+              <div className="flex items-center gap-2">
+                <input
+                  type="text"
+                  readOnly
+                  value={normalizeInvitationLinkForFrontend(
+                    dispatched.invitationLink
+                  )}
+                  className="flex-1 rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 font-mono text-[11px] text-slate-700"
+                />
+                <Button size="sm" variant="outline" onClick={handleCopyLink}>
+                  {copied ? 'Copied!' : 'Copy Link'}
+                </Button>
+              </div>
+            </div>
+          </div>
+        </div>
+      ) : isAlreadyLinked ? (
+        <div className="space-y-3 text-xs">
+          <AlertBanner
+            variant="success"
+            message={`This student profile (${student.admissionNumber}) is already linked to active Side_forge User Account #${student.userId}.`}
+          />
+        </div>
+      ) : !isEligibleStatus ? (
+        <div className="space-y-3 text-xs">
+          <AlertBanner
+            variant="warning"
+            message={`Cannot invite ${formatStudentFullName(student)} because their student profile status is ${student.status}. Only ACTIVE students can receive login invitations.`}
+          />
+        </div>
+      ) : pendingInvitation ? (
+        <div className="space-y-4 text-xs">
+          {error && <AlertBanner variant="error" message={error} />}
+          <AlertBanner
+            variant="info"
+            message="An active pending Student login invitation already exists for this student. You can resend it to generate a fresh single-use link or revoke it."
+          />
+          <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 space-y-2">
+            <div className="flex items-center justify-between">
+              <span className="text-slate-500">Student:</span>
+              <span className="font-semibold text-slate-900">
+                {formatStudentFullName(student)} ({student.admissionNumber})
+              </span>
+            </div>
+            <div className="flex items-center justify-between">
+              <span className="text-slate-500">Invited Email:</span>
+              <span className="font-semibold text-slate-900">
+                {pendingInvitation.email}
+              </span>
+            </div>
+            <div className="flex items-center justify-between">
+              <span className="text-slate-500">Status:</span>
+              <Badge
+                variant={
+                  getInvitationStatusBadge(pendingInvitation.status).variant
+                }
+              >
+                {getInvitationStatusBadge(pendingInvitation.status).label}
+              </Badge>
+            </div>
+            <div className="flex items-center justify-between">
+              <span className="text-slate-500">Expires At:</span>
+              <span className="text-slate-800">
+                {new Date(pendingInvitation.expiresAt).toLocaleString()}
+              </span>
+            </div>
+          </div>
+        </div>
+      ) : (
+        <form
+          id="student-invitation-form"
+          onSubmit={handleSubmit}
+          className="space-y-4"
+        >
+          {error && <AlertBanner variant="error" message={error} />}
+
+          <div className="rounded-xl border border-indigo-200 bg-indigo-50/50 p-3.5 text-xs space-y-1">
+            <div className="flex items-center justify-between">
+              <span className="font-semibold text-slate-900">
+                Student: {formatStudentFullName(student)}
+              </span>
+              <Badge variant="info">Role: STUDENT</Badge>
+            </div>
+            <p className="text-slate-600">
+              Admission #: <strong className="font-mono">{student.admissionNumber}</strong> • Profile ID #{student.id}
+              {student.phoneNumber ? ` • Phone: ${student.phoneNumber}` : ''}
+            </p>
+          </div>
+
+          <FormField
+            label="Student Login Email Address"
+            htmlFor="si-email"
+            required
+            hint="The student will use this email address to sign in and accept the invitation."
+          >
+            <TextInput
+              id="si-email"
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              placeholder="student@school.edu.in"
+              maxLength={255}
+              required
+            />
+          </FormField>
+
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <FormField label="First Name" htmlFor="si-first">
+              <TextInput
+                id="si-first"
+                value={firstName}
+                onChange={(e) => setFirstName(e.target.value)}
+                maxLength={100}
+              />
+            </FormField>
+
+            <FormField label="Last Name" htmlFor="si-last">
+              <TextInput
+                id="si-last"
+                value={lastName}
+                onChange={(e) => setLastName(e.target.value)}
+                maxLength={100}
+              />
+            </FormField>
+
+            <FormField
+              label="Mobile Number (10-digit Indian)"
+              htmlFor="si-phone"
+              hint="Optional 10-digit mobile number"
+            >
+              <TextInput
+                id="si-phone"
+                value={phoneNumber}
+                onChange={(e) => setPhoneNumber(e.target.value)}
+                placeholder="9876543210"
+                maxLength={13}
+              />
+            </FormField>
+
+            <FormField
+              label="Invitation Expiry (Hours)"
+              htmlFor="si-expiry"
+            >
+              <TextInput
+                id="si-expiry"
+                type="number"
+                min={1}
+                max={720}
+                value={expiryHours}
+                onChange={(e) => setExpiryHours(e.target.value)}
+              />
+            </FormField>
+          </div>
+        </form>
+      )}
+    </Modal>
+  );
+};
+
 
 
 

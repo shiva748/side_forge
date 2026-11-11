@@ -12,6 +12,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import com.side.forge.authorization.annotation.RequirePermission;
 import com.side.forge.authorization.enums.PermissionCode;
+import com.side.forge.organization.academic.classsubject.entity.ClassSubject;
 import com.side.forge.organization.academic.classsubject.repository.ClassSubjectRepository;
 import com.side.forge.organization.academic.common.AcademicTenantAccessValidator;
 import com.side.forge.organization.academic.schoolclass.entity.SchoolClass;
@@ -175,11 +176,17 @@ public class TeacherAssignmentService {
 		ActiveTeacherPair activeTeacher = teacherService.requireActiveAssignableTeacherForUpdate(
 				orgId, request.teacherId());
 
-		// Validate that the subject is actually assigned to this class in this academic session
+		// Auto-link the active subject to this class in this academic session if not yet linked
 		if (!classSubjectRepository.existsByOrganizationIdAndAcademicSessionIdAndClassIdAndSubjectId(
 				orgId, session.getId(), schoolClass.getId(), subject.getId())) {
-			throw new IllegalStateException(
-					"Subject is not assigned to the specified class in this academic session");
+			ClassSubject classSubject = new ClassSubject();
+			classSubject.setOrganizationId(orgId);
+			classSubject.setAcademicSessionId(session.getId());
+			classSubject.setClassId(schoolClass.getId());
+			classSubject.setSubjectId(subject.getId());
+			classSubject.setCompulsory(true);
+			classSubject.setDisplayOrder(1);
+			classSubjectRepository.saveAndFlush(classSubject);
 		}
 
 		if (subjectAssignmentRepository.existsByOrganizationIdAndAcademicSessionIdAndClassIdAndSubjectIdAndTeacherId(

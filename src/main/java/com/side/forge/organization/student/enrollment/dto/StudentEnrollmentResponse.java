@@ -15,6 +15,8 @@ public record StudentEnrollmentResponse(
 		Long classId,
 		String className,
 		String classCode,
+		Long sectionId,
+		String sectionName,
 		String rollNumber,
 		LocalDate enrollmentDate,
 		EnrollmentStatus status,

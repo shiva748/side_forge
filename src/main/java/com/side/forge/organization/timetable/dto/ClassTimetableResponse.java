@@ -13,6 +13,8 @@ public record ClassTimetableResponse(
 		Long classId,
 		String className,
 		String classCode,
+		Long sectionId,
+		String sectionName,
 		Long timetableConfigId,
 		String timetableConfigName,
 		TimetableStatus status,

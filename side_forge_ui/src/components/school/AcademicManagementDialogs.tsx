@@ -9,11 +9,14 @@ import {
   AcademicSessionResponse,
   AssignClassSubjectRequest,
   CreateSchoolClassRequest,
+  CreateSectionRequest,
   CreateSubjectRequest,
   getSessionStatusBadgeMeta,
   SchoolClassResponse,
+  SectionResponse,
   SubjectResponse,
   UpdateSchoolClassRequest,
+  UpdateSectionRequest,
   UpdateSubjectRequest,
 } from '../../types/academicManagement';
 import { Badge, IdLabel } from '../ui/Badge';
@@ -556,7 +559,7 @@ export const SubjectFormDialog: React.FC<SubjectFormDialogProps> = ({
 export interface DeactivateEntityDialogProps {
   open: boolean;
   onClose: () => void;
-  entityType: 'Class' | 'Subject';
+  entityType: 'Class' | 'Subject' | 'Section';
   entityName: string;
   entityCode: string;
   isSubmitting: boolean;
@@ -860,6 +863,261 @@ export const AssignClassSubjectDialog: React.FC<AssignClassSubjectDialogProps> =
     </Dialog>
   );
 };
+
+// ============================================================================
+// 8. Create / Edit Class Section Dialog
+// ============================================================================
+
+export interface SectionFormDialogProps {
+  open: boolean;
+  onClose: () => void;
+  sessionName: string;
+  editingSection: SectionResponse | null;
+  availableClasses: SchoolClassResponse[];
+  existingSections?: SectionResponse[];
+  defaultClassId?: number | null;
+  isSubmitting: boolean;
+  errorMessage: string | null;
+  onSubmit: (payload: CreateSectionRequest | UpdateSectionRequest) => Promise<void>;
+}
+
+export const SectionFormDialog: React.FC<SectionFormDialogProps> = ({
+  open,
+  onClose,
+  sessionName,
+  editingSection,
+  availableClasses,
+  existingSections = [],
+  defaultClassId = null,
+  isSubmitting,
+  errorMessage,
+  onSubmit,
+}) => {
+  const activeClasses = availableClasses.filter(
+    (c) => c.active || (editingSection && c.id === editingSection.classId)
+  );
+
+  const [classId, setClassId] = useState<string>('');
+  const [name, setName] = useState<string>('');
+  const [capacity, setCapacity] = useState<string>('');
+  const [validationError, setValidationError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    if (editingSection) {
+      setClassId(String(editingSection.classId));
+      setName(editingSection.name || '');
+      setCapacity(
+        editingSection.capacity !== null && editingSection.capacity !== undefined
+          ? String(editingSection.capacity)
+          : ''
+      );
+    } else {
+      const initialClass =
+        defaultClassId && activeClasses.some((c) => c.id === defaultClassId)
+          ? defaultClassId
+          : activeClasses[0]?.id ?? '';
+      setClassId(initialClass ? String(initialClass) : '');
+      setName('');
+      setCapacity('');
+    }
+    setValidationError(null);
+  }, [open, editingSection, defaultClassId]);
+
+  const selectedParentClass =
+    activeClasses.find((c) => c.id === Number(classId)) || null;
+
+  const existingForSelectedClass = existingSections.filter(
+    (s) =>
+      s.classId === Number(classId) &&
+      (!editingSection || s.id !== editingSection.id)
+  );
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const parsedClassId = Number(classId);
+    if (!classId || Number.isNaN(parsedClassId) || parsedClassId <= 0) {
+      setValidationError('Please select an active parent class.');
+      return;
+    }
+
+    const trimmedName = name.trim();
+    if (!trimmedName) {
+      setValidationError('Section name is required (e.g., A, B, C).');
+      return;
+    }
+    if (trimmedName.length > 50) {
+      setValidationError('Section name must not exceed 50 characters.');
+      return;
+    }
+
+    const duplicate = existingForSelectedClass.find(
+      (s) => s.name.trim().toLowerCase() === trimmedName.toLowerCase()
+    );
+    if (duplicate) {
+      setValidationError(
+        `Section "${duplicate.name}" already exists under ${
+          selectedParentClass?.name || 'this class'
+        } in ${sessionName}.`
+      );
+      return;
+    }
+
+    let parsedCapacity: number | null = null;
+    if (capacity.trim() !== '') {
+      const num = Number(capacity.trim());
+      if (Number.isNaN(num) || !Number.isInteger(num) || num <= 0) {
+        setValidationError('Capacity must be a positive whole number.');
+        return;
+      }
+      parsedCapacity = num;
+    }
+
+    setValidationError(null);
+    await onSubmit({
+      classId: parsedClassId,
+      name: trimmedName,
+      capacity: parsedCapacity,
+    });
+  };
+
+  return (
+    <Dialog
+      open={open}
+      onClose={onClose}
+      title={editingSection ? 'Edit Class Section' : 'Create Class Section'}
+      description={
+        editingSection
+          ? `Update section "${editingSection.name}" in academic session ${sessionName}.`
+          : `Create a session-specific section for a class in academic session ${sessionName}.`
+      }
+      maxWidthClass="max-w-md"
+      footer={
+        <>
+          <Button variant="outline" onClick={onClose} disabled={isSubmitting}>
+            Cancel
+          </Button>
+          <Button
+            type="submit"
+            form="academic-section-form"
+            variant="primary"
+            disabled={activeClasses.length === 0}
+            isLoading={isSubmitting}
+          >
+            {editingSection ? 'Save Changes' : 'Create Section'}
+          </Button>
+        </>
+      }
+    >
+      <form id="academic-section-form" onSubmit={handleSubmit} className="space-y-4">
+        {(errorMessage || validationError) && (
+          <InlineAlert variant="error" title="Unable to save section">
+            {validationError || errorMessage}
+          </InlineAlert>
+        )}
+
+        {activeClasses.length === 0 ? (
+          <InlineAlert variant="warning" title="No Active Classes Available">
+            Create or activate at least one school class in the Classes tab before creating sections.
+          </InlineAlert>
+        ) : (
+          <>
+            {/* Academic Hierarchy Context Banner */}
+            <div className="rounded-xl border border-indigo-200/80 bg-indigo-50/50 px-3.5 py-2.5 text-xs space-y-1">
+              <div className="text-[11px] font-semibold uppercase tracking-wider text-indigo-700">
+                Academic Hierarchy Placement
+              </div>
+              <div className="flex flex-wrap items-center gap-1.5 text-slate-800 font-medium">
+                <span>{sessionName || 'Academic Session'}</span>
+                <span className="text-slate-400">→</span>
+                <span className="font-semibold text-indigo-950">
+                  {selectedParentClass
+                    ? `${selectedParentClass.name} (${selectedParentClass.code})`
+                    : 'Select Parent Class'}
+                </span>
+                {name.trim() && (
+                  <>
+                    <span className="text-slate-400">→</span>
+                    <span className="rounded bg-indigo-600 px-1.5 py-0.5 text-[11px] font-semibold text-white">
+                      Section {name.trim()}
+                    </span>
+                  </>
+                )}
+              </div>
+              {existingForSelectedClass.length > 0 && (
+                <div className="text-[11px] text-slate-500 pt-0.5">
+                  Existing sections in {selectedParentClass?.name}:{' '}
+                  <span className="font-medium text-slate-700">
+                    {existingForSelectedClass
+                      .map((s) => `Section ${s.name}`)
+                      .join(', ')}
+                  </span>
+                </div>
+              )}
+            </div>
+
+            <FormField
+              label="Parent Class"
+              htmlFor="section-class-select"
+              required
+              hint="Select the parent class under which this section belongs."
+            >
+              <Select
+                id="section-class-select"
+                value={classId}
+                onChange={(e) => setClassId(e.target.value)}
+                required
+              >
+                <option value="">Select a parent class...</option>
+                {activeClasses.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.name} ({c.code})
+                  </option>
+                ))}
+              </Select>
+            </FormField>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+              <FormField
+                label="Section Name"
+                htmlFor="section-name-input"
+                required
+                hint="E.g., A, B, C, Rose, Science-A (max 50 chars)."
+              >
+                <Input
+                  id="section-name-input"
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  placeholder="e.g., A"
+                  maxLength={50}
+                  required
+                />
+              </FormField>
+
+              <FormField
+                label="Student Capacity (Optional)"
+                htmlFor="section-capacity-input"
+                hint="Optional target seating capacity."
+              >
+                <Input
+                  id="section-capacity-input"
+                  type="number"
+                  min={1}
+                  step={1}
+                  value={capacity}
+                  onChange={(e) => setCapacity(e.target.value)}
+                  placeholder="e.g., 40"
+                />
+              </FormField>
+            </div>
+          </>
+        )}
+      </form>
+    </Dialog>
+  );
+};
+
+
 
 
 

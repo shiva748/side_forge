@@ -21,6 +21,10 @@ import lombok.Setter;
 						name = "uk_sections_org_session_class_name",
 						columnNames = {"organization_id", "academic_session_id", "class_id", "name"}
 				),
+				@UniqueConstraint(
+						name = "uk_sections_org_session_class_id",
+						columnNames = {"organization_id", "academic_session_id", "class_id", "id"}
+				),
 				@UniqueConstraint(name = "uk_sections_id_org", columnNames = {"id", "organization_id"})
 		},
 		indexes = {

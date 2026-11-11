@@ -53,6 +53,10 @@ import {
 } from '../types/platformSubscription';
 import { AppShell } from '../components/layout/AppShell';
 import {
+  PaymentReceiptDownloadButtons,
+  RecordManualPaymentDialog,
+} from '../components/platform/ManualPaymentAndReceiptControls';
+import {
   SubscriptionActionDialog,
   SubscriptionActionMode,
   SubscriptionActionTarget,
@@ -98,6 +102,8 @@ export const PlatformSubscriptionsPage: React.FC = () => {
   const canViewSubscriptions = platformPermissions.has('platform.subscription.view');
   const canManageSubscriptions = platformPermissions.has('platform.subscription.manage');
   const canViewBilling = platformPermissions.has('platform.billing.view');
+  const canManageBilling = platformPermissions.has('platform.billing.manage');
+  const canManageEntitlements = platformPermissions.has('platform.entitlement.manage');
 
   const [activeTab, setActiveTab] = useState<ActiveSectionTab>('SUBSCRIPTIONS');
 
@@ -150,6 +156,14 @@ export const PlatformSubscriptionsPage: React.FC = () => {
     useState<SubscriptionActionTarget | null>(null);
   const [isMutatingSub, setIsMutatingSub] = useState(false);
   const [subActionError, setSubActionError] = useState<string | null>(null);
+
+  // Manual Payment Recording Dialog state
+  const [manualPaymentTarget, setManualPaymentTarget] = useState<{
+    organizationId: number;
+    organizationName: string;
+    currentSubscription: FullOrganizationSubscriptionResponse | null;
+    billingSummary: OrganizationBillingSummaryResponse | null;
+  } | null>(null);
 
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -504,6 +518,63 @@ export const PlatformSubscriptionsPage: React.FC = () => {
     [canViewSubscriptions, currentSubByOrgId, detailCurrentSub, detailOrg]
   );
 
+  const handleOpenRecordPayment = useCallback(
+    async (orgId: number, orgName: string) => {
+      const cachedSub =
+        detailOrg?.id === orgId
+          ? detailCurrentSub
+          : currentSubByOrgId[orgId] || null;
+      const cachedBilling =
+        detailOrg?.id === orgId ? detailBilling : null;
+
+      setManualPaymentTarget({
+        organizationId: orgId,
+        organizationName: orgName,
+        currentSubscription: cachedSub,
+        billingSummary: cachedBilling,
+      });
+
+      try {
+        const [fetchedSub, fetchedBilling] = await Promise.all([
+          cachedSub
+            ? Promise.resolve(cachedSub)
+            : canViewSubscriptions
+            ? platformSubscriptionApi.getCurrentSubscription(orgId).catch(() => null)
+            : Promise.resolve(null),
+          cachedBilling
+            ? Promise.resolve(cachedBilling)
+            : canViewBilling
+            ? platformSubscriptionApi
+                .getOrganizationBillingSummary(orgId)
+                .catch(() => null)
+            : Promise.resolve(null),
+        ]);
+        if (fetchedSub) {
+          setCurrentSubByOrgId((prev) => ({ ...prev, [orgId]: fetchedSub }));
+        }
+        setManualPaymentTarget((prev) =>
+          prev && prev.organizationId === orgId
+            ? {
+                ...prev,
+                currentSubscription: fetchedSub,
+                billingSummary: fetchedBilling,
+              }
+            : prev
+        );
+      } catch {
+        // Keep cached values
+      }
+    },
+    [
+      canViewBilling,
+      canViewSubscriptions,
+      currentSubByOrgId,
+      detailBilling,
+      detailCurrentSub,
+      detailOrg,
+    ]
+  );
+
   const subscriptionColumns: DataTableColumn<OrganizationAdminListItemResponse>[] = useMemo(
     () => [
       {
@@ -671,6 +742,17 @@ export const PlatformSubscriptionsPage: React.FC = () => {
             >
               Details
             </Button>
+            {canManageBilling && row.planCode && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => void handleOpenRecordPayment(row.id, row.name)}
+                className="border-emerald-300 text-emerald-800 hover:bg-emerald-50"
+                leftIcon={<Receipt className="w-3.5 h-3.5" />}
+              >
+                Pay
+              </Button>
+            )}
             {canManageSubscriptions && (
               <>
                 {row.subscriptionStatus !== 'ACTIVE' && row.planCode && (
@@ -714,7 +796,13 @@ export const PlatformSubscriptionsPage: React.FC = () => {
         ),
       },
     ],
-    [canManageSubscriptions, currentSubByOrgId, handleOpenSubscriptionDetails]
+    [
+      canManageBilling,
+      canManageSubscriptions,
+      currentSubByOrgId,
+      handleOpenRecordPayment,
+      handleOpenSubscriptionDetails,
+    ]
   );
 
 
@@ -1352,7 +1440,8 @@ export const PlatformSubscriptionsPage: React.FC = () => {
                       <th className="px-4 py-3 font-semibold">Billing Period</th>
                       <th className="px-4 py-3 font-semibold">Method</th>
                       <th className="px-4 py-3 font-semibold">Amount</th>
-                      <th className="px-4 py-3 font-semibold text-right">Status</th>
+                      <th className="px-4 py-3 font-semibold">Status</th>
+                      <th className="px-4 py-3 font-semibold text-right">Receipts</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100">
@@ -1397,10 +1486,17 @@ export const PlatformSubscriptionsPage: React.FC = () => {
                           <td className="px-4 py-3.5 font-semibold text-slate-900 whitespace-nowrap tabular-nums">
                             {formatCurrencyINR(pmt.amountReceived, true)}
                           </td>
-                          <td className="px-4 py-3.5 text-right">
+                          <td className="px-4 py-3.5">
                             <Badge variant={pmtMeta.variant} dot>
                               {pmtMeta.label}
                             </Badge>
+                          </td>
+                          <td className="px-4 py-3.5 text-right whitespace-nowrap">
+                            <PaymentReceiptDownloadButtons
+                              organizationId={pmt.organizationId}
+                              paymentId={pmt.id}
+                              invoiceNumber={pmt.invoiceNumber}
+                            />
                           </td>
                         </tr>
                       );
@@ -1460,7 +1556,7 @@ export const PlatformSubscriptionsPage: React.FC = () => {
 
       {/* Organization Subscription Details Modal */}
       <SubscriptionDetailsModal
-        open={Boolean(detailOrg) && !subActionTarget}
+        open={Boolean(detailOrg) && !subActionTarget && !manualPaymentTarget}
         onClose={() => setDetailOrg(null)}
         organizationId={detailOrg?.id ?? null}
         organizationName={detailOrg?.name || ''}
@@ -1470,9 +1566,45 @@ export const PlatformSubscriptionsPage: React.FC = () => {
         isLoading={isLoadingDetail}
         errorMessage={detailError}
         canManageSubscriptions={canManageSubscriptions}
+        canManageBilling={canManageBilling}
+        canManageEntitlements={canManageEntitlements}
+        onOpenRecordPayment={() => {
+          if (!detailOrg) return;
+          void handleOpenRecordPayment(detailOrg.id, detailOrg.name);
+        }}
+        onCapacityOverrideUpdated={() => {
+          if (!detailOrg) return;
+          void refreshAfterMutation(detailOrg.id, detailOrg.name);
+        }}
         onTriggerAction={(mode, options) => {
           if (!detailOrg) return;
           triggerSubActionForOrg(detailOrg.id, detailOrg.name, mode, options);
+        }}
+      />
+
+      {/* Record Manual Payment Dialog */}
+      <RecordManualPaymentDialog
+        open={Boolean(manualPaymentTarget)}
+        onClose={() => setManualPaymentTarget(null)}
+        organizationId={manualPaymentTarget?.organizationId ?? null}
+        organizationName={manualPaymentTarget?.organizationName || ''}
+        currentSubscription={manualPaymentTarget?.currentSubscription || null}
+        billingSummary={manualPaymentTarget?.billingSummary || null}
+        onPaymentRecorded={(payment, updatedSub, updatedBilling) => {
+          if (updatedSub) {
+            setCurrentSubByOrgId((prev) => ({
+              ...prev,
+              [payment.organizationId]: updatedSub,
+            }));
+          }
+          if (detailOrg?.id === payment.organizationId) {
+            if (updatedSub) setDetailCurrentSub(updatedSub);
+            if (updatedBilling) setDetailBilling(updatedBilling);
+          }
+          void refreshAfterMutation(
+            payment.organizationId,
+            payment.organizationName
+          );
         }}
       />
 

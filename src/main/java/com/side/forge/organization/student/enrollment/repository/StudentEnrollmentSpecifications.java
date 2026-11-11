@@ -21,6 +21,16 @@ public final class StudentEnrollmentSpecifications {
 			Long classId,
 			Long studentId,
 			EnrollmentStatus status) {
+		return withFilters(organizationId, academicSessionId, classId, null, studentId, status);
+	}
+
+	public static Specification<StudentEnrollment> withFilters(
+			Long organizationId,
+			Long academicSessionId,
+			Long classId,
+			Long sectionId,
+			Long studentId,
+			EnrollmentStatus status) {
 
 		return (root, query, cb) -> {
 			List<Predicate> predicates = new ArrayList<>();
@@ -31,6 +41,9 @@ public final class StudentEnrollmentSpecifications {
 			}
 			if (classId != null) {
 				predicates.add(cb.equal(root.get("classId"), classId));
+			}
+			if (sectionId != null) {
+				predicates.add(cb.equal(root.get("sectionId"), sectionId));
 			}
 			if (studentId != null) {
 				predicates.add(cb.equal(root.get("studentId"), studentId));

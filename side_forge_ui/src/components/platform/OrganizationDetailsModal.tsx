@@ -9,12 +9,15 @@ import {
   Globe,
   HardDrive,
   History,
+  Layers,
   Mail,
   MapPin,
   PauseCircle,
   Phone,
   PowerOff,
   ShieldCheck,
+  Sliders,
+  UserPlus,
   Users,
 } from 'lucide-react';
 import { BOARD_AFFILIATION_LABELS } from '../../types/onboarding';
@@ -26,10 +29,21 @@ import {
   OrganizationAdminDetailResponse,
 } from '../../types/platformDashboard';
 import { formatOnboardingDate } from './OnboardingRequestDetailsModal';
+import {
+  OrganizationEntitlementsPanel,
+  OrganizationInvitationsPanel,
+  OrganizationStudentCapacityPanel,
+} from './OrganizationGovernancePanels';
 import { Badge, CounterLabel, IdLabel } from '../ui/Badge';
 import { Button } from '../ui/Button';
 import { Dialog } from '../ui/Dialog';
 import { InlineAlert, LoadingState } from '../ui/StateViews';
+
+export type OrganizationDetailsTab =
+  | 'OVERVIEW'
+  | 'INVITATIONS'
+  | 'ENTITLEMENTS'
+  | 'CAPACITY';
 
 export interface OrganizationDetailsModalProps {
   open: boolean;
@@ -40,6 +54,9 @@ export interface OrganizationDetailsModalProps {
   isLoading?: boolean;
   errorMessage?: string | null;
   canManageOrganization: boolean;
+  canManageEntitlements?: boolean;
+  initialTab?: OrganizationDetailsTab;
+  onOrganizationUpdated?: () => void;
   onTriggerStatusAction: (
     organization: OrganizationAdminDetailResponse,
     nextStatus: ManageableOrganizationStatus
@@ -54,8 +71,20 @@ export const OrganizationDetailsModal: React.FC<OrganizationDetailsModalProps> =
   isLoading = false,
   errorMessage = null,
   canManageOrganization,
+  canManageEntitlements = false,
+  initialTab = 'OVERVIEW',
+  onOrganizationUpdated,
   onTriggerStatusAction,
 }) => {
+  const [activeTab, setActiveTab] =
+    React.useState<OrganizationDetailsTab>(initialTab);
+
+  React.useEffect(() => {
+    if (open) {
+      setActiveTab(initialTab);
+    }
+  }, [initialTab, open, organization?.id]);
+
   if (!open) return null;
 
   const orgStatusMeta = organization
@@ -201,6 +230,99 @@ export const OrganizationDetailsModal: React.FC<OrganizationDetailsModalProps> =
             </InlineAlert>
           )}
 
+          {/* Navigation Tabs */}
+          <div className="flex flex-wrap items-center gap-1.5 rounded-xl border border-slate-200/80 bg-slate-100/70 p-1">
+            <button
+              type="button"
+              onClick={() => setActiveTab('OVERVIEW')}
+              className={`inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold transition-colors cursor-pointer ${
+                activeTab === 'OVERVIEW'
+                  ? 'bg-white text-indigo-700 shadow-2xs'
+                  : 'text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              <Building2 className="w-3.5 h-3.5" />
+              <span>Overview &amp; History</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setActiveTab('INVITATIONS')}
+              className={`inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold transition-colors cursor-pointer ${
+                activeTab === 'INVITATIONS'
+                  ? 'bg-white text-indigo-700 shadow-2xs'
+                  : 'text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              <UserPlus className="w-3.5 h-3.5" />
+              <span>School Admin Invitations</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setActiveTab('ENTITLEMENTS')}
+              className={`inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold transition-colors cursor-pointer ${
+                activeTab === 'ENTITLEMENTS'
+                  ? 'bg-white text-indigo-700 shadow-2xs'
+                  : 'text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              <Layers className="w-3.5 h-3.5" />
+              <span>Feature Entitlements</span>
+              {organization.entitlements && (
+                <CounterLabel
+                  count={(organization.entitlements.enabledFeatures || []).length}
+                />
+              )}
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setActiveTab('CAPACITY')}
+              className={`inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold transition-colors cursor-pointer ${
+                activeTab === 'CAPACITY'
+                  ? 'bg-white text-indigo-700 shadow-2xs'
+                  : 'text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              <Sliders className="w-3.5 h-3.5" />
+              <span>Student Capacity</span>
+              {organization.usage?.overrideStudentLimit != null && (
+                <Badge variant="warning">Override</Badge>
+              )}
+            </button>
+          </div>
+
+          {activeTab === 'INVITATIONS' && (
+            <OrganizationInvitationsPanel
+              organization={organization}
+              applicantContactName={applicantContactName}
+              canManageOrganization={canManageOrganization}
+              onOrganizationUpdated={onOrganizationUpdated}
+            />
+          )}
+
+          {activeTab === 'ENTITLEMENTS' && (
+            <OrganizationEntitlementsPanel
+              organization={organization}
+              canManageEntitlements={canManageEntitlements}
+              onOrganizationUpdated={onOrganizationUpdated}
+            />
+          )}
+
+          {activeTab === 'CAPACITY' && (
+            <OrganizationStudentCapacityPanel
+              organizationId={organization.id}
+              organizationName={organization.name}
+              initialUsage={organization.usage}
+              hasActiveSubscription={Boolean(sub)}
+              canManageEntitlements={canManageEntitlements}
+              onUpdated={() => onOrganizationUpdated?.()}
+            />
+          )}
+
+          {activeTab === 'OVERVIEW' && (
+            <>
           {/* Grid: Basic Organization Info & Contact / Address */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {/* 1. Basic Organization Information */}
@@ -410,6 +532,36 @@ export const OrganizationDetailsModal: React.FC<OrganizationDetailsModalProps> =
                 )}
               </div>
             )}
+
+            <div className="pt-2.5 border-t border-slate-100 flex flex-wrap items-center gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => setActiveTab('INVITATIONS')}
+                leftIcon={<UserPlus className="w-3.5 h-3.5" />}
+              >
+                School Admin Invitations
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => setActiveTab('ENTITLEMENTS')}
+                leftIcon={<Layers className="w-3.5 h-3.5" />}
+              >
+                Feature Entitlements
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => setActiveTab('CAPACITY')}
+                leftIcon={<Sliders className="w-3.5 h-3.5" />}
+              >
+                Student Capacity Override
+              </Button>
+            </div>
           </div>
 
 
@@ -474,6 +626,8 @@ export const OrganizationDetailsModal: React.FC<OrganizationDetailsModalProps> =
               </div>
             )}
           </div>
+            </>
+          )}
         </div>
       )}
     </Dialog>

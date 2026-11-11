@@ -67,13 +67,14 @@ public class StudentController {
 			@RequestParam(required = false) Gender gender,
 			@RequestParam(required = false) @Positive Long academicSessionId,
 			@RequestParam(required = false) @Positive Long classId,
+			@RequestParam(required = false) @Positive Long sectionId,
 			@RequestParam(defaultValue = "0") int page,
 			@RequestParam(defaultValue = "20") int size,
 			@RequestParam(defaultValue = "firstName") String sortBy,
 			@RequestParam(defaultValue = "asc") String sortDir) {
 		PagedResponse<StudentResponse> students = studentService.getStudents(
 				organizationId, search, admissionNumber, status, gender,
-				academicSessionId, classId, page, size, sortBy, sortDir);
+				academicSessionId, classId, sectionId, page, size, sortBy, sortDir);
 		return ResponseEntity.ok(new ApiResponse<>(true, "Students retrieved successfully", students));
 	}
 

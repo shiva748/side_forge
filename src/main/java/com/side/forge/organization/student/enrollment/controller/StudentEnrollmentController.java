@@ -63,6 +63,7 @@ public class StudentEnrollmentController {
 			@PathVariable @Positive Long organizationId,
 			@RequestParam(required = false) @Positive Long academicSessionId,
 			@RequestParam(required = false) @Positive Long classId,
+			@RequestParam(required = false) @Positive Long sectionId,
 			@RequestParam(required = false) @Positive Long studentId,
 			@RequestParam(required = false) EnrollmentStatus status,
 			@RequestParam(defaultValue = "0") int page,
@@ -70,7 +71,7 @@ public class StudentEnrollmentController {
 			@RequestParam(defaultValue = "enrollmentDate") String sortBy,
 			@RequestParam(defaultValue = "desc") String sortDir) {
 		PagedResponse<StudentEnrollmentResponse> enrollments = enrollmentService.getEnrollments(
-				organizationId, academicSessionId, classId, studentId, status, page, size, sortBy, sortDir);
+				organizationId, academicSessionId, classId, sectionId, studentId, status, page, size, sortBy, sortDir);
 		return ResponseEntity.ok(new ApiResponse<>(true, "Enrollments retrieved successfully", enrollments));
 	}
 
@@ -121,13 +122,14 @@ public class StudentEnrollmentController {
 			@PathVariable @Positive Long organizationId,
 			@PathVariable @Positive Long sessionId,
 			@RequestParam(required = false) @Positive Long classId,
+			@RequestParam(required = false) @Positive Long sectionId,
 			@RequestParam(required = false) EnrollmentStatus status,
 			@RequestParam(defaultValue = "0") int page,
 			@RequestParam(defaultValue = "20") int size,
 			@RequestParam(defaultValue = "enrollmentDate") String sortBy,
 			@RequestParam(defaultValue = "asc") String sortDir) {
 		PagedResponse<StudentEnrollmentResponse> enrollments = enrollmentService.getEnrollments(
-				organizationId, sessionId, classId, null, status, page, size, sortBy, sortDir);
+				organizationId, sessionId, classId, sectionId, null, status, page, size, sortBy, sortDir);
 		return ResponseEntity.ok(new ApiResponse<>(true, "Session enrollments retrieved successfully", enrollments));
 	}
 
@@ -137,6 +139,7 @@ public class StudentEnrollmentController {
 			@PathVariable @Positive Long organizationId,
 			@PathVariable @Positive Long sessionId,
 			@PathVariable @Positive Long classId,
+			@RequestParam(required = false) @Positive Long sectionId,
 			@RequestParam(required = false) String search,
 			@RequestParam(required = false) StudentStatus status,
 			@RequestParam(required = false) Gender gender,
@@ -145,7 +148,7 @@ public class StudentEnrollmentController {
 			@RequestParam(defaultValue = "firstName") String sortBy,
 			@RequestParam(defaultValue = "asc") String sortDir) {
 		PagedResponse<StudentResponse> directory = studentService.getStudents(
-				organizationId, search, null, status, gender, sessionId, classId, page, size, sortBy, sortDir);
+				organizationId, search, null, status, gender, sessionId, classId, sectionId, page, size, sortBy, sortDir);
 		return ResponseEntity.ok(new ApiResponse<>(true, "Class student directory retrieved successfully", directory));
 	}
 }

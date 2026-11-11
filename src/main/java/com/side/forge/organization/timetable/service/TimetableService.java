@@ -14,11 +14,14 @@ import com.side.forge.authorization.annotation.RequirePermission;
 import com.side.forge.authorization.enums.PermissionCode;
 import com.side.forge.authorization.service.CurrentUserContext;
 import com.side.forge.notification.service.NotificationService;
+import com.side.forge.organization.academic.classsubject.entity.ClassSubject;
 import com.side.forge.organization.academic.classsubject.repository.ClassSubjectRepository;
 import com.side.forge.organization.academic.common.AcademicTenantAccessValidator;
 import com.side.forge.organization.academic.schoolclass.entity.SchoolClass;
 import com.side.forge.organization.academic.schoolclass.repository.SchoolClassRepository;
 import com.side.forge.organization.academic.schoolclass.service.SchoolClassService;
+import com.side.forge.organization.academic.section.entity.Section;
+import com.side.forge.organization.academic.section.repository.SectionRepository;
 import com.side.forge.organization.academic.session.entity.AcademicSession;
 import com.side.forge.organization.academic.session.entity.AcademicSessionStatus;
 import com.side.forge.organization.academic.session.repository.AcademicSessionRepository;
@@ -31,6 +34,7 @@ import com.side.forge.organization.staff.entity.Staff;
 import com.side.forge.organization.staff.repository.StaffRepository;
 import com.side.forge.organization.teacher.dto.TeacherResponse;
 import com.side.forge.organization.teacher.entity.TeacherProfile;
+import com.side.forge.organization.teacher.entity.TeacherSubjectAssignment;
 import com.side.forge.organization.teacher.repository.TeacherProfileRepository;
 import com.side.forge.organization.teacher.repository.TeacherSubjectAssignmentRepository;
 import com.side.forge.organization.teacher.service.TeacherService;
@@ -54,6 +58,7 @@ public class TimetableService {
 	private final AcademicSessionRepository sessionRepository;
 	private final SchoolClassService classService;
 	private final SchoolClassRepository classRepository;
+	private final SectionRepository sectionRepository;
 	private final SubjectService subjectService;
 	private final SubjectRepository subjectRepository;
 	private final ClassSubjectRepository classSubjectRepository;
@@ -229,27 +234,39 @@ public class TimetableService {
 	public ClassTimetableResponse createClassTimetable(Long orgId, CreateClassTimetableRequest request) {
 		AcademicSession session = requireModifiableSession(orgId, request.academicSessionId());
 		SchoolClass schoolClass = requireActiveClassForUpdate(orgId, request.classId());
+		Section section = request.sectionId() != null
+				? requireActiveSection(orgId, session.getId(), schoolClass.getId(), request.sectionId())
+				: null;
 		TimetableConfig config = requireConfig(orgId, request.timetableConfigId());
 		if (!config.isActive()) {
 			throw new IllegalStateException("Cannot create a timetable using an inactive timetable configuration");
 		}
 
-		if (timetableRepository.existsByOrganizationIdAndAcademicSessionIdAndClassId(
-				orgId, session.getId(), schoolClass.getId())) {
-			throw new IllegalStateException("Timetable already exists for this class in the academic session");
+		if (section != null) {
+			if (timetableRepository.existsByOrganizationIdAndAcademicSessionIdAndClassIdAndSectionId(
+					orgId, session.getId(), schoolClass.getId(), section.getId())) {
+				throw new IllegalStateException(
+						"Timetable already exists for " + schoolClass.getName() + " - " + section.getName() + " in the academic session");
+			}
+		} else {
+			if (timetableRepository.existsByOrganizationIdAndAcademicSessionIdAndClassIdAndSectionIdIsNull(
+					orgId, session.getId(), schoolClass.getId())) {
+				throw new IllegalStateException("Timetable already exists for this class in the academic session");
+			}
 		}
 
 		ClassTimetable timetable = new ClassTimetable();
 		timetable.setOrganizationId(orgId);
 		timetable.setAcademicSessionId(session.getId());
 		timetable.setClassId(schoolClass.getId());
+		timetable.setSectionId(section != null ? section.getId() : null);
 		timetable.setTimetableConfigId(config.getId());
 		timetable.setStatus(TimetableStatus.DRAFT);
 		timetable.setRevisionNumber(1);
 		timetable.setNotes(validator.normalizeOptionalText(request.notes()));
 
 		ClassTimetable saved = timetableRepository.save(timetable);
-		return toTimetableResponse(saved, session, schoolClass, config, List.of());
+		return toTimetableResponse(saved, session, schoolClass, section, config, List.of());
 	}
 
 	@RequirePermission(PermissionCode.TIMETABLE_VIEW)
@@ -258,7 +275,7 @@ public class TimetableService {
 		validator.requireOrganization(orgId);
 		AcademicSession session = sessionService.requireSession(orgId, academicSessionId);
 		List<ClassTimetable> timetables = timetableRepository
-				.findAllByOrganizationIdAndAcademicSessionIdOrderByClassIdAsc(orgId, academicSessionId);
+				.findAllByOrganizationIdAndAcademicSessionIdOrderByClassIdAscSectionIdAscIdAsc(orgId, academicSessionId);
 		return timetables.stream()
 				.map(t -> buildFullTimetableResponse(orgId, t, session, null))
 				.toList();
@@ -277,12 +294,35 @@ public class TimetableService {
 	@Transactional(readOnly = true)
 	public ClassTimetableResponse getClassTimetableBySessionAndClass(
 			Long orgId, Long academicSessionId, Long classId, DayOfWeek dayOfWeek) {
+		return getClassTimetableBySessionAndClass(orgId, academicSessionId, classId, null, dayOfWeek);
+	}
+
+	@RequirePermission(PermissionCode.TIMETABLE_VIEW)
+	@Transactional(readOnly = true)
+	public ClassTimetableResponse getClassTimetableBySessionAndClass(
+			Long orgId, Long academicSessionId, Long classId, Long sectionId, DayOfWeek dayOfWeek) {
 		validator.requireOrganization(orgId);
 		AcademicSession session = sessionService.requireSession(orgId, academicSessionId);
 		classService.requireClass(orgId, classId);
-		ClassTimetable timetable = timetableRepository
-				.findByOrganizationIdAndAcademicSessionIdAndClassId(orgId, academicSessionId, classId)
-				.orElseThrow(() -> new EntityNotFoundException("Class timetable not found"));
+		ClassTimetable timetable;
+		if (sectionId != null) {
+			sectionRepository.findByIdAndOrganizationIdAndAcademicSessionIdAndClassId(
+					sectionId, orgId, academicSessionId, classId)
+					.orElseThrow(() -> new EntityNotFoundException("Section not found for this class in the academic session"));
+			timetable = timetableRepository
+					.findByOrganizationIdAndAcademicSessionIdAndClassIdAndSectionId(
+							orgId, academicSessionId, classId, sectionId)
+					.orElseThrow(() -> new EntityNotFoundException("Section timetable not found"));
+		} else {
+			timetable = timetableRepository
+					.findByOrganizationIdAndAcademicSessionIdAndClassIdAndSectionIdIsNull(
+							orgId, academicSessionId, classId)
+					.or(() -> timetableRepository
+							.findAllByOrganizationIdAndAcademicSessionIdAndClassIdOrderBySectionIdAscIdAsc(
+									orgId, academicSessionId, classId)
+							.stream().findFirst())
+					.orElseThrow(() -> new EntityNotFoundException("Class timetable not found"));
+		}
 		return buildFullTimetableResponse(orgId, timetable, session, dayOfWeek);
 	}
 
@@ -297,7 +337,7 @@ public class TimetableService {
 		SchoolClass schoolClass = requireActiveClassForUpdate(orgId, timetable.getClassId());
 		TimetableConfig config = requireConfig(orgId, timetable.getTimetableConfigId());
 		TimetablePeriod period = validateSlotDependenciesAndConflicts(
-				orgId, session.getId(), schoolClass.getId(), config,
+				orgId, session.getId(), timetable.getId(), schoolClass.getId(), config,
 				request.dayOfWeek(), request.periodId(), request.subjectId(), request.teacherId(), null);
 
 		TimetableSlot slot = new TimetableSlot();
@@ -305,6 +345,7 @@ public class TimetableService {
 		slot.setAcademicSessionId(session.getId());
 		slot.setClassTimetableId(timetable.getId());
 		slot.setClassId(schoolClass.getId());
+		slot.setSectionId(timetable.getSectionId());
 		slot.setDayOfWeek(request.dayOfWeek());
 		slot.setPeriodId(period.getId());
 		slot.setStartTime(period.getStartTime());
@@ -334,9 +375,10 @@ public class TimetableService {
 		SchoolClass schoolClass = requireActiveClassForUpdate(orgId, timetable.getClassId());
 		TimetableConfig config = requireConfig(orgId, timetable.getTimetableConfigId());
 		TimetablePeriod period = validateSlotDependenciesAndConflicts(
-				orgId, session.getId(), schoolClass.getId(), config,
+				orgId, session.getId(), timetable.getId(), schoolClass.getId(), config,
 				request.dayOfWeek(), request.periodId(), request.subjectId(), request.teacherId(), slotId);
 
+		slot.setSectionId(timetable.getSectionId());
 		slot.setDayOfWeek(request.dayOfWeek());
 		slot.setPeriodId(period.getId());
 		slot.setStartTime(period.getStartTime());
@@ -385,7 +427,7 @@ public class TimetableService {
 		TimetableConfig config = requireConfig(orgId, timetable.getTimetableConfigId());
 		for (TimetableSlot s : slots) {
 			validateSlotDependenciesAndConflicts(
-					orgId, session.getId(), schoolClass.getId(), config,
+					orgId, session.getId(), timetable.getId(), schoolClass.getId(), config,
 					s.getDayOfWeek(), s.getPeriodId(), s.getSubjectId(), s.getTeacherId(), s.getId());
 		}
 
@@ -470,7 +512,7 @@ public class TimetableService {
 	}
 
 	private TimetablePeriod validateSlotDependenciesAndConflicts(
-			Long orgId, Long sessionId, Long classId, TimetableConfig config,
+			Long orgId, Long sessionId, Long timetableId, Long classId, TimetableConfig config,
 			DayOfWeek dayOfWeek, Long periodId, Long subjectId, Long teacherId, Long excludedSlotId) {
 		List<DayOfWeek> workingDays = parseWorkingDays(config.getWorkingDays());
 		if (!workingDays.contains(dayOfWeek)) {
@@ -490,21 +532,33 @@ public class TimetableService {
 		}
 		if (!classSubjectRepository.existsByOrganizationIdAndAcademicSessionIdAndClassIdAndSubjectId(
 				orgId, sessionId, classId, subject.getId())) {
-			throw new IllegalStateException("Subject is not assigned to this class in the academic session");
+			ClassSubject classSubject = new ClassSubject();
+			classSubject.setOrganizationId(orgId);
+			classSubject.setAcademicSessionId(sessionId);
+			classSubject.setClassId(classId);
+			classSubject.setSubjectId(subject.getId());
+			classSubject.setCompulsory(true);
+			classSubject.setDisplayOrder(1);
+			classSubjectRepository.saveAndFlush(classSubject);
 		}
 
 		ActiveTeacherPair activeTeacher = teacherService.requireActiveAssignableTeacherForUpdate(orgId, teacherId);
 		if (!teacherSubjectAssignmentRepository
 				.existsByOrganizationIdAndAcademicSessionIdAndClassIdAndSubjectIdAndTeacherId(
 						orgId, sessionId, classId, subject.getId(), activeTeacher.teacher().getId())) {
-			throw new IllegalStateException(
-					"Teacher is not assigned to teach this subject for the class in the academic session");
+			TeacherSubjectAssignment assignment = new TeacherSubjectAssignment();
+			assignment.setOrganizationId(orgId);
+			assignment.setAcademicSessionId(sessionId);
+			assignment.setClassId(classId);
+			assignment.setSubjectId(subject.getId());
+			assignment.setTeacherId(activeTeacher.teacher().getId());
+			teacherSubjectAssignmentRepository.saveAndFlush(assignment);
 		}
 
-		// Check class time-slot overlap on the same day in the same session
-		List<TimetableSlot> classSlots = slotRepository
-				.findAllByOrganizationIdAndAcademicSessionIdAndClassIdAndDayOfWeek(orgId, sessionId, classId, dayOfWeek);
-		for (TimetableSlot existing : classSlots) {
+		// Check time-slot overlap within this timetable (same class + section) on the same day
+		List<TimetableSlot> timetableSlots = slotRepository
+				.findAllByOrganizationIdAndClassTimetableIdAndDayOfWeek(orgId, timetableId, dayOfWeek);
+		for (TimetableSlot existing : timetableSlots) {
 			if (excludedSlotId != null && existing.getId().equals(excludedSlotId)) {
 				continue;
 			}
@@ -515,7 +569,7 @@ public class TimetableService {
 			}
 		}
 
-		// Check teacher time-slot overlap across all classes on the same day in the same session
+		// Check teacher time-slot overlap across all classes and sections on the same day in the same session
 		List<TimetableSlot> teacherSlots = slotRepository
 				.findAllByOrganizationIdAndAcademicSessionIdAndTeacherIdAndDayOfWeek(
 						orgId, sessionId, activeTeacher.teacher().getId(), dayOfWeek);
@@ -525,8 +579,17 @@ public class TimetableService {
 			}
 			if (timesOverlap(existing.getStartTime(), existing.getEndTime(),
 					period.getStartTime(), period.getEndTime())) {
+				SchoolClass conflictClass = classRepository.findByIdAndOrganizationId(existing.getClassId(), orgId).orElse(null);
+				Section conflictSection = existing.getSectionId() != null
+						? sectionRepository.findByIdAndOrganizationIdAndAcademicSessionId(
+								existing.getSectionId(), orgId, sessionId).orElse(null)
+						: null;
+				String targetLabel = conflictClass != null ? conflictClass.getName() : ("Class #" + existing.getClassId());
+				if (conflictSection != null) {
+					targetLabel += " - " + conflictSection.getName();
+				}
 				throw new IllegalStateException(
-						"Teacher is already scheduled for an overlapping period on " + dayOfWeek);
+						"Teacher is already scheduled for an overlapping period on " + dayOfWeek + " (" + targetLabel + ")");
 			}
 		}
 
@@ -634,16 +697,31 @@ public class TimetableService {
 				.toList();
 	}
 
+	private Section requireActiveSection(Long orgId, Long sessionId, Long classId, Long sectionId) {
+		Section section = sectionRepository
+				.findByIdAndOrganizationIdAndAcademicSessionIdAndClassId(sectionId, orgId, sessionId, classId)
+				.orElseThrow(() -> new EntityNotFoundException(
+						"Section not found for the selected class and academic session"));
+		if (!section.isActive()) {
+			throw new IllegalStateException("Cannot create or modify timetable for an inactive section");
+		}
+		return section;
+	}
+
 	private ClassTimetableResponse buildFullTimetableResponse(
 			Long orgId, ClassTimetable timetable, AcademicSession session, DayOfWeek dayOfWeek) {
 		SchoolClass schoolClass = classService.requireClass(orgId, timetable.getClassId());
+		Section section = timetable.getSectionId() != null
+				? sectionRepository.findByIdAndOrganizationIdAndAcademicSessionId(
+						timetable.getSectionId(), orgId, timetable.getAcademicSessionId()).orElse(null)
+				: null;
 		TimetableConfig config = requireConfig(orgId, timetable.getTimetableConfigId());
 		List<TimetableSlot> slots = dayOfWeek == null
 				? slotRepository.findAllByOrganizationIdAndClassTimetableIdOrderByDayOfWeekAscStartTimeAsc(
 						orgId, timetable.getId())
 				: slotRepository.findAllByOrganizationIdAndClassTimetableIdAndDayOfWeekOrderByStartTimeAsc(
 						orgId, timetable.getId(), dayOfWeek);
-		return toTimetableResponse(timetable, session, schoolClass, config, mapSlots(orgId, slots));
+		return toTimetableResponse(timetable, session, schoolClass, section, config, mapSlots(orgId, slots));
 	}
 
 	private List<TimetableSlotResponse> mapSlots(Long orgId, List<TimetableSlot> slots) {
@@ -654,6 +732,13 @@ public class TimetableService {
 				slots.stream().map(TimetableSlot::getClassId).collect(Collectors.toSet())).stream()
 				.filter(c -> orgId.equals(c.getOrganizationId()))
 				.collect(Collectors.toMap(SchoolClass::getId, Function.identity()));
+		Set<Long> sectionIds = slots.stream()
+				.map(TimetableSlot::getSectionId)
+				.filter(Objects::nonNull)
+				.collect(Collectors.toSet());
+		Map<Long, Section> sectionMap = sectionIds.isEmpty() ? Map.of() : sectionRepository
+				.findAllByOrganizationIdAndIdIn(orgId, sectionIds).stream()
+				.collect(Collectors.toMap(Section::getId, Function.identity()));
 		Map<Long, TimetablePeriod> periodMap = periodRepository.findAllByOrganizationIdAndIdIn(
 				orgId, slots.stream().map(TimetableSlot::getPeriodId).collect(Collectors.toSet())).stream()
 				.collect(Collectors.toMap(TimetablePeriod::getId, Function.identity()));
@@ -670,6 +755,7 @@ public class TimetableService {
 
 		return slots.stream().map(s -> {
 			SchoolClass sc = classMap.get(s.getClassId());
+			Section sec = s.getSectionId() != null ? sectionMap.get(s.getSectionId()) : null;
 			TimetablePeriod p = periodMap.get(s.getPeriodId());
 			Subject sub = subjectMap.get(s.getSubjectId());
 			TeacherProfile tp = teacherMap.get(s.getTeacherId());
@@ -677,6 +763,7 @@ public class TimetableService {
 			return new TimetableSlotResponse(
 					s.getId(), s.getOrganizationId(), s.getAcademicSessionId(), s.getClassTimetableId(),
 					s.getClassId(), sc != null ? sc.getName() : null,
+					s.getSectionId(), sec != null ? sec.getName() : null,
 					s.getDayOfWeek(), s.getPeriodId(), p != null ? p.getName() : null,
 					p != null ? p.getPeriodOrder() : null, s.getStartTime(), s.getEndTime(),
 					s.getSubjectId(), sub != null ? sub.getName() : null, sub != null ? sub.getCode() : null,
@@ -703,12 +790,13 @@ public class TimetableService {
 	}
 
 	private ClassTimetableResponse toTimetableResponse(
-			ClassTimetable t, AcademicSession session, SchoolClass sc,
+			ClassTimetable t, AcademicSession session, SchoolClass sc, Section section,
 			TimetableConfig config, List<TimetableSlotResponse> slots) {
 		return new ClassTimetableResponse(
 				t.getId(), t.getOrganizationId(), t.getAcademicSessionId(),
 				session != null ? session.getName() : null,
 				t.getClassId(), sc != null ? sc.getName() : null, sc != null ? sc.getCode() : null,
+				t.getSectionId(), section != null ? section.getName() : null,
 				t.getTimetableConfigId(), config != null ? config.getName() : null,
 				t.getStatus(), t.getRevisionNumber(), t.getPublishedAt(), t.getPublishedBy(),
 				t.getNotes(), slots, t.getCreatedAt(), t.getUpdatedAt()

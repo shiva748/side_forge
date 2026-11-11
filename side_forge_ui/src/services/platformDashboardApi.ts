@@ -1,14 +1,30 @@
 import { apiClient } from '../lib/api-client';
-import { SubscriptionStatus } from '../types/auth';
+import {
+  OrganizationEntitlementsResponse,
+  PlatformAdminUserResponse,
+  PlatformFeature,
+  SubscriptionStatus,
+} from '../types/auth';
 import { PagedResponse } from '../types/onboarding';
 import {
+  AssignPlatformAdminRoleRequest,
+  AuthorizationAuditLogResponse,
   ChangeOrganizationStatusRequest,
   OrganizationAdminDetailResponse,
   OrganizationAdminListItemResponse,
   OrganizationStatus,
+  OrganizationUsageResponse,
+  PlatformAuditAction,
   PlatformAuditLogItem,
   PlatformDashboardResponse,
+  UpdateFeatureEntitlementOverrideRequest,
+  UpdateStudentLimitOverrideRequest,
 } from '../types/platformDashboard';
+import {
+  CreateInvitationRequest,
+  InvitationDispatchResponse,
+  InvitationResponse,
+} from '../types/staffManagement';
 
 export interface ListPlatformOrganizationsParams {
   status?: OrganizationStatus | '';
@@ -20,8 +36,18 @@ export interface ListPlatformOrganizationsParams {
 }
 
 export interface ListPlatformAuditLogsParams {
+  action?: PlatformAuditAction | '';
   resourceType?: string;
   targetOrganizationId?: number;
+  actorUserId?: number;
+  page?: number;
+  size?: number;
+}
+
+export interface ListAuthorizationAuditLogsParams {
+  organizationId?: number;
+  actorUserId?: number;
+  action?: string;
   page?: number;
   size?: number;
 }
@@ -94,21 +120,184 @@ export const platformDashboardApi = {
     );
   },
 
-  /**
-   * Fetches recent platform audit log entries.
-   * Target: `GET /api/platform/audit-logs`
-   * Permission: `platform.audit.view` (`PermissionCode.PLATFORM_AUDIT_VIEW`)
-   */
+  // =========================================================================
+  // Platform-Level School Administrator Invitations (`platform.organization.manage`)
+  // =========================================================================
+
+  listOrganizationInvitations: async (
+    organizationId: number
+  ): Promise<InvitationResponse[]> => {
+    return apiClient.get<InvitationResponse[]>(
+      `/api/platform/organizations/${organizationId}/invitations`
+    );
+  },
+
+  createSchoolAdminInvitation: async (
+    organizationId: number,
+    payload: CreateInvitationRequest
+  ): Promise<InvitationDispatchResponse> => {
+    return apiClient.post<InvitationDispatchResponse>(
+      `/api/platform/organizations/${organizationId}/invitations`,
+      {
+        ...payload,
+        email: payload.email.trim(),
+        roleCode: 'SCHOOL_ADMIN',
+        targetType: 'SCHOOL_ADMIN',
+      }
+    );
+  },
+
+  resendOrganizationInvitation: async (
+    organizationId: number,
+    invitationId: number
+  ): Promise<InvitationDispatchResponse> => {
+    return apiClient.post<InvitationDispatchResponse>(
+      `/api/platform/organizations/${organizationId}/invitations/${invitationId}/resend`
+    );
+  },
+
+  revokeOrganizationInvitation: async (
+    organizationId: number,
+    invitationId: number
+  ): Promise<InvitationResponse> => {
+    return apiClient.post<InvitationResponse>(
+      `/api/platform/organizations/${organizationId}/invitations/${invitationId}/revoke`
+    );
+  },
+
+  // =========================================================================
+  // Per-Organization Feature Entitlement Overrides (`platform.entitlement.manage`)
+  // =========================================================================
+
+  getOrganizationEntitlements: async (
+    organizationId: number
+  ): Promise<OrganizationEntitlementsResponse> => {
+    return apiClient.get<OrganizationEntitlementsResponse>(
+      `/api/platform/organizations/${organizationId}/entitlements`
+    );
+  },
+
+  setFeatureEntitlementOverride: async (
+    organizationId: number,
+    feature: PlatformFeature,
+    payload: UpdateFeatureEntitlementOverrideRequest
+  ): Promise<OrganizationEntitlementsResponse> => {
+    return apiClient.put<OrganizationEntitlementsResponse>(
+      `/api/platform/organizations/${organizationId}/entitlements/${feature}`,
+      {
+        enabled: payload.enabled,
+        reason: payload.reason.trim(),
+        expiresAt: payload.expiresAt || null,
+      }
+    );
+  },
+
+  removeFeatureEntitlementOverride: async (
+    organizationId: number,
+    feature: PlatformFeature
+  ): Promise<OrganizationEntitlementsResponse> => {
+    return apiClient.delete<OrganizationEntitlementsResponse>(
+      `/api/platform/organizations/${organizationId}/entitlements/${feature}`
+    );
+  },
+
+  // =========================================================================
+  // Student Capacity Limit Overrides (`platform.entitlement.manage`)
+  // =========================================================================
+
+  getOrganizationUsage: async (
+    organizationId: number
+  ): Promise<OrganizationUsageResponse> => {
+    return apiClient.get<OrganizationUsageResponse>(
+      `/api/platform/organizations/${organizationId}/usage`
+    );
+  },
+
+  setStudentLimitOverride: async (
+    organizationId: number,
+    payload: UpdateStudentLimitOverrideRequest
+  ): Promise<OrganizationUsageResponse> => {
+    return apiClient.put<OrganizationUsageResponse>(
+      `/api/platform/organizations/${organizationId}/student-limit-override`,
+      {
+        overrideStudentLimit: payload.overrideStudentLimit,
+        reason: payload.reason.trim(),
+        expiresAt: payload.expiresAt || null,
+      }
+    );
+  },
+
+  clearStudentLimitOverride: async (
+    organizationId: number,
+    reason?: string
+  ): Promise<OrganizationUsageResponse> => {
+    return apiClient.delete<OrganizationUsageResponse>(
+      `/api/platform/organizations/${organizationId}/student-limit-override`,
+      {
+        params: reason?.trim() ? { reason: reason.trim() } : undefined,
+      }
+    );
+  },
+
+  // =========================================================================
+  // Platform Administrator Management (`platform.role.manage`)
+  // =========================================================================
+
+  listPlatformAdmins: async (): Promise<PlatformAdminUserResponse[]> => {
+    return apiClient.get<PlatformAdminUserResponse[]>('/api/platform/admins');
+  },
+
+  assignPlatformAdminRole: async (
+    payload: AssignPlatformAdminRoleRequest
+  ): Promise<PlatformAdminUserResponse> => {
+    return apiClient.post<PlatformAdminUserResponse>('/api/platform/admins/roles', {
+      userId: payload.userId,
+      roleCode: payload.roleCode.trim().toUpperCase(),
+    });
+  },
+
+  revokePlatformAdminRole: async (
+    userId: number,
+    roleCode: string
+  ): Promise<PlatformAdminUserResponse> => {
+    return apiClient.delete<PlatformAdminUserResponse>(
+      `/api/platform/admins/${userId}/roles/${encodeURIComponent(roleCode.trim().toUpperCase())}`
+    );
+  },
+
+  // =========================================================================
+  // Platform & Authorization Audit Logs (`platform.audit.view`)
+  // =========================================================================
+
   listAuditLogs: async (
     params: ListPlatformAuditLogsParams = {}
   ): Promise<PagedResponse<PlatformAuditLogItem>> => {
     return apiClient.get<PagedResponse<PlatformAuditLogItem>>('/api/platform/audit-logs', {
       params: {
-        resourceType: params.resourceType || undefined,
+        action: params.action || undefined,
+        resourceType: params.resourceType?.trim() || undefined,
         targetOrganizationId: params.targetOrganizationId || undefined,
+        actorUserId: params.actorUserId || undefined,
         page: params.page ?? 0,
         size: params.size ?? 6,
       },
     });
+  },
+
+  listAuthorizationAuditLogs: async (
+    params: ListAuthorizationAuditLogsParams = {}
+  ): Promise<PagedResponse<AuthorizationAuditLogResponse>> => {
+    return apiClient.get<PagedResponse<AuthorizationAuditLogResponse>>(
+      '/api/platform/authorization-audit-logs',
+      {
+        params: {
+          organizationId: params.organizationId || undefined,
+          actorUserId: params.actorUserId || undefined,
+          action: params.action?.trim() || undefined,
+          page: params.page ?? 0,
+          size: params.size ?? 20,
+        },
+      }
+    );
   },
 };

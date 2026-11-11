@@ -6,11 +6,14 @@ import {
   ClassSubjectResponse,
   CreateAcademicSessionRequest,
   CreateSchoolClassRequest,
+  CreateSectionRequest,
   CreateSubjectRequest,
   SchoolClassResponse,
+  SectionResponse,
   SubjectResponse,
   UpdateAcademicSessionRequest,
   UpdateSchoolClassRequest,
+  UpdateSectionRequest,
   UpdateSubjectRequest,
 } from '../types/academicManagement';
 
@@ -149,4 +152,51 @@ export const academicManagementApi = {
       `/api/organizations/${orgId}/academic-sessions/${sessionId}/classes/${classId}/subjects/${subjectId}`
     );
   },
+
+  // 5. Academic-Session-Specific Class Sections (`/api/organizations/{orgId}/academic-sessions/{sessionId}/sections`)
+  getSections: (
+    orgId: number,
+    sessionId: number,
+    params?: { classId?: number; active?: boolean }
+  ) =>
+    apiClient.get<SectionResponse[]>(
+      `/api/organizations/${orgId}/academic-sessions/${sessionId}/sections`,
+      {
+        params: {
+          classId: params?.classId || undefined,
+          active: params?.active !== undefined ? params.active : undefined,
+        },
+      }
+    ),
+
+  getSectionById: (orgId: number, sessionId: number, sectionId: number) =>
+    apiClient.get<SectionResponse>(
+      `/api/organizations/${orgId}/academic-sessions/${sessionId}/sections/${sectionId}`
+    ),
+
+  createSection: (
+    orgId: number,
+    sessionId: number,
+    payload: CreateSectionRequest
+  ) =>
+    apiClient.post<SectionResponse>(
+      `/api/organizations/${orgId}/academic-sessions/${sessionId}/sections`,
+      payload
+    ),
+
+  updateSection: (
+    orgId: number,
+    sessionId: number,
+    sectionId: number,
+    payload: UpdateSectionRequest
+  ) =>
+    apiClient.put<SectionResponse>(
+      `/api/organizations/${orgId}/academic-sessions/${sessionId}/sections/${sectionId}`,
+      payload
+    ),
+
+  deactivateSection: (orgId: number, sessionId: number, sectionId: number) =>
+    apiClient.patch<SectionResponse>(
+      `/api/organizations/${orgId}/academic-sessions/${sessionId}/sections/${sectionId}/deactivate`
+    ),
 };

@@ -63,10 +63,12 @@ interface StudentDetailModalProps {
   student: StudentResponse | null;
   sessions?: AcademicSessionResponse[];
   guardianInvitations?: InvitationResponse[];
+  studentInvitations?: InvitationResponse[];
   initialTab?: StudentDetailTab;
   canUpdateStudent: boolean;
   canManageEnrollment: boolean;
   canManageGuardian: boolean;
+  canInviteStudent?: boolean;
   isSuspended: boolean;
   refreshTrigger?: number;
   onStudentRefreshed?: (student: StudentResponse) => void;
@@ -98,6 +100,10 @@ interface StudentDetailModalProps {
     student: StudentResponse,
     returnTab: StudentDetailTab
   ) => void;
+  onInviteStudent?: (
+    student: StudentResponse,
+    returnTab: StudentDetailTab
+  ) => void;
 }
 
 function formatDate(iso: string | null | undefined): string {
@@ -126,10 +132,12 @@ export const StudentDetailModal: React.FC<StudentDetailModalProps> = ({
   student,
   sessions = [],
   guardianInvitations = [],
+  studentInvitations = [],
   initialTab = 'profile',
   canUpdateStudent,
   canManageEnrollment,
   canManageGuardian,
+  canInviteStudent = false,
   isSuspended,
   refreshTrigger = 0,
   onStudentRefreshed,
@@ -141,6 +149,7 @@ export const StudentDetailModal: React.FC<StudentDetailModalProps> = ({
   onLinkGuardian,
   onEditGuardianLink,
   onInviteGuardian,
+  onInviteStudent,
 }) => {
   const [activeTab, setActiveTab] = useState<StudentDetailTab>(initialTab);
   const [liveStudent, setLiveStudent] = useState<StudentResponse | null>(student);
@@ -374,6 +383,14 @@ export const StudentDetailModal: React.FC<StudentDetailModalProps> = ({
   const initials = formatStudentInitials(currentStudent);
   const linkedGuardianIds = guardians.map((g) => g.guardianId);
   const currentActiveEnrollment = enrollments.find((e) => e.status === 'ACTIVE');
+  const hasPendingStudentInvite = studentInvitations.some(
+    (inv) =>
+      inv.status === 'PENDING' &&
+      inv.targetType === 'STUDENT' &&
+      (inv.targetProfileId === currentStudent.id ||
+        (currentStudent.email &&
+          inv.email.toLowerCase() === currentStudent.email.toLowerCase()))
+  );
 
   return (
     <Modal
@@ -403,6 +420,21 @@ export const StudentDetailModal: React.FC<StudentDetailModalProps> = ({
                 </Button>
               </>
             )}
+            {canInviteStudent &&
+              !isSuspended &&
+              currentStudent.status === 'ACTIVE' &&
+              !currentStudent.userId &&
+              onInviteStudent && (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => onInviteStudent(currentStudent, activeTab)}
+                >
+                  {hasPendingStudentInvite
+                    ? 'Manage Login Invite'
+                    : 'Invite Student Login'}
+                </Button>
+              )}
             {canManageEnrollment && !isSuspended && currentStudent.status === 'ACTIVE' && (
               <Button
                 size="sm"
@@ -452,6 +484,13 @@ export const StudentDetailModal: React.FC<StudentDetailModalProps> = ({
                 <Badge variant={statusBadge.variant} dot>
                   {statusBadge.label}
                 </Badge>
+                {currentStudent.userId ? (
+                  <Badge variant="success">
+                    Login Account Linked (User #{currentStudent.userId})
+                  </Badge>
+                ) : hasPendingStudentInvite ? (
+                  <Badge variant="warning">Login Invite Pending</Badge>
+                ) : null}
               </div>
               <p className="mt-0.5 text-xs text-slate-600">
                 <span className="font-mono font-semibold text-slate-800">
@@ -466,6 +505,9 @@ export const StudentDetailModal: React.FC<StudentDetailModalProps> = ({
                   <strong>
                     {currentActiveEnrollment.className ||
                       `Class #${currentActiveEnrollment.classId}`}
+                    {currentActiveEnrollment.sectionName
+                      ? ` • Sec ${currentActiveEnrollment.sectionName}`
+                      : ''}
                   </strong>
                   {currentActiveEnrollment.rollNumber
                     ? ` • Roll #${currentActiveEnrollment.rollNumber}`
@@ -701,6 +743,11 @@ export const StudentDetailModal: React.FC<StudentDetailModalProps> = ({
                             {enr.className || `Class #${enr.classId}`}
                             {enr.classCode ? ` (${enr.classCode})` : ''}
                           </span>
+                          {enr.sectionName && (
+                            <Badge variant="info">
+                              Section {enr.sectionName}
+                            </Badge>
+                          )}
                           <Badge variant={enrBadge.variant} dot>
                             {enrBadge.label}
                           </Badge>

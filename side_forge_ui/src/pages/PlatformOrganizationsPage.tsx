@@ -78,6 +78,7 @@ export const PlatformOrganizationsPage: React.FC = () => {
   // Strictly check platform-scoped permissions
   const canViewOrganizations = platformPermissions.has('platform.organization.view');
   const canManageOrganizations = platformPermissions.has('platform.organization.manage');
+  const canManageEntitlements = platformPermissions.has('platform.entitlement.manage');
 
   const initialStatusParam = searchParams.get('status') as OrganizationStatus | null;
   const validInitialStatus: OrganizationStatus | '' =
@@ -837,6 +838,16 @@ export const PlatformOrganizationsPage: React.FC = () => {
         isLoading={isLoadingDetails}
         errorMessage={detailsError}
         canManageOrganization={canManageOrganizations}
+        canManageEntitlements={canManageEntitlements}
+        onOrganizationUpdated={() => {
+          if (selectedOrgDetail) {
+            void platformDashboardApi
+              .getOrganizationDetails(selectedOrgDetail.id)
+              .then((fresh) => setSelectedOrgDetail(fresh))
+              .catch(() => undefined);
+          }
+          void fetchOrganizationsAndCounts();
+        }}
         onTriggerStatusAction={(org, nextStatus) => {
           setStatusActionError(null);
           setStatusActionTarget({

@@ -28,6 +28,18 @@ public final class StudentSpecifications {
 			Gender gender,
 			Long academicSessionId,
 			Long classId) {
+		return withFilters(organizationId, search, admissionNumber, status, gender, academicSessionId, classId, null);
+	}
+
+	public static Specification<Student> withFilters(
+			Long organizationId,
+			String search,
+			String admissionNumber,
+			StudentStatus status,
+			Gender gender,
+			Long academicSessionId,
+			Long classId,
+			Long sectionId) {
 
 		return (root, query, cb) -> {
 			List<Predicate> predicates = new ArrayList<>();
@@ -58,7 +70,7 @@ public final class StudentSpecifications {
 				predicates.add(cb.or(firstNameMatch, middleNameMatch, lastNameMatch, admMatch, fullNameMatch));
 			}
 
-			if (academicSessionId != null || classId != null) {
+			if (academicSessionId != null || classId != null || sectionId != null) {
 				Subquery<Long> subquery = query.subquery(Long.class);
 				Root<StudentEnrollment> enrollmentRoot = subquery.from(StudentEnrollment.class);
 				List<Predicate> subPredicates = new ArrayList<>();
@@ -69,6 +81,9 @@ public final class StudentSpecifications {
 				}
 				if (classId != null) {
 					subPredicates.add(cb.equal(enrollmentRoot.get("classId"), classId));
+				}
+				if (sectionId != null) {
+					subPredicates.add(cb.equal(enrollmentRoot.get("sectionId"), sectionId));
 				}
 				subquery.select(enrollmentRoot.get("studentId")).where(subPredicates.toArray(new Predicate[0]));
 				predicates.add(cb.exists(subquery));

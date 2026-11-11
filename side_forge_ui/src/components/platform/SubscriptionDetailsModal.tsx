@@ -28,6 +28,8 @@ import {
   resolveSubscriptionPaymentLabel,
 } from '../../types/platformSubscription';
 import { formatOnboardingDate } from './OnboardingRequestDetailsModal';
+import { PaymentReceiptDownloadButtons } from './ManualPaymentAndReceiptControls';
+import { OrganizationStudentCapacityPanel } from './OrganizationGovernancePanels';
 import { SubscriptionActionMode } from './SubscriptionActionDialogs';
 import { Badge, CounterLabel, IdLabel } from '../ui/Badge';
 import { Button } from '../ui/Button';
@@ -45,6 +47,10 @@ export interface SubscriptionDetailsModalProps {
   isLoading: boolean;
   errorMessage: string | null;
   canManageSubscriptions: boolean;
+  canManageBilling?: boolean;
+  canManageEntitlements?: boolean;
+  onOpenRecordPayment?: () => void;
+  onCapacityOverrideUpdated?: () => void;
   onTriggerAction: (
     mode: SubscriptionActionMode,
     options?: { presetStatus?: 'ACTIVE'; presetComplimentary?: boolean }
@@ -62,6 +68,10 @@ export const SubscriptionDetailsModal: React.FC<SubscriptionDetailsModalProps> =
   isLoading,
   errorMessage,
   canManageSubscriptions,
+  canManageBilling = false,
+  canManageEntitlements = false,
+  onOpenRecordPayment,
+  onCapacityOverrideUpdated,
   onTriggerAction,
 }) => {
   if (!open) return null;
@@ -92,6 +102,17 @@ export const SubscriptionDetailsModal: React.FC<SubscriptionDetailsModalProps> =
         <Button variant="outline" onClick={onClose}>
           Close
         </Button>
+        {canManageBilling && sub && onOpenRecordPayment && (
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={onOpenRecordPayment}
+            className="border-emerald-300 text-emerald-800 hover:bg-emerald-50"
+            leftIcon={<Receipt className="w-3.5 h-3.5" />}
+          >
+            Record Payment
+          </Button>
+        )}
         {canManageSubscriptions && organizationId && (
           <>
             {sub && effStatus !== 'ACTIVE' && (
@@ -357,18 +378,31 @@ export const SubscriptionDetailsModal: React.FC<SubscriptionDetailsModalProps> =
                 <Receipt className="w-4 h-4 text-indigo-600" />
                 <span>Billing Summary &amp; Payment History</span>
               </div>
-              {billingSummary && (
-                <span className="text-xs text-slate-500">
-                  Paid:{' '}
-                  <strong className="font-semibold text-emerald-700">
-                    {formatCurrencyINR(billingSummary.currentPeriodPaidAmount)}
-                  </strong>{' '}
-                  • Outstanding:{' '}
-                  <strong className="font-semibold text-rose-700">
-                    {formatCurrencyINR(billingSummary.currentPeriodOutstandingAmount)}
-                  </strong>
-                </span>
-              )}
+              <div className="flex flex-wrap items-center gap-3">
+                {billingSummary && (
+                  <span className="text-xs text-slate-500">
+                    Paid:{' '}
+                    <strong className="font-semibold text-emerald-700">
+                      {formatCurrencyINR(billingSummary.currentPeriodPaidAmount)}
+                    </strong>{' '}
+                    • Outstanding:{' '}
+                    <strong className="font-semibold text-rose-700">
+                      {formatCurrencyINR(billingSummary.currentPeriodOutstandingAmount)}
+                    </strong>
+                  </span>
+                )}
+                {canManageBilling && sub && onOpenRecordPayment && (
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="primary"
+                    onClick={onOpenRecordPayment}
+                    leftIcon={<Receipt className="w-3.5 h-3.5" />}
+                  >
+                    Record Manual Payment
+                  </Button>
+                )}
+              </div>
             </div>
 
             {!billingSummary?.payments || billingSummary.payments.length === 0 ? (
@@ -384,7 +418,8 @@ export const SubscriptionDetailsModal: React.FC<SubscriptionDetailsModalProps> =
                       <th className="py-2 px-3 font-semibold">Payment Date</th>
                       <th className="py-2 px-3 font-semibold">Method</th>
                       <th className="py-2 px-3 font-semibold">Amount</th>
-                      <th className="py-2 pl-3 font-semibold text-right">Status</th>
+                      <th className="py-2 px-3 font-semibold">Status</th>
+                      <th className="py-2 pl-3 font-semibold text-right">Receipts</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100">
@@ -405,10 +440,17 @@ export const SubscriptionDetailsModal: React.FC<SubscriptionDetailsModalProps> =
                           <td className="py-2 px-3 font-semibold text-slate-900">
                             {formatCurrencyINR(pmt.amountReceived)}
                           </td>
-                          <td className="py-2 pl-3 text-right">
+                          <td className="py-2 px-3">
                             <Badge variant={pmtMeta.variant} dot>
                               {pmtMeta.label}
                             </Badge>
+                          </td>
+                          <td className="py-2 pl-3 text-right">
+                            <PaymentReceiptDownloadButtons
+                              organizationId={pmt.organizationId}
+                              paymentId={pmt.id}
+                              invoiceNumber={pmt.invoiceNumber}
+                            />
                           </td>
                         </tr>
                       );
@@ -418,6 +460,19 @@ export const SubscriptionDetailsModal: React.FC<SubscriptionDetailsModalProps> =
               </div>
             )}
           </div>
+
+          {/* 3B. Student Enrollment Capacity & Limit Override */}
+          {organizationId && (
+            <div className="rounded-xl border border-slate-200/80 bg-white p-4">
+              <OrganizationStudentCapacityPanel
+                organizationId={organizationId}
+                organizationName={organizationName}
+                hasActiveSubscription={Boolean(sub)}
+                canManageEntitlements={canManageEntitlements}
+                onUpdated={() => onCapacityOverrideUpdated?.()}
+              />
+            </div>
+          )}
 
           {/* 4. Renewal & Plan Change History */}
           <div className="rounded-xl border border-slate-200/80 bg-slate-50/60 p-4 space-y-3">

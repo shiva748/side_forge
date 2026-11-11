@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import {
+  Activity,
   ArrowLeftRight,
   Briefcase,
   Building2,
@@ -8,6 +9,7 @@ import {
   ChevronDown,
   ChevronRight,
   ClipboardCheck,
+  Clock,
   CreditCard,
   Layers,
   LayoutDashboard,
@@ -185,6 +187,33 @@ export const AppShell: React.FC<AppShellProps> = ({
         });
       }
 
+      const adminItems: NavItemConfig[] = [];
+      if (hasPermission('platform.role.manage')) {
+        adminItems.push({
+          id: 'platform-admins',
+          label: 'Platform Admins',
+          to: '/platform/admins',
+          icon: <Users className="w-4 h-4 shrink-0" />,
+          matchPaths: ['/platform/admins'],
+        });
+      }
+      if (hasPermission('platform.audit.view')) {
+        adminItems.push({
+          id: 'platform-audit-logs',
+          label: 'Audit Logs',
+          to: '/platform/audit-logs',
+          icon: <Activity className="w-4 h-4 shrink-0" />,
+          matchPaths: ['/platform/audit-logs'],
+        });
+      }
+      adminItems.push({
+        id: 'platform-context',
+        label: 'Workspace Overview',
+        to: '/platform/context',
+        icon: <ShieldCheck className="w-4 h-4 shrink-0" />,
+        matchPaths: ['/platform/context'],
+      });
+
       const groups: NavGroupConfig[] = [];
       if (opsItems.length > 0) {
         groups.push({
@@ -194,15 +223,7 @@ export const AppShell: React.FC<AppShellProps> = ({
       }
       groups.push({
         groupLabel: 'Administration',
-        items: [
-          {
-            id: 'platform-context',
-            label: 'Workspace Overview',
-            to: '/platform/context',
-            icon: <ShieldCheck className="w-4 h-4 shrink-0" />,
-            matchPaths: ['/platform/context'],
-          },
-        ],
+        items: adminItems,
       });
       return groups;
     }
@@ -302,6 +323,26 @@ export const AppShell: React.FC<AppShellProps> = ({
           to: '/app/staff',
           icon: <Briefcase className="w-4 h-4 shrink-0" />,
           matchPaths: ['/app/staff'],
+          restricted: isOrganizationRestricted,
+        });
+      }
+
+      const hasTimetablePerms =
+        hasPermission('timetable.view') ||
+        hasPermission('timetable.manage') ||
+        hasPermission('timetable.publish');
+
+      const canAccessTimetable =
+        hasTimetablePerms &&
+        (hasFeature('TIMETABLE') || isOrganizationRestricted);
+
+      if (canAccessTimetable) {
+        schoolOpsItems.push({
+          id: 'school-timetable',
+          label: 'Timetable',
+          to: '/app/timetable',
+          icon: <Clock className="w-4 h-4 shrink-0" />,
+          matchPaths: ['/app/timetable'],
           restricted: isOrganizationRestricted,
         });
       }

@@ -1,4 +1,4 @@
-import { apiClient } from '../lib/api-client';
+import { ApiError, apiClient, buildUrl } from '../lib/api-client';
 import { PagedResponse } from '../types/onboarding';
 import { OrganizationSubscriptionHistoryItem } from '../types/platformDashboard';
 import {
@@ -8,6 +8,8 @@ import {
   CreateSubscriptionPlanRequest,
   FullOrganizationSubscriptionResponse,
   OrganizationBillingSummaryResponse,
+  ReceiptExportFormat,
+  RecordSubscriptionPaymentRequest,
   RenewSubscriptionRequest,
   SubscriptionPaymentResponse,
   SubscriptionPaymentStatus,
@@ -170,6 +172,97 @@ export const platformSubscriptionApi = {
         },
       }
     );
+  },
+
+  /**
+   * Records a manual offline subscription payment for an organization.
+   * Target: `POST /api/platform/organizations/{organizationId}/billing/payments`
+   * Permission: `platform.billing.manage` (`PermissionCode.PLATFORM_BILLING_MANAGE`)
+   */
+  recordManualPayment: async (
+    organizationId: number,
+    payload: RecordSubscriptionPaymentRequest
+  ): Promise<SubscriptionPaymentResponse> => {
+    return apiClient.post<SubscriptionPaymentResponse>(
+      `/api/platform/organizations/${organizationId}/billing/payments`,
+      payload
+    );
+  },
+
+  /**
+   * Downloads a subscription payment receipt in `PDF`, `EXCEL`, or `CSV` format.
+   * Target: `GET /api/platform/organizations/{organizationId}/billing/payments/{paymentId}/receipt/export?format=...`
+   * Permission: `platform.billing.view` (`PermissionCode.PLATFORM_BILLING_VIEW`)
+   */
+  downloadPaymentReceipt: async (
+    organizationId: number,
+    paymentId: number,
+    format: ReceiptExportFormat = 'PDF'
+  ): Promise<{ blob: Blob; filename: string; contentType: string }> => {
+    const url = buildUrl(
+      `/api/platform/organizations/${organizationId}/billing/payments/${paymentId}/receipt/export`,
+      { format }
+    );
+    const response = await fetch(url, {
+      method: 'GET',
+      credentials: 'include',
+    });
+
+    if (!response.ok) {
+      let message = `Receipt download failed (HTTP ${response.status})`;
+      const contentType = response.headers.get('content-type') || '';
+      if (contentType.includes('application/json')) {
+        try {
+          const json = (await response.json()) as { message?: string; error?: string };
+          message = json.message || json.error || message;
+        } catch {
+          // Ignore parse error
+        }
+      } else {
+        try {
+          const text = await response.text();
+          if (text.trim()) message = text.trim();
+        } catch {
+          // Ignore text error
+        }
+      }
+      throw new ApiError(message, response.status);
+    }
+
+    const contentDisposition = response.headers.get('content-disposition') || '';
+    const contentType =
+      response.headers.get('content-type') || 'application/octet-stream';
+    const ext = format === 'EXCEL' ? 'xlsx' : format === 'CSV' ? 'csv' : 'pdf';
+    let filename = `subscription-receipt-${paymentId}.${ext}`;
+
+    const filenameMatch = contentDisposition.match(/filename\*?=(?:UTF-8'')?"?([^";]+)"?/i);
+    if (filenameMatch && filenameMatch[1]) {
+      try {
+        filename = decodeURIComponent(filenameMatch[1].trim());
+      } catch {
+        filename = filenameMatch[1].trim();
+      }
+    }
+
+    const blob = await response.blob();
+    const typedBlob =
+      blob.type && blob.type !== 'application/octet-stream'
+        ? blob
+        : new Blob([blob], { type: contentType });
+
+    const objectUrl = URL.createObjectURL(typedBlob);
+    try {
+      const anchor = document.createElement('a');
+      anchor.href = objectUrl;
+      anchor.download = filename;
+      document.body.appendChild(anchor);
+      anchor.click();
+      document.body.removeChild(anchor);
+    } finally {
+      setTimeout(() => URL.revokeObjectURL(objectUrl), 5000);
+    }
+
+    return { blob: typedBlob, filename, contentType };
   },
 };
 

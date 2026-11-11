@@ -13,8 +13,8 @@ import lombok.Setter;
 		name = "class_timetables",
 		uniqueConstraints = {
 				@UniqueConstraint(
-						name = "uk_class_timetables_org_session_class",
-						columnNames = {"organization_id", "academic_session_id", "class_id"}
+						name = "uk_class_timetables_org_session_class_section",
+						columnNames = {"organization_id", "academic_session_id", "class_id", "section_id"}
 				),
 				@UniqueConstraint(name = "uk_class_timetables_id_org", columnNames = {"id", "organization_id"})
 		},
@@ -38,6 +38,9 @@ public class ClassTimetable extends AuditableEntity {
 
 	@Column(name = "class_id", nullable = false)
 	private Long classId;
+
+	@Column(name = "section_id")
+	private Long sectionId;
 
 	@Column(name = "timetable_config_id", nullable = false)
 	private Long timetableConfigId;

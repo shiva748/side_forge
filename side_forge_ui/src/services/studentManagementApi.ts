@@ -8,6 +8,7 @@ import type {
 import type {
   ChangeEnrollmentStatusRequest,
   ChangeStudentStatusRequest,
+  ClassStudentRosterQueryParams,
   CreateEnrollmentRequest,
   CreateGuardianRequest,
   CreateStudentRequest,
@@ -45,6 +46,7 @@ export const studentManagementApi = {
           gender: params.gender || undefined,
           academicSessionId: params.academicSessionId || undefined,
           classId: params.classId || undefined,
+          sectionId: params.sectionId || undefined,
           page: params.page ?? 0,
           size: params.size ?? 15,
           sortBy: params.sortBy || 'firstName',
@@ -169,6 +171,7 @@ export const studentManagementApi = {
         params: {
           academicSessionId: params.academicSessionId || undefined,
           classId: params.classId || undefined,
+          sectionId: params.sectionId || undefined,
           studentId: params.studentId || undefined,
           status: params.status || undefined,
           page: params.page ?? 0,
@@ -192,16 +195,53 @@ export const studentManagementApi = {
   getSessionEnrollments(
     organizationId: number,
     sessionId: number,
-    params?: { classId?: number; status?: EnrollmentStatus; page?: number; size?: number }
+    params?: {
+      classId?: number;
+      sectionId?: number;
+      status?: EnrollmentStatus;
+      page?: number;
+      size?: number;
+    }
   ): Promise<PagedResponse<StudentEnrollmentResponse>> {
     return apiClient.get<PagedResponse<StudentEnrollmentResponse>>(
       `/api/organizations/${organizationId}/academic-sessions/${sessionId}/enrollments`,
       {
         params: {
           classId: params?.classId,
+          sectionId: params?.sectionId,
           status: params?.status,
           page: params?.page ?? 0,
           size: params?.size ?? 20,
+        },
+      }
+    );
+  },
+
+  /**
+   * Dedicated paginated class-wise student roster endpoint.
+   * Target: `GET /api/organizations/{organizationId}/academic-sessions/{sessionId}/classes/{classId}/students`
+   * Permission: `student.view`
+   */
+  getClassStudentRoster(
+    organizationId: number,
+    sessionId: number,
+    classId: number,
+    params: ClassStudentRosterQueryParams = {},
+    signal?: AbortSignal
+  ): Promise<PagedResponse<StudentResponse>> {
+    return apiClient.get<PagedResponse<StudentResponse>>(
+      `/api/organizations/${organizationId}/academic-sessions/${sessionId}/classes/${classId}/students`,
+      {
+        signal,
+        params: {
+          sectionId: params.sectionId || undefined,
+          search: params.search?.trim() || undefined,
+          status: params.status || undefined,
+          gender: params.gender || undefined,
+          page: params.page ?? 0,
+          size: params.size ?? 15,
+          sortBy: params.sortBy || 'firstName',
+          sortDir: params.sortDir || 'asc',
         },
       }
     );
@@ -351,6 +391,50 @@ export const studentManagementApi = {
   },
 
   revokeGuardianInvitation(
+    organizationId: number,
+    invitationId: number
+  ): Promise<InvitationResponse> {
+    return apiClient.post<InvitationResponse>(
+      `/api/organizations/${organizationId}/invitations/${invitationId}/revoke`
+    );
+  },
+
+  // =========================================================================
+  // Student Login Invitations (`InvitationTargetType.STUDENT`, role `STUDENT`)
+  // =========================================================================
+  listStudentInvitations(
+    organizationId: number
+  ): Promise<InvitationResponse[]> {
+    return apiClient.get<InvitationResponse[]>(
+      `/api/organizations/${organizationId}/invitations?targetType=STUDENT`
+    );
+  },
+
+  inviteStudent(
+    organizationId: number,
+    payload: CreateInvitationRequest
+  ): Promise<InvitationDispatchResponse> {
+    return apiClient.post<InvitationDispatchResponse>(
+      `/api/organizations/${organizationId}/invitations`,
+      {
+        ...payload,
+        email: payload.email.trim(),
+        roleCode: 'STUDENT',
+        targetType: 'STUDENT',
+      }
+    );
+  },
+
+  resendStudentInvitation(
+    organizationId: number,
+    invitationId: number
+  ): Promise<InvitationDispatchResponse> {
+    return apiClient.post<InvitationDispatchResponse>(
+      `/api/organizations/${organizationId}/invitations/${invitationId}/resend`
+    );
+  },
+
+  revokeStudentInvitation(
     organizationId: number,
     invitationId: number
   ): Promise<InvitationResponse> {

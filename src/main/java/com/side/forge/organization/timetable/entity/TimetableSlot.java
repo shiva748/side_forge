@@ -14,8 +14,8 @@ import lombok.Setter;
 		name = "timetable_slots",
 		uniqueConstraints = {
 				@UniqueConstraint(
-						name = "uk_timetable_slots_class_day_period",
-						columnNames = {"organization_id", "academic_session_id", "class_id", "day_of_week", "period_id"}
+						name = "uk_timetable_slots_timetable_day_period",
+						columnNames = {"organization_id", "class_timetable_id", "day_of_week", "period_id"}
 				),
 				@UniqueConstraint(
 						name = "uk_timetable_slots_teacher_day_period",
@@ -46,6 +46,9 @@ public class TimetableSlot extends AuditableEntity {
 
 	@Column(name = "class_id", nullable = false)
 	private Long classId;
+
+	@Column(name = "section_id")
+	private Long sectionId;
 
 	@Enumerated(EnumType.STRING)
 	@Column(name = "day_of_week", nullable = false, length = 15)

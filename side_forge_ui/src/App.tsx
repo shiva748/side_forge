@@ -15,10 +15,13 @@ import { PlatformDashboardPage } from './pages/PlatformDashboardPage';
 import { PlatformOnboardingPage } from './pages/PlatformOnboardingPage';
 import { PlatformOrganizationsPage } from './pages/PlatformOrganizationsPage';
 import { PlatformSubscriptionsPage } from './pages/PlatformSubscriptionsPage';
+import { PlatformAdminsPage } from './pages/PlatformAdminsPage';
+import { PlatformAuditLogsPage } from './pages/PlatformAuditLogsPage';
 import { SchoolDashboardPage } from './pages/SchoolDashboardPage';
 import { SchoolAcademicPage } from './pages/SchoolAcademicPage';
 import { SchoolStudentsPage } from './pages/SchoolStudentsPage';
 import { SchoolStaffPage } from './pages/SchoolStaffPage';
+import { SchoolTimetablePage } from './pages/SchoolTimetablePage';
 import { WorkspaceShellPlaceholder } from './pages/WorkspaceShellPlaceholder';
 import { UnauthorizedPage } from './pages/UnauthorizedPage';
 import { NotFoundPage } from './pages/NotFoundPage';
@@ -107,6 +110,28 @@ export default function App() {
                 }
               />
               <Route
+                path="/platform/admins"
+                element={
+                  <ProtectedRoute
+                    workspace="PLATFORM"
+                    requiredPermissions={['platform.role.manage']}
+                  >
+                    <PlatformAdminsPage />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/platform/audit-logs"
+                element={
+                  <ProtectedRoute
+                    workspace="PLATFORM"
+                    requiredPermissions={['platform.audit.view']}
+                  >
+                    <PlatformAuditLogsPage />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
                 path="/platform/context"
                 element={
                   <ProtectedRoute workspace="PLATFORM">
@@ -166,6 +191,17 @@ export default function App() {
                     requiredFeature="STAFF_MANAGEMENT"
                   >
                     <SchoolStaffPage />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/app/timetable"
+                element={
+                  <ProtectedRoute
+                    workspace="SCHOOL"
+                    requiredFeature="TIMETABLE"
+                  >
+                    <SchoolTimetablePage />
                   </ProtectedRoute>
                 }
               />

@@ -445,17 +445,6 @@ export const SchoolDashboardPage: React.FC = () => {
         icon: <ClipboardCheck className="w-3.5 h-3.5" />,
       });
     }
-    if (
-      hasTimetableFeature &&
-      (hasPermission('timetable.manage') || hasPermission('timetable.view'))
-    ) {
-      items.push({
-        id: 'manage-timetable',
-        label: 'Manage Timetable',
-        permissionHint: 'Timetable Module (Upcoming)',
-        icon: <Calendar className="w-3.5 h-3.5" />,
-      });
-    }
     if (hasCommunicationFeature && hasPermission('communication.manage')) {
       items.push({
         id: 'create-announcement',
@@ -762,6 +751,20 @@ export const SchoolDashboardPage: React.FC = () => {
                       Staff &amp; Teachers
                     </Button>
                   )}
+
+                  {hasTimetableFeature &&
+                    (hasPermission('timetable.view') ||
+                      hasPermission('timetable.manage') ||
+                      hasPermission('timetable.publish')) && (
+                      <Button
+                        variant="primary"
+                        size="sm"
+                        onClick={() => navigate('/app/timetable')}
+                        leftIcon={<Clock className="w-3.5 h-3.5" />}
+                      >
+                        Timetable
+                      </Button>
+                    )}
 
                 <Button
                   variant="outline"

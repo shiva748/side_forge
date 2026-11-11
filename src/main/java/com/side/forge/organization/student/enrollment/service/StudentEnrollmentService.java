@@ -4,6 +4,7 @@ import java.time.LocalDate;
 import java.util.Collection;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.function.Function;
 import java.util.stream.Collectors;
@@ -23,6 +24,8 @@ import com.side.forge.organization.academic.common.AcademicTenantAccessValidator
 import com.side.forge.organization.academic.schoolclass.entity.SchoolClass;
 import com.side.forge.organization.academic.schoolclass.repository.SchoolClassRepository;
 import com.side.forge.organization.academic.schoolclass.service.SchoolClassService;
+import com.side.forge.organization.academic.section.entity.Section;
+import com.side.forge.organization.academic.section.repository.SectionRepository;
 import com.side.forge.organization.academic.session.entity.AcademicSession;
 import com.side.forge.organization.academic.session.entity.AcademicSessionStatus;
 import com.side.forge.organization.academic.session.repository.AcademicSessionRepository;
@@ -60,6 +63,7 @@ public class StudentEnrollmentService {
 	private final AcademicSessionRepository sessionRepository;
 	private final SchoolClassService classService;
 	private final SchoolClassRepository classRepository;
+	private final SectionRepository sectionRepository;
 	private final FeeManagementService feeManagementService;
 	private final AcademicTenantAccessValidator validator;
 	private final SubscriptionEntitlementService subscriptionEntitlementService;
@@ -79,6 +83,9 @@ public class StudentEnrollmentService {
 		ensureSessionNotCompleted(session);
 
 		SchoolClass schoolClass = requireActiveClass(orgId, request.classId());
+		Section section = request.sectionId() != null
+				? requireActiveSection(orgId, session.getId(), schoolClass.getId(), request.sectionId())
+				: null;
 
 		if (enrollmentRepository.existsByOrganizationIdAndAcademicSessionIdAndStudentId(
 				orgId, session.getId(), student.getId())) {
@@ -99,6 +106,7 @@ public class StudentEnrollmentService {
 		enrollment.setStudentId(student.getId());
 		enrollment.setAcademicSessionId(session.getId());
 		enrollment.setClassId(schoolClass.getId());
+		enrollment.setSectionId(section != null ? section.getId() : null);
 		enrollment.setRollNumber(validator.normalizeOptionalText(request.rollNumber()));
 		enrollment.setEnrollmentDate(enrollmentDate);
 		enrollment.setStatus(EnrollmentStatus.ACTIVE);
@@ -106,13 +114,21 @@ public class StudentEnrollmentService {
 
 		StudentEnrollment saved = enrollmentRepository.saveAndFlush(enrollment);
 		feeManagementService.applyPublishedFeeStructureOnEnrollment(orgId, session, saved);
-		return toResponse(saved, session, schoolClass, studentMapper.toResponse(student));
+		return toResponse(saved, session, schoolClass, section, studentMapper.toResponse(student));
 	}
 
 	@RequirePermission(PermissionCode.STUDENT_VIEW)
 	@Transactional(readOnly = true)
 	public PagedResponse<StudentEnrollmentResponse> getEnrollments(
 			Long orgId, Long academicSessionId, Long classId, Long studentId,
+			EnrollmentStatus status, int page, int size, String sortBy, String sortDir) {
+		return getEnrollments(orgId, academicSessionId, classId, null, studentId, status, page, size, sortBy, sortDir);
+	}
+
+	@RequirePermission(PermissionCode.STUDENT_VIEW)
+	@Transactional(readOnly = true)
+	public PagedResponse<StudentEnrollmentResponse> getEnrollments(
+			Long orgId, Long academicSessionId, Long classId, Long sectionId, Long studentId,
 			EnrollmentStatus status, int page, int size, String sortBy, String sortDir) {
 		validator.requireOrganization(orgId);
 		if (academicSessionId != null) {
@@ -127,7 +143,7 @@ public class StudentEnrollmentService {
 
 		Pageable pageable = buildPageable(page, size, sortBy, sortDir);
 		Specification<StudentEnrollment> spec = StudentEnrollmentSpecifications.withFilters(
-				orgId, academicSessionId, classId, studentId, status);
+				orgId, academicSessionId, classId, sectionId, studentId, status);
 
 		Page<StudentEnrollment> rawPage = enrollmentRepository.findAll(spec, pageable);
 		return toPagedResponses(orgId, rawPage);
@@ -140,8 +156,12 @@ public class StudentEnrollmentService {
 		StudentEnrollment enrollment = requireEnrollment(orgId, enrollmentId);
 		AcademicSession session = sessionService.requireSession(orgId, enrollment.getAcademicSessionId());
 		SchoolClass schoolClass = classService.requireClass(orgId, enrollment.getClassId());
+		Section section = enrollment.getSectionId() != null
+				? sectionRepository.findByIdAndOrganizationIdAndAcademicSessionId(
+						enrollment.getSectionId(), orgId, enrollment.getAcademicSessionId()).orElse(null)
+				: null;
 		Student student = studentService.requireStudent(orgId, enrollment.getStudentId());
-		return toResponse(enrollment, session, schoolClass, studentMapper.toResponse(student));
+		return toResponse(enrollment, session, schoolClass, section, studentMapper.toResponse(student));
 	}
 
 	@RequirePermission(PermissionCode.STUDENT_VIEW)
@@ -161,10 +181,14 @@ public class StudentEnrollmentService {
 				enrollments.stream().map(StudentEnrollment::getAcademicSessionId).collect(Collectors.toSet()));
 		Map<Long, SchoolClass> classMap = loadClasses(orgId,
 				enrollments.stream().map(StudentEnrollment::getClassId).collect(Collectors.toSet()));
+		Map<Long, Section> sectionMap = loadSections(orgId,
+				enrollments.stream().map(StudentEnrollment::getSectionId).filter(Objects::nonNull).collect(Collectors.toSet()));
 
 		return enrollments.stream()
 				.map(e -> toResponse(e, sessionMap.get(e.getAcademicSessionId()),
-						classMap.get(e.getClassId()), studentDto))
+						classMap.get(e.getClassId()),
+						e.getSectionId() != null ? sectionMap.get(e.getSectionId()) : null,
+						studentDto))
 				.toList();
 	}
 
@@ -182,6 +206,9 @@ public class StudentEnrollmentService {
 		}
 
 		SchoolClass schoolClass = requireActiveClass(orgId, request.classId());
+		Section section = request.sectionId() != null
+				? requireActiveSection(orgId, session.getId(), schoolClass.getId(), request.sectionId())
+				: null;
 		Student student = studentService.requireStudent(orgId, enrollment.getStudentId());
 
 		if (request.enrollmentDate() != null) {
@@ -193,6 +220,7 @@ public class StudentEnrollmentService {
 
 		Long previousClassId = enrollment.getClassId();
 		enrollment.setClassId(schoolClass.getId());
+		enrollment.setSectionId(section != null ? section.getId() : null);
 		enrollment.setRollNumber(validator.normalizeOptionalText(request.rollNumber()));
 		enrollment.setRemarks(validator.normalizeOptionalText(request.remarks()));
 
@@ -201,7 +229,7 @@ public class StudentEnrollmentService {
 			feeManagementService.handleClassChangeFeeAdjustment(
 					orgId, session, saved, previousClassId, saved.getClassId(), saved.getEnrollmentDate());
 		}
-		return toResponse(saved, session, schoolClass, studentMapper.toResponse(student));
+		return toResponse(saved, session, schoolClass, section, studentMapper.toResponse(student));
 	}
 
 	@RequirePermission(PermissionCode.STUDENT_ENROLLMENT_MANAGE)
@@ -221,9 +249,13 @@ public class StudentEnrollmentService {
 		}
 
 		SchoolClass schoolClass = classService.requireClass(orgId, enrollment.getClassId());
+		Section section = enrollment.getSectionId() != null
+				? sectionRepository.findByIdAndOrganizationIdAndAcademicSessionId(
+						enrollment.getSectionId(), orgId, enrollment.getAcademicSessionId()).orElse(null)
+				: null;
 		Student student = studentService.requireStudent(orgId, enrollment.getStudentId());
 		StudentEnrollment saved = enrollmentRepository.save(enrollment);
-		return toResponse(saved, session, schoolClass, studentMapper.toResponse(student));
+		return toResponse(saved, session, schoolClass, section, studentMapper.toResponse(student));
 	}
 
 	public StudentEnrollment requireEnrollment(Long orgId, Long enrollmentId) {
@@ -255,6 +287,17 @@ public class StudentEnrollmentService {
 		return schoolClass;
 	}
 
+	private Section requireActiveSection(Long orgId, Long sessionId, Long classId, Long sectionId) {
+		Section section = sectionRepository
+				.findByIdAndOrganizationIdAndAcademicSessionIdAndClassId(sectionId, orgId, sessionId, classId)
+				.orElseThrow(() -> new EntityNotFoundException(
+						"Section not found for the selected class and academic session"));
+		if (!section.isActive()) {
+			throw new IllegalStateException("Cannot enroll student into an inactive section");
+		}
+		return section;
+	}
+
 	private PagedResponse<StudentEnrollmentResponse> toPagedResponses(Long orgId, Page<StudentEnrollment> rawPage) {
 		List<StudentEnrollment> content = rawPage.getContent();
 		if (content.isEmpty()) {
@@ -266,10 +309,15 @@ public class StudentEnrollmentService {
 
 		Set<Long> sessionIds = content.stream().map(StudentEnrollment::getAcademicSessionId).collect(Collectors.toSet());
 		Set<Long> classIds = content.stream().map(StudentEnrollment::getClassId).collect(Collectors.toSet());
+		Set<Long> sectionIds = content.stream()
+				.map(StudentEnrollment::getSectionId)
+				.filter(Objects::nonNull)
+				.collect(Collectors.toSet());
 		Set<Long> studentIds = content.stream().map(StudentEnrollment::getStudentId).collect(Collectors.toSet());
 
 		Map<Long, AcademicSession> sessionMap = loadSessions(orgId, sessionIds);
 		Map<Long, SchoolClass> classMap = loadClasses(orgId, classIds);
+		Map<Long, Section> sectionMap = loadSections(orgId, sectionIds);
 		Map<Long, StudentResponse> studentMap = studentRepository
 				.findAllByOrganizationIdAndIdInOrderByFirstNameAscLastNameAsc(orgId, studentIds)
 				.stream()
@@ -278,7 +326,9 @@ public class StudentEnrollmentService {
 
 		List<StudentEnrollmentResponse> mapped = content.stream()
 				.map(e -> toResponse(e, sessionMap.get(e.getAcademicSessionId()),
-						classMap.get(e.getClassId()), studentMap.get(e.getStudentId())))
+						classMap.get(e.getClassId()),
+						e.getSectionId() != null ? sectionMap.get(e.getSectionId()) : null,
+						studentMap.get(e.getStudentId())))
 				.toList();
 
 		return new PagedResponse<>(
@@ -299,8 +349,16 @@ public class StudentEnrollmentService {
 				.collect(Collectors.toMap(SchoolClass::getId, Function.identity()));
 	}
 
+	private Map<Long, Section> loadSections(Long orgId, Collection<Long> ids) {
+		if (ids == null || ids.isEmpty()) {
+			return Map.of();
+		}
+		return sectionRepository.findAllByOrganizationIdAndIdIn(orgId, ids).stream()
+				.collect(Collectors.toMap(Section::getId, Function.identity()));
+	}
+
 	private StudentEnrollmentResponse toResponse(
-			StudentEnrollment e, AcademicSession session, SchoolClass schoolClass, StudentResponse student) {
+			StudentEnrollment e, AcademicSession session, SchoolClass schoolClass, Section section, StudentResponse student) {
 		return new StudentEnrollmentResponse(
 				e.getId(),
 				e.getOrganizationId(),
@@ -310,6 +368,8 @@ public class StudentEnrollmentService {
 				e.getClassId(),
 				schoolClass != null ? schoolClass.getName() : null,
 				schoolClass != null ? schoolClass.getCode() : null,
+				e.getSectionId(),
+				section != null ? section.getName() : null,
 				e.getRollNumber(),
 				e.getEnrollmentDate(),
 				e.getStatus(),

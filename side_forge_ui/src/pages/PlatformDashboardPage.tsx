@@ -692,7 +692,13 @@ export const PlatformDashboardPage: React.FC = () => {
                       Recent Platform Activity
                     </h2>
                   </div>
-                  <span className="text-[11px] text-slate-400">Platform Audit Log</span>
+                  <Link
+                    to="/platform/audit-logs"
+                    className="inline-flex items-center gap-1 text-xs font-semibold text-indigo-600 hover:text-indigo-700 transition-colors"
+                  >
+                    <span>View All Audit Logs</span>
+                    <ArrowRight className="w-3.5 h-3.5" />
+                  </Link>
                 </div>
 
                 {recentAuditLogs.length === 0 ? (

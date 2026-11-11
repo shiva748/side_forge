@@ -91,6 +91,7 @@ public class ParentPortalService {
 	private final AcademicSessionService sessionService;
 	private final AcademicSessionRepository sessionRepository;
 	private final SchoolClassRepository classRepository;
+	private final com.side.forge.organization.academic.section.repository.SectionRepository sectionRepository;
 	private final StudentRepository studentRepository;
 	private final StudentMapper studentMapper;
 	private final StudentEnrollmentRepository enrollmentRepository;
@@ -617,9 +618,17 @@ public class ParentPortalService {
 				.findByOrganizationIdAndAcademicSessionIdAndStudentId(orgId, session.getId(), studentId)
 				.orElseThrow(() -> new EntityNotFoundException(
 						"Student is not enrolled in a class for the specified academic session"));
-		ClassTimetable timetable = classTimetableRepository
-				.findByOrganizationIdAndAcademicSessionIdAndClassId(
-						orgId, session.getId(), enrollment.getClassId())
+		Optional<ClassTimetable> timetableOpt = enrollment.getSectionId() != null
+				? classTimetableRepository
+						.findByOrganizationIdAndAcademicSessionIdAndClassIdAndSectionId(
+								orgId, session.getId(), enrollment.getClassId(), enrollment.getSectionId())
+						.or(() -> classTimetableRepository
+								.findByOrganizationIdAndAcademicSessionIdAndClassIdAndSectionIdIsNull(
+										orgId, session.getId(), enrollment.getClassId()))
+				: classTimetableRepository
+						.findByOrganizationIdAndAcademicSessionIdAndClassIdAndSectionIdIsNull(
+								orgId, session.getId(), enrollment.getClassId());
+		ClassTimetable timetable = timetableOpt
 				.orElseThrow(() -> new EntityNotFoundException(
 						"No timetable has been configured for the student's class in this academic session"));
 		if (timetable.getStatus() != TimetableStatus.PUBLISHED) {
@@ -720,11 +729,17 @@ public class ParentPortalService {
 					.findByIdAndOrganizationId(e.getAcademicSessionId(), orgId).orElse(null);
 			SchoolClass sc = classRepository
 					.findByIdAndOrganizationId(e.getClassId(), orgId).orElse(null);
+			com.side.forge.organization.academic.section.entity.Section sec = e.getSectionId() != null
+					? sectionRepository.findByIdAndOrganizationIdAndAcademicSessionId(
+							e.getSectionId(), orgId, e.getAcademicSessionId()).orElse(null)
+					: null;
 			out.add(new StudentEnrollmentResponse(
 					e.getId(), e.getOrganizationId(), e.getStudentId(),
 					e.getAcademicSessionId(), sess != null ? sess.getName() : null,
 					e.getClassId(), sc != null ? sc.getName() : null,
-					sc != null ? sc.getCode() : null, e.getRollNumber(),
+					sc != null ? sc.getCode() : null,
+					e.getSectionId(), sec != null ? sec.getName() : null,
+					e.getRollNumber(),
 					e.getEnrollmentDate(), e.getStatus(), e.getRemarks(),
 					studentDto, e.getCreatedAt(), e.getUpdatedAt()));
 		}

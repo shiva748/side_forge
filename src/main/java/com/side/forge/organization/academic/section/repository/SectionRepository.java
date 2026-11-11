@@ -1,5 +1,6 @@
 package com.side.forge.organization.academic.section.repository;
 
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 
@@ -11,6 +12,11 @@ public interface SectionRepository extends JpaRepository<Section, Long> {
 
 	Optional<Section> findByIdAndOrganizationIdAndAcademicSessionId(
 			Long id, Long organizationId, Long academicSessionId);
+
+	Optional<Section> findByIdAndOrganizationIdAndAcademicSessionIdAndClassId(
+			Long id, Long organizationId, Long academicSessionId, Long classId);
+
+	List<Section> findAllByOrganizationIdAndIdIn(Long organizationId, Collection<Long> ids);
 
 	List<Section> findAllByOrganizationIdAndAcademicSessionIdOrderByClassIdAscNameAsc(
 			Long organizationId, Long academicSessionId);

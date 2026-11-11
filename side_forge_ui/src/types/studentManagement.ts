@@ -96,6 +96,8 @@ export interface StudentEnrollmentResponse {
   classId: number;
   className: string | null;
   classCode: string | null;
+  sectionId: number | null;
+  sectionName: string | null;
   rollNumber: string | null;
   enrollmentDate: string;
   status: EnrollmentStatus;
@@ -109,6 +111,7 @@ export interface CreateEnrollmentRequest {
   studentId: number;
   academicSessionId: number;
   classId: number;
+  sectionId?: number | null;
   rollNumber?: string | null;
   enrollmentDate?: string | null;
   remarks?: string | null;
@@ -116,6 +119,7 @@ export interface CreateEnrollmentRequest {
 
 export interface UpdateEnrollmentRequest {
   classId: number;
+  sectionId?: number | null;
   rollNumber?: string | null;
   enrollmentDate?: string | null;
   remarks?: string | null;
@@ -228,6 +232,7 @@ export interface StudentDirectoryQueryParams {
   gender?: Gender | '';
   academicSessionId?: number | '';
   classId?: number | '';
+  sectionId?: number | '';
   page?: number;
   size?: number;
   sortBy?:
@@ -245,11 +250,30 @@ export interface StudentDirectoryQueryParams {
 export interface EnrollmentDirectoryQueryParams {
   academicSessionId?: number | '';
   classId?: number | '';
+  sectionId?: number | '';
   studentId?: number | '';
   status?: EnrollmentStatus | '';
   page?: number;
   size?: number;
   sortBy?: 'enrollmentDate' | 'rollNumber' | 'status' | 'createdAt' | 'id';
+  sortDir?: 'asc' | 'desc';
+}
+
+export interface ClassStudentRosterQueryParams {
+  sectionId?: number | '';
+  search?: string;
+  status?: StudentStatus | '';
+  gender?: Gender | '';
+  page?: number;
+  size?: number;
+  sortBy?:
+    | 'firstName'
+    | 'lastName'
+    | 'admissionNumber'
+    | 'admissionDate'
+    | 'dateOfBirth'
+    | 'status'
+    | 'createdAt';
   sortDir?: 'asc' | 'desc';
 }
 

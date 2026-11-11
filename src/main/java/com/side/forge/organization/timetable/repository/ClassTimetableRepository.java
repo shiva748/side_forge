@@ -25,10 +25,28 @@ public interface ClassTimetableRepository extends JpaRepository<ClassTimetable, 
 	Optional<ClassTimetable> findByOrganizationIdAndAcademicSessionIdAndClassId(
 			Long organizationId, Long academicSessionId, Long classId);
 
+	Optional<ClassTimetable> findByOrganizationIdAndAcademicSessionIdAndClassIdAndSectionId(
+			Long organizationId, Long academicSessionId, Long classId, Long sectionId);
+
+	Optional<ClassTimetable> findByOrganizationIdAndAcademicSessionIdAndClassIdAndSectionIdIsNull(
+			Long organizationId, Long academicSessionId, Long classId);
+
+	List<ClassTimetable> findAllByOrganizationIdAndAcademicSessionIdAndClassIdOrderBySectionIdAscIdAsc(
+			Long organizationId, Long academicSessionId, Long classId);
+
 	List<ClassTimetable> findAllByOrganizationIdAndAcademicSessionIdOrderByClassIdAsc(
 			Long organizationId, Long academicSessionId);
 
+	List<ClassTimetable> findAllByOrganizationIdAndAcademicSessionIdOrderByClassIdAscSectionIdAscIdAsc(
+			Long organizationId, Long academicSessionId);
+
 	boolean existsByOrganizationIdAndAcademicSessionIdAndClassId(
+			Long organizationId, Long academicSessionId, Long classId);
+
+	boolean existsByOrganizationIdAndAcademicSessionIdAndClassIdAndSectionId(
+			Long organizationId, Long academicSessionId, Long classId, Long sectionId);
+
+	boolean existsByOrganizationIdAndAcademicSessionIdAndClassIdAndSectionIdIsNull(
 			Long organizationId, Long academicSessionId, Long classId);
 
 	boolean existsByOrganizationIdAndTimetableConfigIdAndStatus(

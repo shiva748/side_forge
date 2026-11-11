@@ -88,6 +88,30 @@ export interface AssignClassSubjectRequest {
   displayOrder?: number;
 }
 
+export interface SectionResponse {
+  id: number;
+  organizationId: number;
+  academicSessionId: number;
+  classId: number;
+  name: string;
+  capacity: number | null;
+  active: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CreateSectionRequest {
+  classId: number;
+  name: string;
+  capacity?: number | null;
+}
+
+export interface UpdateSectionRequest {
+  classId: number;
+  name: string;
+  capacity?: number | null;
+}
+
 export function getSessionStatusBadgeMeta(status?: AcademicSessionStatus | string | null): {
   label: string;
   variant: BadgeVariant;

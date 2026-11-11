@@ -13,6 +13,9 @@ public record CreateClassTimetableRequest(
 		@Positive(message = "Class ID must be a positive number")
 		Long classId,
 
+		@Positive(message = "Section ID must be a positive number")
+		Long sectionId,
+
 		@NotNull(message = "Timetable configuration ID is required")
 		@Positive(message = "Timetable configuration ID must be a positive number")
 		Long timetableConfigId,

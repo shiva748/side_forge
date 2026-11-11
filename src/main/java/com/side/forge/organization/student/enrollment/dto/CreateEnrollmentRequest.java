@@ -19,6 +19,9 @@ public record CreateEnrollmentRequest(
 		@Positive(message = "Class ID must be a positive number")
 		Long classId,
 
+		@Positive(message = "Section ID must be a positive number")
+		Long sectionId,
+
 		@Size(max = 30, message = "Roll number must not exceed 30 characters")
 		String rollNumber,
 

@@ -32,6 +32,10 @@ import lombok.Setter;
 						columnList = "organization_id, academic_session_id, class_id, status"
 				),
 				@Index(
+						name = "idx_student_enrollments_org_session_class_section",
+						columnList = "organization_id, academic_session_id, class_id, section_id"
+				),
+				@Index(
 						name = "idx_student_enrollments_org_student",
 						columnList = "organization_id, student_id"
 				)
@@ -56,6 +60,9 @@ public class StudentEnrollment extends AuditableEntity {
 
 	@Column(name = "class_id", nullable = false)
 	private Long classId;
+
+	@Column(name = "section_id")
+	private Long sectionId;
 
 	@Column(name = "roll_number", length = 30)
 	private String rollNumber;

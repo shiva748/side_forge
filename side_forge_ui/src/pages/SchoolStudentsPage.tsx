@@ -21,6 +21,7 @@ import {
   GuardianInvitationModal,
   LinkGuardianModal,
   StudentFormModal,
+  StudentInvitationModal,
   StudentStatusModal,
 } from '../components/school/StudentManagementDialogs';
 import {
@@ -39,6 +40,7 @@ import {
   getSessionStatusBadgeMeta,
   type AcademicSessionResponse,
   type SchoolClassResponse,
+  type SectionResponse,
 } from '../types/academicManagement';
 
 const TextInput = Input;
@@ -164,7 +166,7 @@ import {
   type UpdateStudentRequest,
 } from '../types/studentManagement';
 
-type StudentsPageTab = 'directory' | 'enrollments' | 'guardians';
+type StudentsPageTab = 'directory' | 'roster' | 'enrollments' | 'guardians';
 
 type ReturnToDetailContext = {
   student: StudentResponse;
@@ -226,6 +228,11 @@ type ActiveStudentDialog =
       guardian: GuardianResponse;
       returnToDetail?: ReturnToDetailContext;
     }
+  | {
+      kind: 'INVITE_STUDENT';
+      student: StudentResponse;
+      returnToDetail?: ReturnToDetailContext;
+    }
   | null;
 
 function formatDate(iso: string | null | undefined): string {
@@ -260,10 +267,14 @@ export const SchoolStudentsPage: React.FC = () => {
   const canUpdateStudent = hasPermission('student.update');
   const canManageEnrollment = hasPermission('student.enrollment.manage');
   const canManageGuardian = hasPermission('student.guardian.manage');
+  const canInviteStudent =
+    canCreateStudent || canUpdateStudent || canManageEnrollment;
 
   const initialTabParam = searchParams.get('tab');
   const [activeTab, setActiveTab] = useState<StudentsPageTab>(
-    initialTabParam === 'enrollments' || initialTabParam === 'guardians'
+    initialTabParam === 'roster' ||
+      initialTabParam === 'enrollments' ||
+      initialTabParam === 'guardians'
       ? initialTabParam
       : 'directory'
   );
@@ -273,6 +284,9 @@ export const SchoolStudentsPage: React.FC = () => {
   const [classes, setClasses] = useState<SchoolClassResponse[]>([]);
   const [guardians, setGuardians] = useState<GuardianResponse[]>([]);
   const [guardianInvitations, setGuardianInvitations] = useState<
+    InvitationResponse[]
+  >([]);
+  const [studentInvitations, setStudentInvitations] = useState<
     InvitationResponse[]
   >([]);
 
@@ -314,6 +328,8 @@ export const SchoolStudentsPage: React.FC = () => {
   const [enrollmentPageSize, setEnrollmentPageSize] = useState(15);
   const [enrollmentSessionFilter, setEnrollmentSessionFilter] = useState<number | ''>('');
   const [enrollmentClassFilter, setEnrollmentClassFilter] = useState<number | ''>('');
+  const [enrollmentSectionFilter, setEnrollmentSectionFilter] = useState<number | ''>('');
+  const [enrollmentSections, setEnrollmentSections] = useState<SectionResponse[]>([]);
   const [enrollmentStatusFilter, setEnrollmentStatusFilter] = useState<
     EnrollmentStatus | ''
   >('');
@@ -329,6 +345,40 @@ export const SchoolStudentsPage: React.FC = () => {
   const [guardianActiveFilter, setGuardianActiveFilter] = useState<
     'ALL' | 'ACTIVE' | 'INACTIVE'
   >('ALL');
+
+  // Class-wise Student Roster state (`GET /api/organizations/{orgId}/academic-sessions/{sessionId}/classes/{classId}/students`)
+  const [rosterSessionId, setRosterSessionId] = useState<number | ''>('');
+  const [rosterClassId, setRosterClassId] = useState<number | ''>('');
+  const [rosterSectionId, setRosterSectionId] = useState<number | ''>('');
+  const [rosterSections, setRosterSections] = useState<SectionResponse[]>([]);
+  const [rosterStudents, setRosterStudents] = useState<StudentResponse[]>([]);
+  const [rosterTotalElements, setRosterTotalElements] = useState(0);
+  const [rosterTotalPages, setRosterTotalPages] = useState(0);
+  const [rosterPage, setRosterPage] = useState(0);
+  const [rosterPageSize, setRosterPageSize] = useState(15);
+  const [rosterSearch, setRosterSearch] = useState('');
+  const [debouncedRosterSearch, setDebouncedRosterSearch] = useState('');
+  const [rosterStatusFilter, setRosterStatusFilter] = useState<StudentStatus | ''>('');
+  const [rosterGenderFilter, setRosterGenderFilter] = useState<Gender | ''>('');
+  const [rosterSortBy, setRosterSortBy] = useState<
+    | 'firstName'
+    | 'lastName'
+    | 'admissionNumber'
+    | 'admissionDate'
+    | 'dateOfBirth'
+    | 'status'
+    | 'createdAt'
+  >('firstName');
+  const [rosterSortDir, setRosterSortDir] = useState<'asc' | 'desc'>('asc');
+  const [loadingRoster, setLoadingRoster] = useState(false);
+  const [rosterLoaded, setRosterLoaded] = useState(false);
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      setDebouncedRosterSearch(rosterSearch.trim());
+    }, 300);
+    return () => window.clearTimeout(timer);
+  }, [rosterSearch]);
 
   // Loading & error states
   const [loadingReference, setLoadingReference] = useState(true);
@@ -369,7 +419,18 @@ export const SchoolStudentsPage: React.FC = () => {
     setEnrollmentsLoaded(false);
     setGuardians([]);
     setGuardianInvitations([]);
+    setStudentInvitations([]);
     setGuardiansLoaded(false);
+    setRosterSessionId('');
+    setRosterClassId('');
+    setRosterSectionId('');
+    setRosterSections([]);
+    setEnrollmentSectionFilter('');
+    setEnrollmentSections([]);
+    setRosterStudents([]);
+    setRosterTotalElements(0);
+    setRosterTotalPages(0);
+    setRosterLoaded(false);
     setSessions([]);
     setClasses([]);
     setError(null);
@@ -407,20 +468,25 @@ export const SchoolStudentsPage: React.FC = () => {
     }
     setLoadingReference(true);
     try {
-      const [sessionList, classList, guardianList, invList] = await Promise.all([
-        academicManagementApi.getSessions(orgId),
-        academicManagementApi.getClasses(orgId),
-        canViewStudents
-          ? studentManagementApi.listOrganizationGuardians(orgId)
-          : Promise.resolve([]),
-        canViewStudents || canManageGuardian
-          ? studentManagementApi.listGuardianInvitations(orgId).catch(() => [])
-          : Promise.resolve([]),
-      ]);
+      const [sessionList, classList, guardianList, invList, studentInvList] =
+        await Promise.all([
+          academicManagementApi.getSessions(orgId),
+          academicManagementApi.getClasses(orgId),
+          canViewStudents
+            ? studentManagementApi.listOrganizationGuardians(orgId)
+            : Promise.resolve([]),
+          canManageGuardian || canCreateStudent
+            ? studentManagementApi.listGuardianInvitations(orgId).catch(() => [])
+            : Promise.resolve([]),
+          canInviteStudent
+            ? studentManagementApi.listStudentInvitations(orgId).catch(() => [])
+            : Promise.resolve([]),
+        ]);
       setSessions(sessionList);
       setClasses(classList);
       setGuardians(guardianList);
       setGuardianInvitations(invList);
+      setStudentInvitations(studentInvList);
       setGuardiansLoaded(canViewStudents);
     } catch (err) {
       await handleApiException(
@@ -435,7 +501,9 @@ export const SchoolStudentsPage: React.FC = () => {
     isOrganizationDeactivated,
     isOrganizationSuspended,
     canViewStudents,
+    canCreateStudent,
     canManageGuardian,
+    canInviteStudent,
     handleApiException,
   ]);
 
@@ -494,6 +562,7 @@ export const SchoolStudentsPage: React.FC = () => {
       const pageData = await studentManagementApi.listEnrollments(orgId, {
         academicSessionId: enrollmentSessionFilter,
         classId: enrollmentClassFilter,
+        sectionId: enrollmentSectionFilter,
         status: enrollmentStatusFilter,
         page: enrollmentPage,
         size: enrollmentPageSize,
@@ -516,6 +585,7 @@ export const SchoolStudentsPage: React.FC = () => {
     isOrganizationSuspended,
     enrollmentSessionFilter,
     enrollmentClassFilter,
+    enrollmentSectionFilter,
     enrollmentStatusFilter,
     enrollmentPage,
     enrollmentPageSize,
@@ -535,6 +605,195 @@ export const SchoolStudentsPage: React.FC = () => {
   useEffect(() => {
     void loadEnrollmentsDirectory();
   }, [loadEnrollmentsDirectory]);
+
+  // Default rosterSessionId to active session (or reuse enrollmentSessionFilter) and rosterClassId to first active class
+  useEffect(() => {
+    if (sessions.length === 0) {
+      setRosterSessionId('');
+      return;
+    }
+    if (
+      rosterSessionId !== '' &&
+      sessions.some((s) => s.id === Number(rosterSessionId))
+    ) {
+      return;
+    }
+    const activeSess = sessions.find((s) => s.status === 'ACTIVE');
+    const plannedSess = sessions.find((s) => s.status === 'PLANNED');
+    setRosterSessionId(
+      enrollmentSessionFilter ||
+        activeSess?.id ||
+        plannedSess?.id ||
+        sessions[0].id
+    );
+  }, [enrollmentSessionFilter, rosterSessionId, sessions]);
+
+  useEffect(() => {
+    if (classes.length === 0) {
+      setRosterClassId('');
+      return;
+    }
+    if (
+      rosterClassId !== '' &&
+      classes.some((c) => c.id === Number(rosterClassId))
+    ) {
+      return;
+    }
+    const activeCls = classes.find((c) => c.active);
+    setRosterClassId(activeCls?.id ?? classes[0].id);
+  }, [classes, rosterClassId]);
+
+  // Load sections for Roster (rosterSessionId + rosterClassId)
+  useEffect(() => {
+    if (!orgId || rosterSessionId === '' || rosterClassId === '') {
+      setRosterSections([]);
+      setRosterSectionId('');
+      return;
+    }
+    let cancelled = false;
+    academicManagementApi
+      .getSections(orgId, Number(rosterSessionId), {
+        classId: Number(rosterClassId),
+      })
+      .then((list) => {
+        if (cancelled) return;
+        const sorted = [...(list || [])].sort((a, b) =>
+          a.name.localeCompare(b.name)
+        );
+        setRosterSections(sorted);
+        setRosterSectionId((prev) =>
+          prev !== '' && sorted.some((s) => s.id === Number(prev)) ? prev : ''
+        );
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setRosterSections([]);
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [orgId, rosterSessionId, rosterClassId]);
+
+  // Load sections for Enrollments filter (enrollmentSessionFilter + enrollmentClassFilter)
+  useEffect(() => {
+    if (
+      !orgId ||
+      enrollmentSessionFilter === '' ||
+      enrollmentClassFilter === ''
+    ) {
+      setEnrollmentSections([]);
+      setEnrollmentSectionFilter('');
+      return;
+    }
+    let cancelled = false;
+    academicManagementApi
+      .getSections(orgId, Number(enrollmentSessionFilter), {
+        classId: Number(enrollmentClassFilter),
+      })
+      .then((list) => {
+        if (cancelled) return;
+        const sorted = [...(list || [])].sort((a, b) =>
+          a.name.localeCompare(b.name)
+        );
+        setEnrollmentSections(sorted);
+        setEnrollmentSectionFilter((prev) =>
+          prev !== '' && sorted.some((s) => s.id === Number(prev)) ? prev : ''
+        );
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setEnrollmentSections([]);
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [orgId, enrollmentSessionFilter, enrollmentClassFilter]);
+
+  // Dedicated paginated Class-wise Student Roster loader with AbortController cancellation
+  useEffect(() => {
+    if (
+      !orgId ||
+      !canViewStudents ||
+      isOrganizationDeactivated ||
+      isOrganizationSuspended ||
+      rosterSessionId === '' ||
+      rosterClassId === ''
+    ) {
+      setRosterStudents([]);
+      setRosterTotalElements(0);
+      setRosterTotalPages(0);
+      setLoadingRoster(false);
+      return;
+    }
+
+    const controller = new AbortController();
+    setLoadingRoster(true);
+
+    studentManagementApi
+      .getClassStudentRoster(
+        orgId,
+        Number(rosterSessionId),
+        Number(rosterClassId),
+        {
+          sectionId: rosterSectionId,
+          search: debouncedRosterSearch,
+          status: rosterStatusFilter,
+          gender: rosterGenderFilter,
+          page: rosterPage,
+          size: rosterPageSize,
+          sortBy: rosterSortBy,
+          sortDir: rosterSortDir,
+        },
+        controller.signal
+      )
+      .then((pageData) => {
+        if (controller.signal.aborted) return;
+        setRosterStudents(pageData.content || []);
+        setRosterTotalElements(pageData.totalElements ?? 0);
+        setRosterTotalPages(pageData.totalPages ?? 0);
+        setRosterLoaded(true);
+      })
+      .catch((err) => {
+        if (
+          controller.signal.aborted ||
+          (err instanceof Error && err.name === 'AbortError')
+        ) {
+          return;
+        }
+        void handleApiException(
+          err,
+          'Failed to load class-wise student roster.'
+        );
+      })
+      .finally(() => {
+        if (!controller.signal.aborted) {
+          setLoadingRoster(false);
+        }
+      });
+
+    return () => {
+      controller.abort();
+    };
+  }, [
+    canViewStudents,
+    debouncedRosterSearch,
+    detailRefreshCounter,
+    handleApiException,
+    isOrganizationDeactivated,
+    isOrganizationSuspended,
+    orgId,
+    rosterClassId,
+    rosterSectionId,
+    rosterGenderFilter,
+    rosterPage,
+    rosterPageSize,
+    rosterSessionId,
+    rosterSortBy,
+    rosterSortDir,
+    rosterStatusFilter,
+  ]);
 
   const handleTabChange = (tab: StudentsPageTab) => {
     setActiveTab(tab);
@@ -858,6 +1117,61 @@ export const SchoolStudentsPage: React.FC = () => {
     return res;
   };
 
+  const refreshStudentInvitations = useCallback(async () => {
+    if (!orgId) return;
+    try {
+      const list = await studentManagementApi.listStudentInvitations(orgId);
+      setStudentInvitations(list);
+    } catch {
+      // Non-fatal
+    }
+  }, [orgId]);
+
+  const handleSendStudentInvitation = async (
+    payload: CreateInvitationRequest
+  ): Promise<InvitationDispatchResponse> => {
+    if (!orgId) throw new Error('Organization context is required.');
+    const res = await studentManagementApi.inviteStudent(orgId, payload);
+    setFeedback({
+      type: 'success',
+      message: `Sent Student Portal login invitation to ${res.invitation.email}.`,
+    });
+    await refreshStudentInvitations();
+    return res;
+  };
+
+  const handleResendStudentInvitation = async (
+    invitationId: number
+  ): Promise<InvitationDispatchResponse> => {
+    if (!orgId) throw new Error('Organization context is required.');
+    const res = await studentManagementApi.resendStudentInvitation(
+      orgId,
+      invitationId
+    );
+    setFeedback({
+      type: 'success',
+      message: `Resent Student Portal login invitation to ${res.invitation.email}.`,
+    });
+    await refreshStudentInvitations();
+    return res;
+  };
+
+  const handleRevokeStudentInvitation = async (
+    invitationId: number
+  ): Promise<InvitationResponse> => {
+    if (!orgId) throw new Error('Organization context is required.');
+    const res = await studentManagementApi.revokeStudentInvitation(
+      orgId,
+      invitationId
+    );
+    setFeedback({
+      type: 'success',
+      message: `Revoked pending Student Portal invitation for ${res.email}.`,
+    });
+    await refreshStudentInvitations();
+    return res;
+  };
+
   const filteredGuardians = useMemo(() => {
     return guardians.filter((g) => {
       if (guardianActiveFilter === 'ACTIVE' && !g.active) return false;
@@ -954,7 +1268,238 @@ export const SchoolStudentsPage: React.FC = () => {
     },
     {
       key: 'status',
-      header: 'Status',
+      header: 'Status & Portal Access',
+      render: (row) => {
+        const b = getStudentStatusBadge(row.status);
+        const hasPendingInvite = studentInvitations.some(
+          (inv) =>
+            inv.status === 'PENDING' &&
+            inv.targetType === 'STUDENT' &&
+            (inv.targetProfileId === row.id ||
+              (row.email &&
+                inv.email.toLowerCase() === row.email.toLowerCase()))
+        );
+        return (
+          <div className="space-y-1">
+            <div>
+              <Badge variant={b.variant} dot>
+                {b.label}
+              </Badge>
+            </div>
+            {row.userId ? (
+              <span className="block text-[11px] font-medium text-emerald-700">
+                Login Linked (#{row.userId})
+              </span>
+            ) : hasPendingInvite ? (
+              <span className="block text-[11px] font-medium text-amber-700">
+                Login Invite Pending
+              </span>
+            ) : (
+              <span className="block text-[11px] text-slate-400">
+                No Login Account
+              </span>
+            )}
+          </div>
+        );
+      },
+    },
+    {
+      key: 'actions',
+      header: 'Actions',
+      align: 'right',
+      render: (row) => {
+        const hasPendingInvite = studentInvitations.some(
+          (inv) =>
+            inv.status === 'PENDING' &&
+            inv.targetType === 'STUDENT' &&
+            (inv.targetProfileId === row.id ||
+              (row.email &&
+                inv.email.toLowerCase() === row.email.toLowerCase()))
+        );
+        return (
+          <div className="flex flex-wrap items-center justify-end gap-1.5">
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() =>
+                setActiveDialog({
+                  kind: 'STUDENT_DETAIL',
+                  student: row,
+                  initialTab: 'profile',
+                })
+              }
+            >
+              360° View
+            </Button>
+            {canInviteStudent && row.status === 'ACTIVE' && !row.userId && (
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() =>
+                  setActiveDialog({
+                    kind: 'INVITE_STUDENT',
+                    student: row,
+                  })
+                }
+              >
+                {hasPendingInvite ? 'Manage Invite' : 'Invite Login'}
+              </Button>
+            )}
+            {canManageEnrollment && row.status === 'ACTIVE' && (
+              <Button
+                size="sm"
+                variant="ghost"
+                onClick={() =>
+                  setActiveDialog({
+                    kind: 'ENROLLMENT_FORM',
+                    mode: 'create',
+                    enrollment: null,
+                    preselectedStudent: row,
+                  })
+                }
+              >
+                Enroll
+              </Button>
+            )}
+            {canUpdateStudent && (
+              <>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onClick={() =>
+                    setActiveDialog({
+                      kind: 'STUDENT_FORM',
+                      mode: 'edit',
+                      student: row,
+                    })
+                  }
+                >
+                  Edit
+                </Button>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onClick={() =>
+                    setActiveDialog({
+                      kind: 'STUDENT_STATUS',
+                      student: row,
+                    })
+                  }
+                >
+                  Status
+                </Button>
+              </>
+            )}
+          </div>
+        );
+      },
+    },
+  ];
+
+  const selectedRosterSession = useMemo(
+    () =>
+      rosterSessionId !== ''
+        ? sessions.find((s) => s.id === Number(rosterSessionId)) || null
+        : null,
+    [rosterSessionId, sessions]
+  );
+
+  const selectedRosterClass = useMemo(
+    () =>
+      rosterClassId !== ''
+        ? classes.find((c) => c.id === Number(rosterClassId)) || null
+        : null,
+    [classes, rosterClassId]
+  );
+
+  const selectedRosterSection = useMemo(
+    () =>
+      rosterSectionId !== ''
+        ? rosterSections.find((s) => s.id === Number(rosterSectionId)) || null
+        : null,
+    [rosterSectionId, rosterSections]
+  );
+
+  const rosterColumns: DataTableColumn<StudentResponse>[] = [
+    {
+      key: 'student',
+      header: 'Student & Admission #',
+      render: (row) => (
+        <div className="flex items-center gap-3">
+          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-indigo-50 text-xs font-bold text-indigo-700 border border-indigo-100">
+            {formatStudentInitials(row)}
+          </div>
+          <div>
+            <button
+              type="button"
+              onClick={() =>
+                setActiveDialog({
+                  kind: 'STUDENT_DETAIL',
+                  student: row,
+                  initialTab: 'enrollments',
+                })
+              }
+              className="text-left font-semibold text-slate-900 hover:text-indigo-600 transition-colors cursor-pointer"
+            >
+              {formatStudentFullName(row)}
+            </button>
+            <p className="mt-0.5 text-xs font-mono text-slate-500">
+              {row.admissionNumber}
+            </p>
+          </div>
+        </div>
+      ),
+    },
+    {
+      key: 'placement',
+      header: 'Enrolled Class & Section',
+      render: () => (
+        <div className="text-xs">
+          <div className="flex flex-wrap items-center gap-1.5">
+            <span className="font-semibold text-slate-900">
+              {selectedRosterClass
+                ? `${selectedRosterClass.name} (${selectedRosterClass.code})`
+                : `Class #${rosterClassId}`}
+            </span>
+            {selectedRosterSection && (
+              <Badge variant="info">Sec {selectedRosterSection.name}</Badge>
+            )}
+          </div>
+          <p className="mt-0.5 text-slate-500">
+            {selectedRosterSession
+              ? `${selectedRosterSession.name} (${selectedRosterSession.status})`
+              : `Session #${rosterSessionId}`}
+          </p>
+        </div>
+      ),
+    },
+    {
+      key: 'demographics',
+      header: 'Gender & DOB',
+      render: (row) => (
+        <div className="text-xs">
+          <span className="font-medium text-slate-800">
+            {GENDER_LABELS[row.gender] || row.gender}
+          </span>
+          <p className="mt-0.5 text-slate-500">DOB: {formatDate(row.dateOfBirth)}</p>
+        </div>
+      ),
+    },
+    {
+      key: 'contact',
+      header: 'Contact',
+      render: (row) => (
+        <div className="text-xs">
+          <p className="text-slate-800">{row.phoneNumber || '—'}</p>
+          <p className="mt-0.5 text-slate-500 truncate max-w-[180px]">
+            {row.email || 'No email on file'}
+          </p>
+        </div>
+      ),
+    },
+    {
+      key: 'status',
+      header: 'Student Status',
       render: (row) => {
         const b = getStudentStatusBadge(row.status);
         return (
@@ -968,68 +1513,47 @@ export const SchoolStudentsPage: React.FC = () => {
       key: 'actions',
       header: 'Actions',
       align: 'right',
-      render: (row) => (
-        <div className="flex flex-wrap items-center justify-end gap-1.5">
-          <Button
-            size="sm"
-            variant="outline"
-            onClick={() =>
-              setActiveDialog({
-                kind: 'STUDENT_DETAIL',
-                student: row,
-                initialTab: 'profile',
-              })
-            }
-          >
-            360° View
-          </Button>
-          {canManageEnrollment && row.status === 'ACTIVE' && (
+      render: (row) => {
+        const hasPendingInvite = studentInvitations.some(
+          (inv) =>
+            inv.status === 'PENDING' &&
+            inv.targetType === 'STUDENT' &&
+            (inv.targetProfileId === row.id ||
+              (row.email &&
+                inv.email.toLowerCase() === row.email.toLowerCase()))
+        );
+        return (
+          <div className="flex flex-wrap items-center justify-end gap-1.5">
             <Button
               size="sm"
-              variant="ghost"
+              variant="outline"
               onClick={() =>
                 setActiveDialog({
-                  kind: 'ENROLLMENT_FORM',
-                  mode: 'create',
-                  enrollment: null,
-                  preselectedStudent: row,
+                  kind: 'STUDENT_DETAIL',
+                  student: row,
+                  initialTab: 'enrollments',
                 })
               }
             >
-              Enroll
+              Student 360°
             </Button>
-          )}
-          {canUpdateStudent && (
-            <>
+            {canInviteStudent && row.status === 'ACTIVE' && !row.userId && (
               <Button
                 size="sm"
-                variant="ghost"
+                variant="outline"
                 onClick={() =>
                   setActiveDialog({
-                    kind: 'STUDENT_FORM',
-                    mode: 'edit',
+                    kind: 'INVITE_STUDENT',
                     student: row,
                   })
                 }
               >
-                Edit
+                {hasPendingInvite ? 'Manage Invite' : 'Invite Login'}
               </Button>
-              <Button
-                size="sm"
-                variant="ghost"
-                onClick={() =>
-                  setActiveDialog({
-                    kind: 'STUDENT_STATUS',
-                    student: row,
-                  })
-                }
-              >
-                Status
-              </Button>
-            </>
-          )}
-        </div>
-      ),
+            )}
+          </div>
+        );
+      },
     },
   ];
 
@@ -1094,13 +1618,20 @@ export const SchoolStudentsPage: React.FC = () => {
     },
     {
       key: 'class',
-      header: 'Class & Roll No.',
+      header: 'Class, Section & Roll No.',
       render: (row) => (
         <div className="text-xs">
-          <span className="font-semibold text-slate-900">
-            {row.className || `Class #${row.classId}`}
-            {row.classCode ? ` (${row.classCode})` : ''}
-          </span>
+          <div className="flex flex-wrap items-center gap-1.5">
+            <span className="font-semibold text-slate-900">
+              {row.className || `Class #${row.classId}`}
+              {row.classCode ? ` (${row.classCode})` : ''}
+            </span>
+            {row.sectionName ? (
+              <Badge variant="info">Sec {row.sectionName}</Badge>
+            ) : (
+              <span className="text-[11px] text-slate-400">Class-wide</span>
+            )}
+          </div>
           <p className="mt-0.5 text-slate-500 font-mono">
             Roll: {row.rollNumber || 'Unassigned'}
           </p>
@@ -1500,6 +2031,14 @@ export const SchoolStudentsPage: React.FC = () => {
                   count: studentsLoaded ? studentTotalElements : undefined,
                 },
                 {
+                  id: 'roster',
+                  label: 'Class-wise Roster',
+                  count:
+                    rosterLoaded && rosterSessionId !== '' && rosterClassId !== ''
+                      ? rosterTotalElements
+                      : undefined,
+                },
+                {
                   id: 'enrollments',
                   label: 'Academic Enrollments',
                   count: enrollmentsLoaded ? enrollmentTotalElements : undefined,
@@ -1699,19 +2238,273 @@ export const SchoolStudentsPage: React.FC = () => {
           </SectionCard>
         )}
 
+        {/* TAB 1B: CLASS-WISE STUDENT ROSTER */}
+        {activeTab === 'roster' && (
+          <SectionCard
+            title={
+              selectedRosterClass && selectedRosterSession
+                ? `Class Roster: ${selectedRosterClass.name}${
+                    selectedRosterSection
+                      ? ` — Section ${selectedRosterSection.name}`
+                      : ''
+                  } (${selectedRosterSession.name})`
+                : 'Class-wise Student Roster'
+            }
+            description="View students enrolled in a specific school class and section for an academic session using the dedicated paginated class roster endpoint."
+            actions={
+              selectedRosterSession && selectedRosterClass ? (
+                <div className="flex items-center gap-2">
+                  {selectedRosterSection && (
+                    <Badge variant="primary">
+                      Section {selectedRosterSection.name}
+                    </Badge>
+                  )}
+                  <Badge variant="info">
+                    {rosterTotalElements} Student
+                    {rosterTotalElements === 1 ? '' : 's'} in{' '}
+                    {selectedRosterSection ? 'Section' : 'Class'}
+                  </Badge>
+                </div>
+              ) : undefined
+            }
+          >
+            {/* Context Selector: Academic Session, Class & Section */}
+            <div className="mb-4 rounded-xl border border-slate-200/80 bg-slate-50/70 p-4 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-6">
+              <div>
+                <label className="mb-1 block text-[11px] font-semibold text-slate-600">
+                  Academic Session *
+                </label>
+                <SelectInput
+                  value={rosterSessionId}
+                  onChange={(e) => {
+                    const nextSess = e.target.value ? Number(e.target.value) : '';
+                    setRosterSessionId(nextSess);
+                    setRosterSectionId('');
+                    setEnrollmentSessionFilter(nextSess);
+                    setRosterPage(0);
+                  }}
+                >
+                  <option value="">Select Academic Session...</option>
+                  {sessions.map((s) => (
+                    <option key={s.id} value={s.id}>
+                      {s.name} — {s.status}
+                    </option>
+                  ))}
+                </SelectInput>
+              </div>
+
+              <div>
+                <label className="mb-1 block text-[11px] font-semibold text-slate-600">
+                  School Class *
+                </label>
+                <SelectInput
+                  value={rosterClassId}
+                  onChange={(e) => {
+                    setRosterClassId(
+                      e.target.value ? Number(e.target.value) : ''
+                    );
+                    setRosterSectionId('');
+                    setRosterPage(0);
+                  }}
+                >
+                  <option value="">Select School Class...</option>
+                  {classes.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.name} ({c.code}){!c.active ? ' [Inactive]' : ''}
+                    </option>
+                  ))}
+                </SelectInput>
+              </div>
+
+              <div>
+                <label className="mb-1 block text-[11px] font-semibold text-slate-600">
+                  Section
+                </label>
+                <SelectInput
+                  value={rosterSectionId}
+                  onChange={(e) => {
+                    setRosterSectionId(
+                      e.target.value ? Number(e.target.value) : ''
+                    );
+                    setRosterPage(0);
+                  }}
+                  disabled={
+                    rosterSessionId === '' ||
+                    rosterClassId === '' ||
+                    rosterSections.length === 0
+                  }
+                >
+                  <option value="">
+                    {rosterSections.length === 0
+                      ? 'All Sections (No sections)'
+                      : `All Sections (${rosterSections.length})`}
+                  </option>
+                  {rosterSections.map((sec) => (
+                    <option key={sec.id} value={sec.id}>
+                      Section {sec.name}
+                      {!sec.active ? ' [Inactive]' : ''}
+                    </option>
+                  ))}
+                </SelectInput>
+              </div>
+
+              <div>
+                <label className="mb-1 block text-[11px] font-semibold text-slate-600">
+                  Search Roster
+                </label>
+                <TextInput
+                  placeholder="Name, admission #, email..."
+                  value={rosterSearch}
+                  onChange={(e) => {
+                    setRosterSearch(e.target.value);
+                    setRosterPage(0);
+                  }}
+                />
+              </div>
+
+              <div>
+                <label className="mb-1 block text-[11px] font-semibold text-slate-600">
+                  Student Status
+                </label>
+                <SelectInput
+                  value={rosterStatusFilter}
+                  onChange={(e) => {
+                    setRosterStatusFilter(e.target.value as StudentStatus | '');
+                    setRosterPage(0);
+                  }}
+                >
+                  <option value="">All Student Statuses</option>
+                  {(Object.keys(STUDENT_STATUS_META) as StudentStatus[]).map(
+                    (st) => (
+                      <option key={st} value={st}>
+                        {STUDENT_STATUS_META[st].label}
+                      </option>
+                    )
+                  )}
+                </SelectInput>
+              </div>
+
+              <div>
+                <label className="mb-1 block text-[11px] font-semibold text-slate-600">
+                  Gender
+                </label>
+                <SelectInput
+                  value={rosterGenderFilter}
+                  onChange={(e) => {
+                    setRosterGenderFilter(e.target.value as Gender | '');
+                    setRosterPage(0);
+                  }}
+                >
+                  <option value="">All Genders</option>
+                  {(Object.keys(GENDER_LABELS) as Gender[]).map((g) => (
+                    <option key={g} value={g}>
+                      {GENDER_LABELS[g]}
+                    </option>
+                  ))}
+                </SelectInput>
+              </div>
+            </div>
+
+            {rosterSessionId === '' || rosterClassId === '' ? (
+              <EmptyState
+                title="Select an Academic Session and Class"
+                description="Choose both an academic session and a school class above to load the paginated class-wise student roster."
+              />
+            ) : (
+              <>
+                <div className="mb-4 flex flex-wrap items-center justify-between gap-2 text-xs text-slate-600">
+                  <div className="flex items-center gap-2">
+                    <span>Sort by:</span>
+                    <select
+                      value={rosterSortBy}
+                      onChange={(e) =>
+                        setRosterSortBy(e.target.value as typeof rosterSortBy)
+                      }
+                      className="rounded border border-slate-300 bg-white px-2 py-1 text-xs text-slate-700"
+                    >
+                      <option value="firstName">First Name</option>
+                      <option value="lastName">Last Name</option>
+                      <option value="admissionNumber">Admission Number</option>
+                      <option value="admissionDate">Admission Date</option>
+                      <option value="dateOfBirth">Date of Birth</option>
+                      <option value="status">Student Status</option>
+                      <option value="createdAt">Created Date</option>
+                    </select>
+                    <select
+                      value={rosterSortDir}
+                      onChange={(e) =>
+                        setRosterSortDir(e.target.value as 'asc' | 'desc')
+                      }
+                      className="rounded border border-slate-300 bg-white px-2 py-1 text-xs text-slate-700"
+                    >
+                      <option value="asc">Ascending</option>
+                      <option value="desc">Descending</option>
+                    </select>
+                  </div>
+
+                  {(rosterSearch ||
+                    rosterSectionId !== '' ||
+                    rosterStatusFilter ||
+                    rosterGenderFilter) && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setRosterSearch('');
+                        setRosterSectionId('');
+                        setRosterStatusFilter('');
+                        setRosterGenderFilter('');
+                        setRosterPage(0);
+                      }}
+                      className="font-medium text-indigo-600 hover:text-indigo-700 cursor-pointer"
+                    >
+                      Reset Roster Filters
+                    </button>
+                  )}
+                </div>
+
+                <DataTable
+                  columns={rosterColumns}
+                  data={rosterStudents}
+                  rowKey={(r) => r.id}
+                  isLoading={loadingRoster || loadingReference}
+                  emptyTitle={
+                    selectedRosterClass && selectedRosterSession
+                      ? `No students enrolled in ${selectedRosterClass.name} for ${selectedRosterSession.name}`
+                      : 'No students found for selected class'
+                  }
+                  emptyDescription="Enroll active students into this class and academic session or adjust your search/status filters."
+                />
+
+                <Pagination
+                  page={rosterPage}
+                  size={rosterPageSize}
+                  totalElements={rosterTotalElements}
+                  totalPages={rosterTotalPages}
+                  onPageChange={setRosterPage}
+                  onSizeChange={(newSize) => {
+                    setRosterPageSize(newSize);
+                    setRosterPage(0);
+                  }}
+                />
+              </>
+            )}
+          </SectionCard>
+        )}
+
         {/* TAB 2: ACADEMIC ENROLLMENTS */}
         {activeTab === 'enrollments' && (
           <SectionCard
             title="Academic Session Enrollments"
-            description="Browse and manage student class placements, roll numbers, and enrollment progression across academic sessions."
+            description="Browse and manage student class placements, sections, roll numbers, and enrollment progression across academic sessions."
           >
-            <div className="mb-4 grid grid-cols-1 gap-3 sm:grid-cols-3">
+            <div className="mb-4 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
               <SelectInput
                 value={enrollmentSessionFilter}
                 onChange={(e) => {
                   setEnrollmentSessionFilter(
                     e.target.value ? Number(e.target.value) : ''
                   );
+                  setEnrollmentSectionFilter('');
                   setEnrollmentPage(0);
                 }}
               >
@@ -1729,6 +2522,7 @@ export const SchoolStudentsPage: React.FC = () => {
                   setEnrollmentClassFilter(
                     e.target.value ? Number(e.target.value) : ''
                   );
+                  setEnrollmentSectionFilter('');
                   setEnrollmentPage(0);
                 }}
               >
@@ -1736,6 +2530,34 @@ export const SchoolStudentsPage: React.FC = () => {
                 {classes.map((c) => (
                   <option key={c.id} value={c.id}>
                     {c.name} ({c.code})
+                  </option>
+                ))}
+              </SelectInput>
+
+              <SelectInput
+                value={enrollmentSectionFilter}
+                onChange={(e) => {
+                  setEnrollmentSectionFilter(
+                    e.target.value ? Number(e.target.value) : ''
+                  );
+                  setEnrollmentPage(0);
+                }}
+                disabled={
+                  enrollmentSessionFilter === '' ||
+                  enrollmentClassFilter === '' ||
+                  enrollmentSections.length === 0
+                }
+              >
+                <option value="">
+                  {enrollmentSessionFilter === '' || enrollmentClassFilter === ''
+                    ? 'Select Session & Class for Sections'
+                    : enrollmentSections.length === 0
+                      ? 'All Sections (None configured)'
+                      : `All Sections (${enrollmentSections.length})`}
+                </option>
+                {enrollmentSections.map((sec) => (
+                  <option key={sec.id} value={sec.id}>
+                    Section {sec.name}
                   </option>
                 ))}
               </SelectInput>
@@ -1791,12 +2613,14 @@ export const SchoolStudentsPage: React.FC = () => {
 
               {(enrollmentSessionFilter ||
                 enrollmentClassFilter ||
+                enrollmentSectionFilter ||
                 enrollmentStatusFilter) && (
                 <button
                   type="button"
                   onClick={() => {
                     setEnrollmentSessionFilter('');
                     setEnrollmentClassFilter('');
+                    setEnrollmentSectionFilter('');
                     setEnrollmentStatusFilter('');
                     setEnrollmentPage(0);
                   }}
@@ -2067,6 +2891,26 @@ export const SchoolStudentsPage: React.FC = () => {
           onRevoke={handleRevokeGuardianInvitation}
         />
 
+        <StudentInvitationModal
+          open={activeDialog?.kind === 'INVITE_STUDENT'}
+          student={
+            activeDialog?.kind === 'INVITE_STUDENT'
+              ? activeDialog.student
+              : null
+          }
+          existingInvitations={studentInvitations}
+          onClose={() =>
+            closeOrReturnDialog(
+              activeDialog?.kind === 'INVITE_STUDENT'
+                ? activeDialog.returnToDetail
+                : undefined
+            )
+          }
+          onSubmit={handleSendStudentInvitation}
+          onResend={handleResendStudentInvitation}
+          onRevoke={handleRevokeStudentInvitation}
+        />
+
         {activeDialog?.kind === 'GUARDIAN_STUDENTS' && (
           <Dialog
             open={true}
@@ -2161,6 +3005,7 @@ export const SchoolStudentsPage: React.FC = () => {
             }
             sessions={sessions}
             guardianInvitations={guardianInvitations}
+            studentInvitations={studentInvitations}
             initialTab={
               activeDialog?.kind === 'STUDENT_DETAIL'
                 ? activeDialog.initialTab
@@ -2169,6 +3014,7 @@ export const SchoolStudentsPage: React.FC = () => {
             canUpdateStudent={canUpdateStudent}
             canManageEnrollment={canManageEnrollment}
             canManageGuardian={canManageGuardian}
+            canInviteStudent={canInviteStudent}
             isSuspended={isOrganizationSuspended || Boolean(orgSuspendedError)}
             refreshTrigger={detailRefreshCounter}
             onEditStudent={(st, returnTab) =>
@@ -2227,6 +3073,13 @@ export const SchoolStudentsPage: React.FC = () => {
               setActiveDialog({
                 kind: 'INVITE_GUARDIAN',
                 guardian,
+                returnToDetail: { student: st, tab: returnTab },
+              })
+            }
+            onInviteStudent={(st, returnTab) =>
+              setActiveDialog({
+                kind: 'INVITE_STUDENT',
+                student: st,
                 returnToDetail: { student: st, tab: returnTab },
               })
             }

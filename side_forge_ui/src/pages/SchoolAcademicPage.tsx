@@ -5,6 +5,7 @@ import {
   BookOpen,
   Calendar,
   CheckCircle2,
+  ChevronDown,
   ChevronLeft,
   ChevronRight,
   Edit3,
@@ -32,11 +33,14 @@ import {
   AssignClassSubjectRequest,
   ClassSubjectResponse,
   CreateSchoolClassRequest,
+  CreateSectionRequest,
   CreateSubjectRequest,
   getSessionStatusBadgeMeta,
   SchoolClassResponse,
+  SectionResponse,
   SubjectResponse,
   UpdateSchoolClassRequest,
+  UpdateSectionRequest,
   UpdateSubjectRequest,
 } from '../types/academicManagement';
 import { AppShell } from '../components/layout/AppShell';
@@ -48,6 +52,7 @@ import {
   DeactivateEntityDialog,
   RemoveClassSubjectDialog,
   SchoolClassFormDialog,
+  SectionFormDialog,
   SubjectFormDialog,
 } from '../components/school/AcademicManagementDialogs';
 import { Badge, CounterLabel, IdLabel } from '../components/ui/Badge';
@@ -63,7 +68,7 @@ import {
 } from '../components/ui/StateViews';
 import { TruncatedText } from '../components/ui/TruncatedText';
 
-type AcademicTab = 'SESSIONS' | 'CLASSES' | 'SUBJECTS' | 'ASSIGNMENTS';
+type AcademicTab = 'SESSIONS' | 'CLASSES' | 'SECTIONS' | 'SUBJECTS' | 'ASSIGNMENTS';
 
 export const SchoolAcademicPage: React.FC = () => {
   const {
@@ -89,6 +94,9 @@ export const SchoolAcademicPage: React.FC = () => {
   const canViewClasses = hasAcademicFeature && hasPermission('class.view');
   const canManageClasses = hasAcademicFeature && hasPermission('class.manage');
 
+  const canViewSections = hasAcademicFeature && hasPermission('section.view');
+  const canManageSections = hasAcademicFeature && hasPermission('section.manage');
+
   const canViewSubjects = hasAcademicFeature && hasPermission('subject.view');
   const canManageSubjects = hasAcademicFeature && hasPermission('subject.manage');
 
@@ -101,23 +109,29 @@ export const SchoolAcademicPage: React.FC = () => {
     const list: AcademicTab[] = [];
     if (canViewSessions || canManageSessions) list.push('SESSIONS');
     if (canViewClasses || canManageClasses) list.push('CLASSES');
+    if (canViewSections || canManageSections) list.push('SECTIONS');
     if (canViewSubjects || canManageSubjects) list.push('SUBJECTS');
     if (canViewClassSubjects || canManageClassSubjects) list.push('ASSIGNMENTS');
     return list;
   }, [
     canManageClassSubjects,
     canManageClasses,
+    canManageSections,
     canManageSessions,
     canManageSubjects,
     canViewClassSubjects,
     canViewClasses,
+    canViewSections,
     canViewSessions,
     canViewSubjects,
   ]);
 
   const tabParam = searchParams.get('tab') as AcademicTab | null;
   const [activeTab, setActiveTab] = useState<AcademicTab>(() => {
-    if (tabParam && ['SESSIONS', 'CLASSES', 'SUBJECTS', 'ASSIGNMENTS'].includes(tabParam)) {
+    if (
+      tabParam &&
+      ['SESSIONS', 'CLASSES', 'SECTIONS', 'SUBJECTS', 'ASSIGNMENTS'].includes(tabParam)
+    ) {
       return tabParam;
     }
     return 'SESSIONS';
@@ -191,9 +205,31 @@ export const SchoolAcademicPage: React.FC = () => {
     null
   );
 
+  // Class Sections state (scoped to `selectedAssignmentSessionId`)
+  const [sections, setSections] = useState<SectionResponse[]>([]);
+  const [isLoadingSections, setIsLoadingSections] = useState<boolean>(false);
+  const [sectionsError, setSectionsError] = useState<string | null>(null);
+  const [sectionClassFilter, setSectionClassFilter] = useState<number | ''>('');
+  const [sectionStatusFilter, setSectionStatusFilter] = useState<
+    'ALL' | 'ACTIVE' | 'INACTIVE'
+  >('ALL');
+  const [sectionSearch, setSectionSearch] = useState<string>('');
+  const [sectionPage, setSectionPage] = useState<number>(0);
+  const [isSectionFormOpen, setIsSectionFormOpen] = useState<boolean>(false);
+  const [editingSection, setEditingSection] = useState<SectionResponse | null>(
+    null
+  );
+  const [preselectedSectionClassId, setPreselectedSectionClassId] = useState<
+    number | null
+  >(null);
+  const [expandedClassIds, setExpandedClassIds] = useState<Set<number>>(
+    new Set()
+  );
+
   const [deactivateTarget, setDeactivateTarget] = useState<{
-    type: 'Class' | 'Subject';
+    type: 'Class' | 'Subject' | 'Section';
     id: number;
+    sessionId?: number;
     name: string;
     code: string;
   } | null>(null);
@@ -212,6 +248,11 @@ export const SchoolAcademicPage: React.FC = () => {
     setSelectedAssignmentSessionId(null);
     setSelectedAssignmentClassId(null);
     setClassSubjects([]);
+    setSections([]);
+    setSectionClassFilter('');
+    setSectionStatusFilter('ALL');
+    setSectionSearch('');
+    setSectionPage(0);
     setClassPage(0);
     setSubjectPage(0);
   }, [activeOrganizationId]);
@@ -251,7 +292,7 @@ export const SchoolAcademicPage: React.FC = () => {
       try {
         const tasks: Promise<void>[] = [];
 
-        if (canViewSessions || canViewClassSubjects) {
+        if (canViewSessions || canViewClassSubjects || canViewSections) {
           tasks.push(
             academicManagementApi
               .getSessions(activeOrganizationId)
@@ -268,7 +309,7 @@ export const SchoolAcademicPage: React.FC = () => {
           setSessions([]);
         }
 
-        if (canViewClasses || canViewClassSubjects) {
+        if (canViewClasses || canViewClassSubjects || canViewSections) {
           tasks.push(
             academicManagementApi
               .getClasses(activeOrganizationId)
@@ -322,6 +363,7 @@ export const SchoolAcademicPage: React.FC = () => {
       activeOrganizationId,
       canViewClassSubjects,
       canViewClasses,
+      canViewSections,
       canViewSessions,
       canViewSubjects,
       isOrganizationRestricted,
@@ -407,6 +449,63 @@ export const SchoolAcademicPage: React.FC = () => {
       void loadClassSubjects();
     }
   }, [activeTab, loadClassSubjects]);
+
+  // Clear stale section data immediately when the selected academic session changes
+  useEffect(() => {
+    setSections([]);
+    setSectionPage(0);
+  }, [selectedAssignmentSessionId]);
+
+  const loadSections = useCallback(async () => {
+    if (
+      !activeOrganizationId ||
+      !selectedAssignmentSessionId ||
+      (!canViewSections && !canManageSections)
+    ) {
+      setSections([]);
+      return;
+    }
+    setIsLoadingSections(true);
+    setSectionsError(null);
+    const requestSessionId = selectedAssignmentSessionId;
+    try {
+      const list = await academicManagementApi.getSections(
+        activeOrganizationId,
+        requestSessionId
+      );
+      setSections((prev) =>
+        requestSessionId === selectedAssignmentSessionId ? list || [] : prev
+      );
+    } catch (err) {
+      setSectionsError(
+        err instanceof ApiError
+          ? err.message
+          : 'Unable to load class sections for the selected academic session.'
+      );
+    } finally {
+      setIsLoadingSections(false);
+    }
+  }, [
+    activeOrganizationId,
+    canManageSections,
+    canViewSections,
+    selectedAssignmentSessionId,
+  ]);
+
+  useEffect(() => {
+    if (activeTab === 'SECTIONS' || activeTab === 'CLASSES') {
+      void loadSections();
+    }
+  }, [activeTab, loadSections]);
+
+  // Expand all classes that have sections by default when classes/sections load
+  useEffect(() => {
+    if (classes.length === 0) return;
+    setExpandedClassIds((prev) => {
+      if (prev.size > 0) return prev;
+      return new Set(classes.map((c) => c.id));
+    });
+  }, [classes]);
 
   const handleSaveSession = async (name: string) => {
     if (!activeOrganizationId) return;
@@ -551,6 +650,53 @@ export const SchoolAcademicPage: React.FC = () => {
     }
   };
 
+  const handleSaveSection = async (
+    payload: CreateSectionRequest | UpdateSectionRequest
+  ) => {
+    if (!activeOrganizationId || !selectedAssignmentSessionId) return;
+    setIsMutating(true);
+    setDialogError(null);
+    try {
+      if (editingSection) {
+        const updated = await academicManagementApi.updateSection(
+          activeOrganizationId,
+          selectedAssignmentSessionId,
+          editingSection.id,
+          payload
+        );
+        toast.success(
+          'Class section updated',
+          `Section "${updated.name}" updated successfully.`
+        );
+      } else {
+        const created = await academicManagementApi.createSection(
+          activeOrganizationId,
+          selectedAssignmentSessionId,
+          payload
+        );
+        toast.success(
+          'Class section created',
+          `Section "${created.name}" created in ${
+            selectedAssignmentSession?.name || 'selected session'
+          }.`
+        );
+      }
+      setExpandedClassIds((prev) => {
+        const next = new Set(prev);
+        next.add(payload.classId);
+        return next;
+      });
+      setIsSectionFormOpen(false);
+      setEditingSection(null);
+      setPreselectedSectionClassId(null);
+      await loadSections();
+    } catch (err) {
+      setDialogError(classifyOrganizationAccessError(err).userMessage);
+    } finally {
+      setIsMutating(false);
+    }
+  };
+
   const handleConfirmDeactivate = async () => {
     if (!activeOrganizationId || !deactivateTarget) return;
     setIsMutating(true);
@@ -565,7 +711,7 @@ export const SchoolAcademicPage: React.FC = () => {
           'Class deactivated',
           `"${deactivateTarget.name}" (${deactivateTarget.code}) is now inactive.`
         );
-      } else {
+      } else if (deactivateTarget.type === 'Subject') {
         await academicManagementApi.deactivateSubject(
           activeOrganizationId,
           deactivateTarget.id
@@ -574,6 +720,22 @@ export const SchoolAcademicPage: React.FC = () => {
           'Subject deactivated',
           `"${deactivateTarget.name}" (${deactivateTarget.code}) is now inactive.`
         );
+      } else if (deactivateTarget.type === 'Section') {
+        const targetSessId =
+          deactivateTarget.sessionId || selectedAssignmentSessionId;
+        if (!targetSessId) return;
+        await academicManagementApi.deactivateSection(
+          activeOrganizationId,
+          targetSessId,
+          deactivateTarget.id
+        );
+        toast.info(
+          'Section deactivated',
+          `Section "${deactivateTarget.name}" (${deactivateTarget.code}) is now inactive.`
+        );
+        setDeactivateTarget(null);
+        await loadSections();
+        return;
       }
       setDeactivateTarget(null);
       await loadAcademicData(true);
@@ -712,6 +874,99 @@ export const SchoolAcademicPage: React.FC = () => {
     }
     return map;
   }, [subjects]);
+
+  const classById = useMemo(() => {
+    const map = new Map<number, SchoolClassResponse>();
+    for (const c of classes) {
+      map.set(c.id, c);
+    }
+    return map;
+  }, [classes]);
+
+  const sectionsByClassId = useMemo(() => {
+    const map = new Map<number, SectionResponse[]>();
+    for (const sec of sections) {
+      const list = map.get(sec.classId) || [];
+      list.push(sec);
+      map.set(sec.classId, list);
+    }
+    for (const [cid, list] of map.entries()) {
+      list.sort((a, b) => a.name.localeCompare(b.name));
+      map.set(cid, list);
+    }
+    return map;
+  }, [sections]);
+
+  const toggleExpandClass = useCallback((classId: number) => {
+    setExpandedClassIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(classId)) {
+        next.delete(classId);
+      } else {
+        next.add(classId);
+      }
+      return next;
+    });
+  }, []);
+
+  const expandAllClasses = useCallback(() => {
+    setExpandedClassIds(new Set(classes.map((c) => c.id)));
+  }, [classes]);
+
+  const collapseAllClasses = useCallback(() => {
+    setExpandedClassIds(new Set());
+  }, []);
+
+  const hierarchyClasses = useMemo(() => {
+    const q = sectionSearch.trim().toLowerCase();
+    return [...classes]
+      .sort((a, b) => a.displayOrder - b.displayOrder || a.name.localeCompare(b.name))
+      .filter((cls) => {
+        if (sectionClassFilter && cls.id !== Number(sectionClassFilter)) {
+          return false;
+        }
+        const clsSections = sectionsByClassId.get(cls.id) || [];
+        const matchingSections = clsSections.filter((sec) => {
+          if (sectionStatusFilter === 'ACTIVE' && !sec.active) return false;
+          if (sectionStatusFilter === 'INACTIVE' && sec.active) return false;
+          if (q && !sec.name.toLowerCase().includes(q)) return false;
+          return true;
+        });
+        if (!q && sectionStatusFilter === 'ALL') return true;
+        const classMatchesQuery =
+          !q ||
+          cls.name.toLowerCase().includes(q) ||
+          cls.code.toLowerCase().includes(q);
+        if (sectionStatusFilter !== 'ALL') {
+          return matchingSections.length > 0 || (classMatchesQuery && clsSections.length === 0);
+        }
+        return classMatchesQuery || matchingSections.length > 0;
+      });
+  }, [
+    classes,
+    sectionClassFilter,
+    sectionSearch,
+    sectionStatusFilter,
+    sectionsByClassId,
+  ]);
+
+  const filteredSections = useMemo(() => {
+    const q = sectionSearch.trim().toLowerCase();
+    return sections.filter((sec) => {
+      if (!q) return true;
+      const cls = classById.get(sec.classId);
+      const matchesName = sec.name.toLowerCase().includes(q);
+      const matchesClass =
+        (cls?.name || '').toLowerCase().includes(q) ||
+        (cls?.code || '').toLowerCase().includes(q);
+      return matchesName || matchesClass;
+    });
+  }, [classById, sectionSearch, sections]);
+
+  const pagedSections = useMemo(() => {
+    const start = sectionPage * pageSize;
+    return filteredSections.slice(start, start + pageSize);
+  }, [filteredSections, sectionPage]);
 
   const selectedAssignmentSession = useMemo(
     () => sessions.find((s) => s.id === selectedAssignmentSessionId) || null,
@@ -900,8 +1155,37 @@ export const SchoolAcademicPage: React.FC = () => {
       },
       {
         key: 'displayOrder',
-        header: 'Order',
-        render: (row) => <CounterLabel count={`#${row.displayOrder}`} />,
+        header: 'Order & Sections',
+        render: (row) => {
+          const clsSections = sectionsByClassId.get(row.id) || [];
+          const activeSecCount = clsSections.filter((s) => s.active).length;
+          return (
+            <div className="flex items-center gap-2 flex-wrap">
+              <CounterLabel count={`#${row.displayOrder}`} />
+              <button
+                type="button"
+                onClick={() => {
+                  setExpandedClassIds((prev) => new Set(prev).add(row.id));
+                  handleSelectTab('SECTIONS');
+                }}
+                className="inline-flex items-center gap-1 rounded-md border border-indigo-200/80 bg-indigo-50/70 px-2 py-0.5 text-[11px] font-semibold text-indigo-700 hover:bg-indigo-100/80 cursor-pointer"
+                title="View sections under this class in the hierarchy"
+              >
+                <Layers className="w-3 h-3" />
+                <span>
+                  {clsSections.length}{' '}
+                  {clsSections.length === 1 ? 'section' : 'sections'}
+                </span>
+                {clsSections.length > 0 &&
+                  activeSecCount !== clsSections.length && (
+                    <span className="text-[10px] text-indigo-500">
+                      ({activeSecCount} active)
+                    </span>
+                  )}
+              </button>
+            </div>
+          );
+        },
       },
       {
         key: 'description',
@@ -941,6 +1225,24 @@ export const SchoolAcademicPage: React.FC = () => {
         align: 'right',
         render: (row) => (
           <div className="flex items-center justify-end gap-1.5">
+            {canManageSections &&
+              row.active &&
+              selectedAssignmentSession &&
+              selectedAssignmentSession.status !== 'COMPLETED' && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    setEditingSection(null);
+                    setPreselectedSectionClassId(row.id);
+                    setDialogError(null);
+                    setIsSectionFormOpen(true);
+                  }}
+                  leftIcon={<Plus className="w-3.5 h-3.5" />}
+                >
+                  Add Section
+                </Button>
+              )}
             {(canViewClassSubjects || canManageClassSubjects) && (
               <Button
                 variant="outline"
@@ -993,7 +1295,14 @@ export const SchoolAcademicPage: React.FC = () => {
         ),
       },
     ],
-    [canManageClassSubjects, canManageClasses, canViewClassSubjects]
+    [
+      canManageClassSubjects,
+      canManageClasses,
+      canManageSections,
+      canViewClassSubjects,
+      selectedAssignmentSession,
+      sectionsByClassId,
+    ]
   );
 
   const subjectColumns: DataTableColumn<SubjectResponse>[] = useMemo(
@@ -1180,8 +1489,147 @@ export const SchoolAcademicPage: React.FC = () => {
     [canManageClassSubjects, selectedAssignmentSession, subjectById]
   );
 
+  const sectionColumns: DataTableColumn<SectionResponse>[] = useMemo(
+    () => [
+      {
+        key: 'name',
+        header: 'Section',
+        render: (row) => (
+          <div className="flex items-center gap-2 flex-wrap min-w-[140px]">
+            <span className="font-bold text-slate-900 text-sm">
+              Section {row.name}
+            </span>
+            <IdLabel>#SEC-{row.id}</IdLabel>
+          </div>
+        ),
+      },
+      {
+        key: 'class',
+        header: 'Associated Class',
+        render: (row) => {
+          const cls = classById.get(row.classId);
+          return (
+            <div className="flex items-center gap-2 flex-wrap min-w-[160px]">
+              <span className="font-semibold text-slate-900">
+                {cls?.name || `Class #${row.classId}`}
+              </span>
+              {cls?.code && <IdLabel>{cls.code}</IdLabel>}
+              {cls && !cls.active && (
+                <Badge variant="neutral">Class Inactive</Badge>
+              )}
+            </div>
+          );
+        },
+      },
+      {
+        key: 'session',
+        header: 'Academic Session',
+        render: () => {
+          const meta = selectedAssignmentSession
+            ? getSessionStatusBadgeMeta(selectedAssignmentSession.status)
+            : null;
+          return (
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="text-xs font-medium text-slate-800">
+                {selectedAssignmentSession?.name || '—'}
+              </span>
+              {meta && <Badge variant={meta.variant}>{meta.label}</Badge>}
+            </div>
+          );
+        },
+      },
+      {
+        key: 'capacity',
+        header: 'Seating Capacity',
+        render: (row) =>
+          row.capacity !== null && row.capacity !== undefined ? (
+            <span className="font-mono text-xs font-semibold text-slate-800">
+              {row.capacity.toLocaleString('en-IN')} students
+            </span>
+          ) : (
+            <span className="text-xs text-slate-400">Unspecified</span>
+          ),
+      },
+      {
+        key: 'status',
+        header: 'Status',
+        render: (row) => (
+          <Badge variant={row.active ? 'success' : 'neutral'} dot>
+            {row.active ? 'Active' : 'Inactive'}
+          </Badge>
+        ),
+      },
+      {
+        key: 'updatedAt',
+        header: 'Updated On',
+        render: (row) => (
+          <span className="text-xs text-slate-500 whitespace-nowrap">
+            {formatOnboardingDate(row.updatedAt || row.createdAt)}
+          </span>
+        ),
+      },
+      {
+        key: 'actions',
+        header: 'Actions',
+        align: 'right',
+        render: (row) => {
+          if (!canManageSections) return null;
+          const isSessionCompleted =
+            selectedAssignmentSession?.status === 'COMPLETED';
+          if (isSessionCompleted) {
+            return (
+              <span className="inline-flex items-center gap-1 text-[11px] text-slate-400">
+                <Lock className="w-3 h-3" />
+                <span>Session Completed</span>
+              </span>
+            );
+          }
+          const cls = classById.get(row.classId);
+          return (
+            <div className="flex items-center justify-end gap-1.5">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  setEditingSection(row);
+                  setDialogError(null);
+                  setIsSectionFormOpen(true);
+                }}
+                leftIcon={<Edit3 className="w-3.5 h-3.5" />}
+              >
+                Edit
+              </Button>
+              {row.active && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => {
+                    setDialogError(null);
+                    setDeactivateTarget({
+                      type: 'Section',
+                      id: row.id,
+                      sessionId: row.academicSessionId,
+                      name: `${cls?.name || `Class #${row.classId}`} — Section ${row.name}`,
+                      code: `SEC-${row.id}`,
+                    });
+                  }}
+                  className="text-rose-600 hover:bg-rose-50 hover:text-rose-700"
+                  leftIcon={<PowerOff className="w-3.5 h-3.5" />}
+                >
+                  Deactivate
+                </Button>
+              )}
+            </div>
+          );
+        },
+      },
+    ],
+    [canManageSections, classById, selectedAssignmentSession]
+  );
+
   const totalClassPages = Math.max(1, Math.ceil(filteredClasses.length / pageSize));
   const totalSubjectPages = Math.max(1, Math.ceil(filteredSubjects.length / pageSize));
+  const totalSectionPages = Math.max(1, Math.ceil(filteredSections.length / pageSize));
 
   if (isOrganizationSuspended) {
     return (
@@ -1338,6 +1786,23 @@ export const SchoolAcademicPage: React.FC = () => {
                   New Class
                 </Button>
               )}
+              {activeTab === 'SECTIONS' &&
+                canManageSections &&
+                selectedAssignmentSession &&
+                selectedAssignmentSession.status !== 'COMPLETED' && (
+                  <Button
+                    variant="primary"
+                    size="sm"
+                    onClick={() => {
+                      setEditingSection(null);
+                      setDialogError(null);
+                      setIsSectionFormOpen(true);
+                    }}
+                    leftIcon={<Plus className="w-3.5 h-3.5" />}
+                  >
+                    New Section
+                  </Button>
+                )}
               {activeTab === 'SUBJECTS' && canManageSubjects && (
                 <Button
                   variant="primary"
@@ -1360,6 +1825,9 @@ export const SchoolAcademicPage: React.FC = () => {
                   void loadAcademicData(true);
                   if (activeTab === 'ASSIGNMENTS') {
                     void loadClassSubjects();
+                  }
+                  if (activeTab === 'SECTIONS') {
+                    void loadSections();
                   }
                 }}
                 leftIcon={<RefreshCw className="w-3.5 h-3.5" />}
@@ -1417,6 +1885,26 @@ export const SchoolAcademicPage: React.FC = () => {
               >
                 {classes.length}
               </span>
+            </button>
+          )}
+
+          {(canViewSections || canManageSections) && (
+            <button
+              type="button"
+              onClick={() => handleSelectTab('SECTIONS')}
+              className={`inline-flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-semibold transition-colors cursor-pointer ${
+                activeTab === 'SECTIONS'
+                  ? 'bg-indigo-600 text-white shadow-xs'
+                  : 'bg-white text-slate-600 hover:bg-slate-100 border border-slate-200/80'
+              }`}
+            >
+              <Layers className="w-3.5 h-3.5" />
+              <span>Class Sections</span>
+              {activeTab === 'SECTIONS' && (
+                <span className="px-1.5 py-0.5 rounded text-[10px] tabular-nums bg-indigo-500 text-white">
+                  {sections.length}
+                </span>
+              )}
             </button>
           )}
 
@@ -1677,6 +2165,383 @@ export const SchoolAcademicPage: React.FC = () => {
                         Next
                       </Button>
                     </div>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* TAB 3: SUBJECTS */}
+            {/* TAB: CLASS SECTIONS */}
+            {activeTab === 'SECTIONS' && (
+              <div className="space-y-4">
+                <div className="rounded-2xl border border-slate-200/80 bg-white p-4 shadow-xs space-y-3">
+                  <div className="grid grid-cols-1 md:grid-cols-12 gap-3.5 items-end">
+                    <div className="md:col-span-3">
+                      <FormField
+                        label="Academic Session"
+                        htmlFor="sections-session-select"
+                      >
+                        <Select
+                          id="sections-session-select"
+                          value={selectedAssignmentSessionId ?? ''}
+                          onChange={(e) => {
+                            setSelectedAssignmentSessionId(
+                              e.target.value ? Number(e.target.value) : null
+                            );
+                            setSectionPage(0);
+                          }}
+                        >
+                          <option value="">Select an academic session...</option>
+                          {sessions.map((s) => (
+                            <option key={s.id} value={s.id}>
+                              {s.name} ({s.status})
+                            </option>
+                          ))}
+                        </Select>
+                      </FormField>
+                    </div>
+
+                    <div className="md:col-span-3">
+                      <FormField
+                        label="Filter by Class"
+                        htmlFor="sections-class-filter"
+                      >
+                        <Select
+                          id="sections-class-filter"
+                          value={sectionClassFilter}
+                          onChange={(e) => {
+                            setSectionClassFilter(
+                              e.target.value ? Number(e.target.value) : ''
+                            );
+                            setSectionPage(0);
+                          }}
+                        >
+                          <option value="">All Classes in Session</option>
+                          {classes.map((c) => (
+                            <option key={c.id} value={c.id}>
+                              {c.name} ({c.code}){!c.active ? ' [Inactive]' : ''}
+                            </option>
+                          ))}
+                        </Select>
+                      </FormField>
+                    </div>
+
+                    <div className="md:col-span-2">
+                      <FormField
+                        label="Section Status"
+                        htmlFor="sections-status-filter"
+                      >
+                        <Select
+                          id="sections-status-filter"
+                          value={sectionStatusFilter}
+                          onChange={(e) => {
+                            setSectionStatusFilter(
+                              e.target.value as 'ALL' | 'ACTIVE' | 'INACTIVE'
+                            );
+                            setSectionPage(0);
+                          }}
+                        >
+                          <option value="ALL">All Statuses</option>
+                          <option value="ACTIVE">Active Only</option>
+                          <option value="INACTIVE">Inactive Only</option>
+                        </Select>
+                      </FormField>
+                    </div>
+
+                    <div className="md:col-span-4">
+                      <FormField
+                        label="Search Sections"
+                        htmlFor="sections-search-input"
+                      >
+                        <Input
+                          id="sections-search-input"
+                          placeholder="Search by section or class name..."
+                          value={sectionSearch}
+                          onChange={(e) => {
+                            setSectionSearch(e.target.value);
+                            setSectionPage(0);
+                          }}
+                          leftIcon={<Search className="w-4 h-4" />}
+                          rightElement={
+                            sectionSearch ? (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setSectionSearch('');
+                                  setSectionPage(0);
+                                }}
+                                className="text-slate-400 hover:text-slate-600 p-0.5 rounded cursor-pointer"
+                                aria-label="Clear section search"
+                              >
+                                <X className="w-3.5 h-3.5" />
+                              </button>
+                            ) : null
+                          }
+                        />
+                      </FormField>
+                    </div>
+                  </div>
+                </div>
+
+                {selectedAssignmentSession?.status === 'COMPLETED' && (
+                  <InlineAlert
+                    variant="warning"
+                    title="Completed Session (Read-Only)"
+                  >
+                    <strong>{selectedAssignmentSession.name}</strong> is completed. Class sections
+                    for this academic session are locked and cannot be created, edited, or
+                    deactivated.
+                  </InlineAlert>
+                )}
+
+                {!selectedAssignmentSession ? (
+                  <div className="rounded-2xl border border-slate-200/80 bg-white p-8 text-center">
+                    <p className="text-sm font-semibold text-slate-800">
+                      Select an Academic Session
+                    </p>
+                    <p className="text-xs text-slate-500 mt-1">
+                      Choose an academic session above to view or manage class sections for that
+                      session.
+                    </p>
+                  </div>
+                ) : isLoadingSections ? (
+                  <LoadingState label="Loading class sections for selected session..." />
+                ) : sectionsError ? (
+                  <ErrorState
+                    title="Unable to load class sections"
+                    message={sectionsError}
+                    onRetry={() => void loadSections()}
+                  />
+                ) : (
+                  <div className="rounded-2xl border border-slate-200/80 bg-white shadow-xs overflow-hidden">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-200/80 bg-slate-50/70 px-4 py-3">
+                      <div className="flex items-center gap-2.5 flex-wrap">
+                        <span className="inline-flex h-7 w-7 items-center justify-center rounded-lg bg-indigo-600 text-white shadow-xs">
+                          <Layers className="w-4 h-4" />
+                        </span>
+                        <div>
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span className="text-sm font-bold text-slate-900">
+                              {selectedAssignmentSession.name}
+                            </span>
+                            {selectedAssignmentSession.status === 'ACTIVE' && (
+                              <Badge variant="success" dot>
+                                Active Session
+                              </Badge>
+                            )}
+                            <span className="text-xs text-slate-500">
+                              • {hierarchyClasses.length} Classes • {sections.length} Sections
+                            </span>
+                          </div>
+                          <p className="text-[11px] text-slate-500">
+                            Academic Hierarchy: Session → Class → Sections
+                          </p>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <Button variant="outline" size="sm" onClick={expandAllClasses}>
+                          Expand All
+                        </Button>
+                        <Button variant="outline" size="sm" onClick={collapseAllClasses}>
+                          Collapse All
+                        </Button>
+                      </div>
+                    </div>
+
+                    {hierarchyClasses.length === 0 ? (
+                      <div className="p-8 text-center">
+                        <p className="text-sm font-semibold text-slate-800">
+                          No classes match your filter
+                        </p>
+                        <p className="text-xs text-slate-500 mt-1">
+                          {classes.length === 0
+                            ? 'Create school classes first, then add sections (A, B, C) under each class.'
+                            : 'Try clearing your class, status, or search filters above.'}
+                        </p>
+                      </div>
+                    ) : (
+                      <div className="divide-y divide-slate-200/80">
+                        {hierarchyClasses.map((cls) => {
+                          const allClassSections = sectionsByClassId.get(cls.id) || [];
+                          const q = sectionSearch.trim().toLowerCase();
+                          const visibleSections = allClassSections.filter((sec) => {
+                            if (sectionStatusFilter === 'ACTIVE' && !sec.active) return false;
+                            if (sectionStatusFilter === 'INACTIVE' && sec.active) return false;
+                            if (
+                              q &&
+                              !sec.name.toLowerCase().includes(q) &&
+                              !cls.name.toLowerCase().includes(q) &&
+                              !cls.code.toLowerCase().includes(q)
+                            ) {
+                              return false;
+                            }
+                            return true;
+                          });
+                          const isExpanded = expandedClassIds.has(cls.id);
+                          const isSessionLocked = selectedAssignmentSession.status === 'COMPLETED';
+
+                          return (
+                            <div key={cls.id} className="bg-white">
+                              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 px-4 py-3 hover:bg-slate-50/80 transition-colors">
+                                <div className="flex items-center gap-2.5 min-w-0">
+                                  <button
+                                    type="button"
+                                    onClick={() => toggleExpandClass(cls.id)}
+                                    className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-600 hover:bg-slate-100 cursor-pointer"
+                                    aria-label={isExpanded ? `Collapse ${cls.name}` : `Expand ${cls.name}`}
+                                  >
+                                    {isExpanded ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => toggleExpandClass(cls.id)}
+                                    className="flex items-center gap-2 flex-wrap text-left cursor-pointer"
+                                  >
+                                    <span className="text-sm font-semibold text-slate-900">{cls.name}</span>
+                                    <IdLabel>{cls.code}</IdLabel>
+                                    <CounterLabel count={`#${cls.displayOrder}`} />
+                                    <Badge variant={cls.active ? 'success' : 'neutral'} dot>
+                                      {cls.active ? 'Active' : 'Inactive'}
+                                    </Badge>
+                                    <span className="inline-flex items-center rounded-full bg-indigo-50 px-2.5 py-0.5 text-[11px] font-semibold text-indigo-700 border border-indigo-200/80">
+                                      {allClassSections.length} {allClassSections.length === 1 ? 'section' : 'sections'}
+                                    </span>
+                                  </button>
+                                </div>
+                                <div className="flex items-center gap-1.5 pl-9 sm:pl-0">
+                                  {canManageSections && cls.active && !isSessionLocked && (
+                                    <Button
+                                      variant="primary"
+                                      size="sm"
+                                      onClick={() => {
+                                        setEditingSection(null);
+                                        setPreselectedSectionClassId(cls.id);
+                                        setDialogError(null);
+                                        setIsSectionFormOpen(true);
+                                      }}
+                                      leftIcon={<Plus className="w-3.5 h-3.5" />}
+                                    >
+                                      Add Section
+                                    </Button>
+                                  )}
+                                  {(canViewClassSubjects || canManageClassSubjects) && (
+                                    <Button
+                                      variant="outline"
+                                      size="sm"
+                                      onClick={() => {
+                                        setSelectedAssignmentClassId(cls.id);
+                                        handleSelectTab('ASSIGNMENTS');
+                                      }}
+                                      leftIcon={<Layers className="w-3.5 h-3.5" />}
+                                    >
+                                      Subjects
+                                    </Button>
+                                  )}
+                                </div>
+                              </div>
+                              {isExpanded && (
+                                <div className="border-t border-slate-100 bg-slate-50/40 pl-8 pr-4 py-2.5">
+                                  {visibleSections.length === 0 ? (
+                                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 rounded-xl border border-dashed border-slate-200 bg-white px-3.5 py-2.5 text-xs text-slate-500">
+                                      <span>
+                                        No sections created under <strong className="text-slate-700">{cls.name}</strong> in {selectedAssignmentSession.name}.
+                                      </span>
+                                      {canManageSections && cls.active && !isSessionLocked && (
+                                        <button
+                                          type="button"
+                                          onClick={() => {
+                                            setEditingSection(null);
+                                            setPreselectedSectionClassId(cls.id);
+                                            setDialogError(null);
+                                            setIsSectionFormOpen(true);
+                                          }}
+                                          className="inline-flex items-center gap-1 font-semibold text-indigo-600 hover:text-indigo-700 cursor-pointer"
+                                        >
+                                          <Plus className="w-3.5 h-3.5" />
+                                          Create first section (e.g., Section A)
+                                        </button>
+                                      )}
+                                    </div>
+                                  ) : (
+                                    <div className="relative border-l-2 border-indigo-200/80 ml-2 pl-4 space-y-2">
+                                      {visibleSections.map((sec) => (
+                                        <div
+                                          key={sec.id}
+                                          className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 rounded-xl border border-slate-200/80 bg-white px-3.5 py-2 shadow-2xs hover:border-indigo-200"
+                                        >
+                                          <div className="flex items-center gap-2.5 flex-wrap">
+                                            <span className="inline-flex items-center rounded-md bg-indigo-50 px-2 py-0.5 text-xs font-bold text-indigo-900 border border-indigo-200/60">
+                                              Section {sec.name}
+                                            </span>
+                                            <IdLabel>{`#SEC-${sec.id}`}</IdLabel>
+                                            <Badge variant={sec.active ? 'success' : 'neutral'} dot>
+                                              {sec.active ? 'Active' : 'Inactive'}
+                                            </Badge>
+                                            <span className="text-xs text-slate-600">
+                                              Capacity:{' '}
+                                              {sec.capacity !== null && sec.capacity !== undefined ? (
+                                                <strong className="text-slate-800">{sec.capacity} students</strong>
+                                              ) : (
+                                                <span className="text-slate-400">Unspecified</span>
+                                              )}
+                                            </span>
+                                            <span className="text-[11px] text-slate-400">
+                                              • Updated {formatOnboardingDate(sec.updatedAt || sec.createdAt)}
+                                            </span>
+                                          </div>
+                                          <div className="flex items-center gap-1.5 justify-end">
+                                            {canManageSections ? (
+                                              <>
+                                                <Button
+                                                  variant="outline"
+                                                  size="sm"
+                                                  disabled={isSessionLocked}
+                                                  onClick={() => {
+                                                    setEditingSection(sec);
+                                                    setPreselectedSectionClassId(sec.classId);
+                                                    setDialogError(null);
+                                                    setIsSectionFormOpen(true);
+                                                  }}
+                                                  leftIcon={<Edit3 className="w-3.5 h-3.5" />}
+                                                >
+                                                  Edit
+                                                </Button>
+                                                {sec.active && (
+                                                  <Button
+                                                    variant="ghost"
+                                                    size="sm"
+                                                    disabled={isSessionLocked}
+                                                    onClick={() => {
+                                                      setDialogError(null);
+                                                      setDeactivateTarget({
+                                                        type: 'Section',
+                                                        id: sec.id,
+                                                        name: `${cls.name} - Section ${sec.name}`,
+                                                        code: cls.code,
+                                                      });
+                                                    }}
+                                                    className="text-rose-600 hover:bg-rose-50 hover:text-rose-700"
+                                                    leftIcon={<PowerOff className="w-3.5 h-3.5" />}
+                                                  >
+                                                    Deactivate
+                                                  </Button>
+                                                )}
+                                              </>
+                                            ) : (
+                                              <span className="text-xs text-slate-400">View only</span>
+                                            )}
+                                          </div>
+                                        </div>
+                                      ))}
+                                    </div>
+                                  )}
+                                </div>
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
                   </div>
                 )}
               </div>
@@ -1949,6 +2814,29 @@ export const SchoolAcademicPage: React.FC = () => {
               isSubmitting={isMutating}
               errorMessage={dialogError}
               onSubmit={handleSaveClass}
+            />
+
+            <SectionFormDialog
+              open={isSectionFormOpen}
+              onClose={() => {
+                if (!isMutating) {
+                  setIsSectionFormOpen(false);
+                  setEditingSection(null);
+                  setPreselectedSectionClassId(null);
+                  setDialogError(null);
+                }
+              }}
+              sessionName={selectedAssignmentSession?.name ?? ''}
+              editingSection={editingSection}
+              availableClasses={classes}
+              existingSections={sections}
+              defaultClassId={
+                preselectedSectionClassId ??
+                (sectionClassFilter ? Number(sectionClassFilter) : null)
+              }
+              isSubmitting={isMutating}
+              errorMessage={dialogError}
+              onSubmit={handleSaveSection}
             />
 
             <SubjectFormDialog

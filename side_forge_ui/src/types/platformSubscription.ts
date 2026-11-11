@@ -7,12 +7,53 @@ import {
 import { BadgeVariant } from '../components/ui/Badge';
 
 export type SubscriptionPaymentMethod =
-  | 'CASH'
   | 'BANK_TRANSFER'
   | 'UPI'
   | 'CHEQUE'
-  | 'CARD'
-  | 'ONLINE';
+  | 'CASH'
+  | 'DEMAND_DRAFT'
+  | 'OTHER';
+
+export type ReceiptExportFormat = 'PDF' | 'EXCEL' | 'CSV';
+
+export const MANUAL_PAYMENT_METHODS: {
+  value: SubscriptionPaymentMethod;
+  label: string;
+  description: string;
+}[] = [
+  {
+    value: 'BANK_TRANSFER',
+    label: 'Bank Transfer (NEFT / RTGS / IMPS)',
+    description: 'Direct bank transfer to Side_forge corporate account',
+  },
+  {
+    value: 'UPI',
+    label: 'UPI Transfer',
+    description: 'Unified Payments Interface transaction with UTR/reference ID',
+  },
+  {
+    value: 'CHEQUE',
+    label: 'Cheque',
+    description: 'Physical cheque clearance with cheque number reference',
+  },
+  {
+    value: 'CASH',
+    label: 'Cash',
+    description: 'Offline cash settlement with voucher/receipt reference',
+  },
+];
+
+export interface RecordSubscriptionPaymentRequest {
+  paymentDate?: string;
+  billedAmount?: number;
+  amountReceived: number;
+  paymentMethod: SubscriptionPaymentMethod;
+  referenceNumber?: string;
+  billingPeriodStart?: string;
+  billingPeriodEnd?: string;
+  renewSubscription?: boolean;
+  remarks?: string;
+}
 
 export type SubscriptionPaymentStatus =
   | 'RECORDED'
