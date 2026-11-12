@@ -382,37 +382,18 @@ export const AccountSettingsModal: React.FC<AccountSettingsModalProps> = ({
     }
   };
 
-  const resolveTokenForInvitation = (inv: InvitationResponse): string | null => {
-    const remembered = getRememberedTokenForInvitation(inv.id);
-    if (remembered) return remembered;
-    if (tokenPromptInvId === inv.id && tokenPromptInput.trim()) {
-      return extractInvitationTokenFromInput(tokenPromptInput);
-    }
-    return null;
-  };
-
   const handleAcceptPendingInvitation = async (inv: InvitationResponse) => {
     setInvitationsError(null);
     setInvitationsSuccess(null);
-    const token = resolveTokenForInvitation(inv);
-    if (!token) {
-      setTokenPromptInvId(inv.id);
-      return;
-    }
-
     setAcceptingInvId(inv.id);
     try {
-      const accepted = await accountAndInvitationApi.acceptInvitation({
-        token,
-        email: inv.email,
-      });
-      clearRememberedInvitationToken(token, inv.id);
-      setTokenPromptInvId(null);
-      setTokenPromptInput('');
+      const accepted = await accountAndInvitationApi.acceptMyInvitationById(
+        inv.id
+      );
       queryClient.clear();
       await refreshSession();
       setInvitationsSuccess(
-        `Joined ${inv.organizationName || `Organization #${inv.organizationId}`} as ${formatRoleLabel(accepted.roleCode)}. It is now available in your Workspace Selector.`
+        `Joined ${inv.organizationName || 'School Organization'} as ${formatRoleLabel(accepted.roleCode)}. It is now available in your Workspace Selector.`
       );
       toast.success(
         'Invitation accepted',
@@ -432,26 +413,13 @@ export const AccountSettingsModal: React.FC<AccountSettingsModalProps> = ({
   const handleRejectPendingInvitation = async (inv: InvitationResponse) => {
     setInvitationsError(null);
     setInvitationsSuccess(null);
-    const token = resolveTokenForInvitation(inv);
-    if (!token) {
-      setTokenPromptInvId(inv.id);
-      setConfirmRejectInvId(null);
-      return;
-    }
-
     setRejectingInvId(inv.id);
     try {
-      await accountAndInvitationApi.rejectInvitation({
-        token,
-        email: inv.email,
-      });
-      clearRememberedInvitationToken(token, inv.id);
+      await accountAndInvitationApi.rejectMyInvitationById(inv.id);
       setConfirmRejectInvId(null);
-      setTokenPromptInvId(null);
-      setTokenPromptInput('');
       await refreshPendingInvitations();
       setInvitationsSuccess(
-        `Declined invitation from ${inv.organizationName || `Organization #${inv.organizationId}`}.`
+        `Declined invitation from ${inv.organizationName || 'School Organization'}.`
       );
       toast.info('Invitation declined', 'The invitation has been declined.');
     } catch (err) {
@@ -463,21 +431,6 @@ export const AccountSettingsModal: React.FC<AccountSettingsModalProps> = ({
     } finally {
       setRejectingInvId(null);
     }
-  };
-
-  const handleOpenQuickLink = (e: React.FormEvent) => {
-    e.preventDefault();
-    setInvitationsError(null);
-    const extracted = extractInvitationTokenFromInput(quickLinkInput);
-    if (!extracted) {
-      setInvitationsError(
-        'Please paste a valid invitation link (containing ?token=...) or raw invitation token.'
-      );
-      return;
-    }
-    rememberInvitationTokenInSession(extracted);
-    onClose();
-    navigate(`/invitations/accept?token=${encodeURIComponent(extracted)}`);
   };
 
   if (!user) return null;
@@ -963,19 +916,11 @@ export const AccountSettingsModal: React.FC<AccountSettingsModalProps> = ({
               </InlineAlert>
             )}
 
-            {/* Quick Link / Token Input */}
-            <form
-              onSubmit={handleOpenQuickLink}
-              className="rounded-xl border border-slate-200 bg-slate-50/70 p-3.5 space-y-2"
-            >
-              <div className="flex items-center justify-between gap-2 flex-wrap">
-                <label
-                  htmlFor="quick-inv-link"
-                  className="text-xs font-semibold text-slate-800 flex items-center gap-1.5"
-                >
-                  <Link2 className="w-3.5 h-3.5 text-indigo-600" />
-                  <span>Have an Invitation Link or Token?</span>
-                </label>
+            <div className="rounded-xl border border-slate-200 bg-slate-50/70 p-3.5 flex items-center justify-between gap-2 flex-wrap">
+              <span className="text-xs font-medium text-slate-600">
+                Manage all pending, accepted, rejected, and expired invitations in your full inbox.
+              </span>
+              <div className="flex items-center gap-2">
                 <Button
                   type="button"
                   size="sm"
@@ -984,26 +929,22 @@ export const AccountSettingsModal: React.FC<AccountSettingsModalProps> = ({
                   onClick={() => void handleRefreshInvitations()}
                   leftIcon={<RefreshCw className="w-3.5 h-3.5" />}
                 >
-                  Refresh List
+                  Refresh
                 </Button>
-              </div>
-              <div className="flex items-center gap-2">
-                <Input
-                  id="quick-inv-link"
-                  value={quickLinkInput}
-                  onChange={(e) => setQuickLinkInput(e.target.value)}
-                  placeholder="Paste invitation link (/invitations/accept?token=...) or raw token"
-                />
                 <Button
-                  type="submit"
+                  type="button"
                   size="sm"
                   variant="outline"
+                  onClick={() => {
+                    onClose();
+                    navigate('/invitations');
+                  }}
                   rightIcon={<ExternalLink className="w-3.5 h-3.5" />}
                 >
-                  Verify &amp; Open
+                  Open Full Inbox
                 </Button>
               </div>
-            </form>
+            </div>
 
             {pendingInvitations.length === 0 ? (
               <EmptyState
@@ -1014,10 +955,6 @@ export const AccountSettingsModal: React.FC<AccountSettingsModalProps> = ({
             ) : (
               <div className="space-y-3">
                 {pendingInvitations.map((inv) => {
-                  const hasSessionToken = Boolean(
-                    getRememberedTokenForInvitation(inv.id)
-                  );
-                  const isPromptingToken = tokenPromptInvId === inv.id;
                   const isConfirmingReject = confirmRejectInvId === inv.id;
 
                   return (
@@ -1030,10 +967,8 @@ export const AccountSettingsModal: React.FC<AccountSettingsModalProps> = ({
                           <div className="flex items-center gap-2 flex-wrap">
                             <Building2 className="w-4 h-4 text-indigo-600" />
                             <span className="text-sm font-bold text-slate-900">
-                              {inv.organizationName ||
-                                `Organization #${inv.organizationId}`}
+                              {inv.organizationName || 'School Organization'}
                             </span>
-                            <IdLabel>ORG-{inv.organizationId}</IdLabel>
                             <Badge variant="warning" dot>
                               {inv.status}
                             </Badge>
@@ -1092,7 +1027,7 @@ export const AccountSettingsModal: React.FC<AccountSettingsModalProps> = ({
                                 onClick={() => setConfirmRejectInvId(inv.id)}
                                 className="text-rose-600 hover:bg-rose-50"
                               >
-                                Decline
+                                Reject
                               </Button>
                               <Button
                                 size="sm"
@@ -1103,55 +1038,12 @@ export const AccountSettingsModal: React.FC<AccountSettingsModalProps> = ({
                                 }
                                 leftIcon={<CheckCircle2 className="w-3.5 h-3.5" />}
                               >
-                                {hasSessionToken
-                                  ? 'Accept Invitation'
-                                  : 'Enter Token to Accept'}
+                                Accept Invitation
                               </Button>
                             </>
                           )}
                         </div>
                       </div>
-
-                      {isPromptingToken && (
-                        <div className="pt-2 border-t border-slate-100 space-y-2">
-                          <p className="text-[11px] text-slate-600">
-                            For security, single-use invitation tokens are hashed in the database. Paste the invitation link or token sent to{' '}
-                            <span className="font-mono font-semibold">
-                              {inv.email}
-                            </span>{' '}
-                            to accept or decline:
-                          </p>
-                          <div className="flex items-center gap-2">
-                            <Input
-                              value={tokenPromptInput}
-                              onChange={(e) =>
-                                setTokenPromptInput(e.target.value)
-                              }
-                              placeholder="Paste invitation link (?token=...) or raw token"
-                            />
-                            <Button
-                              size="sm"
-                              variant="primary"
-                              isLoading={acceptingInvId === inv.id}
-                              onClick={() =>
-                                void handleAcceptPendingInvitation(inv)
-                              }
-                            >
-                              Verify &amp; Accept
-                            </Button>
-                            <Button
-                              size="sm"
-                              variant="danger"
-                              isLoading={rejectingInvId === inv.id}
-                              onClick={() =>
-                                void handleRejectPendingInvitation(inv)
-                              }
-                            >
-                              Decline
-                            </Button>
-                          </div>
-                        </div>
-                      )}
                     </div>
                   );
                 })}

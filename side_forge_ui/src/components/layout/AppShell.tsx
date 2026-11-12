@@ -356,6 +356,13 @@ export const AppShell: React.FC<AppShellProps> = ({
           groupLabel: 'Administration',
           items: [
             {
+              id: 'school-invitations',
+              label: 'My Invitations',
+              to: '/invitations',
+              icon: <Mail className="w-4 h-4 shrink-0" />,
+              matchPaths: ['/invitations', '/invitations/accept'],
+            },
+            {
               id: 'school-context',
               label: 'Workspace Overview',
               to: '/app/context',
@@ -889,6 +896,21 @@ export const AppShell: React.FC<AppShellProps> = ({
               </div>
 
 
+              {/* Direct Invitations Inbox Link */}
+              <Link
+                to="/invitations"
+                className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200/80 bg-white hover:bg-slate-50 px-2.5 py-1.5 text-xs font-medium text-slate-700 transition-colors"
+                title="Open Invitations Inbox"
+              >
+                <Mail className="w-3.5 h-3.5 text-indigo-600 shrink-0" />
+                <span className="hidden sm:inline">Invitations</span>
+                {pendingInvitationsCount > 0 && (
+                  <span className="inline-flex items-center justify-center rounded-full bg-amber-100 text-amber-800 px-1.5 py-0.2 text-[10px] font-bold">
+                    {pendingInvitationsCount}
+                  </span>
+                )}
+              </Link>
+
               {/* User Profile Menu */}
               <div className="relative" ref={userMenuRef}>
                 <button
@@ -954,21 +976,17 @@ export const AppShell: React.FC<AppShellProps> = ({
                         <span>My Profile &amp; Account Settings</span>
                       </button>
 
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setIsUserMenuOpen(false);
-                          setAccountModalTab('invitations');
-                          setAccountModalOpen(true);
-                        }}
-                        className="w-full flex items-center justify-between gap-2 rounded-xl px-3 py-2 text-xs font-medium text-slate-700 hover:bg-slate-50 transition-colors cursor-pointer"
+                      <Link
+                        to="/invitations"
+                        onClick={() => setIsUserMenuOpen(false)}
+                        className="w-full flex items-center justify-between gap-2 rounded-xl px-3 py-2 text-xs font-medium text-slate-700 hover:bg-slate-50 transition-colors"
                       >
                         <span className="flex items-center gap-2.5">
                           <Mail className="w-3.5 h-3.5 text-slate-400" />
-                          <span>Pending Invitations</span>
+                          <span>Invitations Inbox</span>
                         </span>
                         <CounterLabel count={pendingInvitationsCount} />
-                      </button>
+                      </Link>
 
                       <Link
                         to="/workspaces?stay=1"

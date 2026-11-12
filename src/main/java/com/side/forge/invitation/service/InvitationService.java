@@ -351,6 +351,12 @@ public class InvitationService {
 
 	@Transactional
 	public List<InvitationResponse> getMyPendingInvitations(Authentication authentication) {
+		return getMyInvitations(authentication, InvitationStatus.PENDING);
+	}
+
+	@Transactional
+	public List<InvitationResponse> getMyInvitations(
+			Authentication authentication, InvitationStatus statusFilter) {
 		Long userId = AuthenticationUtils.getAuthenticatedUserId(authentication);
 		if (userId == null) {
 			throw new AccessDeniedException("Authentication is required");
@@ -364,13 +370,160 @@ public class InvitationService {
 			refreshExpiredStatusIfNecessary(inv, now);
 		}
 		return list.stream()
-				.filter(i -> i.getStatus() == InvitationStatus.PENDING)
+				.filter(i -> statusFilter == null || i.getStatus() == statusFilter)
+				.sorted((a, b) -> {
+					boolean aPending = a.getStatus() == InvitationStatus.PENDING;
+					boolean bPending = b.getStatus() == InvitationStatus.PENDING;
+					if (aPending != bPending) {
+						return aPending ? -1 : 1;
+					}
+					Instant aCreated = a.getCreatedAt() != null ? a.getCreatedAt() : Instant.EPOCH;
+					Instant bCreated = b.getCreatedAt() != null ? b.getCreatedAt() : Instant.EPOCH;
+					int cmp = bCreated.compareTo(aCreated);
+					if (cmp != 0) {
+						return cmp;
+					}
+					return Long.compare(
+							b.getId() != null ? b.getId() : 0L,
+							a.getId() != null ? a.getId() : 0L);
+				})
 				.map(i -> {
 					String orgName = organizationRepository.findById(i.getOrganizationId())
 							.map(Organization::getName).orElse(null);
 					return toResponse(i, orgName);
 				})
 				.toList();
+	}
+
+	@Transactional
+	public InvitationResponse getMyInvitationById(Long invitationId, Authentication authentication) {
+		Long userId = AuthenticationUtils.getAuthenticatedUserId(authentication);
+		if (userId == null) {
+			throw new AccessDeniedException("Authentication is required");
+		}
+		Users user = userRepository.findById(userId)
+				.orElseThrow(() -> new EntityNotFoundException("User not found"));
+		OrganizationInvitation inv = invitationRepository.findById(invitationId)
+				.orElseThrow(() -> new EntityNotFoundException("Invitation not found"));
+		if (!user.getEmail().equalsIgnoreCase(inv.getEmail())) {
+			throw new AccessDeniedException("You are not authorized to view this invitation");
+		}
+		refreshExpiredStatusIfNecessary(inv, Instant.now());
+		String orgName = organizationRepository.findById(inv.getOrganizationId())
+				.map(Organization::getName).orElse(null);
+		return toResponse(inv, orgName);
+	}
+	@Transactional(noRollbackFor = IllegalStateException.class)
+	public InvitationAcceptanceResponse acceptMyInvitationById(
+			Long invitationId, Authentication authentication) {
+		Long authUserId = AuthenticationUtils.getAuthenticatedUserId(authentication);
+		if (authUserId == null) {
+			throw new AccessDeniedException("Authentication is required to accept an invitation");
+		}
+		Users recipientUser = userRepository.findById(authUserId)
+				.orElseThrow(() -> new AccessDeniedException("Authenticated user not found"));
+		if (recipientUser.getStatus() != UserStatus.ACTIVE) {
+			throw new IllegalStateException("Authenticated user account is not active");
+		}
+
+		OrganizationInvitation inv = invitationRepository.findByIdForUpdate(invitationId)
+				.orElseThrow(() -> new EntityNotFoundException("Invitation not found"));
+		if (!recipientUser.getEmail().equalsIgnoreCase(inv.getEmail())) {
+			throw new AccessDeniedException("Authenticated user is not the intended recipient of this invitation");
+		}
+
+		Organization org = requireActiveOrganizationEntity(inv.getOrganizationId());
+		Instant now = Instant.now();
+		refreshExpiredStatusIfNecessary(inv, now);
+
+		if (inv.getStatus() == InvitationStatus.REVOKED) {
+			throw new IllegalStateException("Invitation has been revoked");
+		}
+		if (inv.getStatus() == InvitationStatus.ACCEPTED) {
+			throw new IllegalStateException("Invitation has already been accepted");
+		}
+		if (inv.getStatus() == InvitationStatus.REJECTED) {
+			throw new IllegalStateException("Invitation has already been declined");
+		}
+		if (inv.getStatus() == InvitationStatus.EXPIRED) {
+			throw new IllegalStateException("Invitation has expired");
+		}
+
+		if (!recipientUser.isEmailVerified()) {
+			recipientUser.setEmailVerified(true);
+			recipientUser = userRepository.saveAndFlush(recipientUser);
+		}
+
+		Role role = findOrganizationRole(inv.getRoleCode(), org.getId());
+		final Long recipientId = recipientUser.getId();
+
+		OrganizationMembership membership = membershipRepository
+				.findByUserIdAndOrganizationId(recipientId, org.getId())
+				.orElseGet(() -> membershipRepository.save(
+						OrganizationMembership.active(recipientId, org.getId())));
+		if (membership.getStatus() != MembershipStatus.ACTIVE) {
+			membership.changeStatus(MembershipStatus.ACTIVE);
+			membership = membershipRepository.saveAndFlush(membership);
+		}
+
+		if (membershipRoleRepository.findByMembershipIdAndRoleId(membership.getId(), role.getId()).isEmpty()) {
+			membershipRoleRepository.saveAndFlush(
+					new MembershipRole(membership.getId(), role.getId(), inv.getInvitedByUserId()));
+			auditLogRepository.saveAndFlush(new AuthorizationAuditLog(
+					inv.getInvitedByUserId(), recipientId, org.getId(),
+					role.getCode(), AuthorizationAuditLog.Action.ORGANIZATION_ROLE_ASSIGNED));
+		}
+
+		Long linkedProfileId = linkDomainProfileOnAcceptance(org.getId(), inv, recipientUser);
+
+		inv.setStatus(InvitationStatus.ACCEPTED);
+		inv.setAcceptedByUserId(recipientId);
+		inv.setAcceptedAt(now);
+		OrganizationInvitation savedInv = invitationRepository.saveAndFlush(inv);
+		notificationService.notifyInvitationAccepted(savedInv, org.getName(), recipientId);
+
+		String jwt = jwtService.generateToken(recipientUser);
+		return new InvitationAcceptanceResponse(
+				toResponse(savedInv, org.getName()),
+				recipientId,
+				recipientUser.getEmail(),
+				org.getId(),
+				role.getCode(),
+				membership.getStatus().name(),
+				linkedProfileId,
+				jwt
+		);
+	}
+
+	@Transactional(noRollbackFor = IllegalStateException.class)
+	public InvitationResponse rejectMyInvitationById(
+			Long invitationId, Authentication authentication) {
+		Long authUserId = AuthenticationUtils.getAuthenticatedUserId(authentication);
+		if (authUserId == null) {
+			throw new AccessDeniedException("Authentication is required to decline an invitation");
+		}
+		Users recipientUser = userRepository.findById(authUserId)
+				.orElseThrow(() -> new AccessDeniedException("Authenticated user not found"));
+
+		OrganizationInvitation inv = invitationRepository.findByIdForUpdate(invitationId)
+				.orElseThrow(() -> new EntityNotFoundException("Invitation not found"));
+		if (!recipientUser.getEmail().equalsIgnoreCase(inv.getEmail())) {
+			throw new AccessDeniedException("Authenticated user is not the intended recipient of this invitation");
+		}
+
+		Instant now = Instant.now();
+		refreshExpiredStatusIfNecessary(inv, now);
+
+		if (inv.getStatus() != InvitationStatus.PENDING) {
+			throw new IllegalStateException("Invitation is no longer pending (status: " + inv.getStatus() + ")");
+		}
+
+		inv.setStatus(InvitationStatus.REJECTED);
+		inv.setRevokedAt(now);
+		OrganizationInvitation saved = invitationRepository.saveAndFlush(inv);
+		String orgName = organizationRepository.findById(inv.getOrganizationId())
+				.map(Organization::getName).orElse(null);
+		return toResponse(saved, orgName);
 	}
 
 	private record ProfileCandidate(Long profileId, String firstName, String lastName, String phoneNumber) {
@@ -909,6 +1062,17 @@ public class InvitationService {
 	}
 
 	private InvitationResponse toResponse(OrganizationInvitation inv, String orgName) {
+		String invitedByName = null;
+		if (inv.getInvitedByUserId() != null) {
+			invitedByName = userRepository.findById(inv.getInvitedByUserId())
+					.map(u -> {
+						String first = u.getFirstName() != null ? u.getFirstName().trim() : "";
+						String last = u.getLastName() != null ? u.getLastName().trim() : "";
+						String full = (first + " " + last).trim();
+						return full.isEmpty() ? u.getEmail() : full;
+					})
+					.orElse(null);
+		}
 		return new InvitationResponse(
 				inv.getId(),
 				inv.getOrganizationId(),
@@ -923,6 +1087,7 @@ public class InvitationService {
 				inv.getStatus(),
 				inv.getExpiresAt(),
 				inv.getInvitedByUserId(),
+				invitedByName,
 				inv.getOnboardingRequestId(),
 				inv.getResendCount(),
 				inv.getLastSentAt(),

@@ -48,6 +48,9 @@ export function HamburgerMenuDrawer({
   const user = useAuthWorkspaceStore((s) => s.user);
   const activeWorkspace = useAuthWorkspaceStore((s) => s.activeWorkspace);
   const workspaces = useAuthWorkspaceStore((s) => s.workspaces);
+  const pendingInvitationsCount = useAuthWorkspaceStore(
+    (s) => s.pendingInvitationsCount
+  );
   const selectWorkspace = useAuthWorkspaceStore((s) => s.selectWorkspace);
   const logout = useAuthWorkspaceStore((s) => s.logout);
 
@@ -387,6 +390,13 @@ export function HamburgerMenuDrawer({
                 >
                   Invitations
                 </Text>
+                {pendingInvitationsCount > 0 ? (
+                  <StatusBadge
+                    label={`${pendingInvitationsCount} Pending`}
+                    tone="warning"
+                    style={{ marginRight: spacing.xs }}
+                  />
+                ) : null}
                 <ChevronRight size={iconSizes.sm} color={colors.textMuted} />
               </Pressable>
             </View>

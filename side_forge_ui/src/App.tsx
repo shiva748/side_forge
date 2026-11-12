@@ -39,8 +39,30 @@ export default function App() {
               {/* Authentication & Registration */}
               <Route path="/login" element={<LoginPage />} />
               <Route path="/register" element={<RegisterPage />} />
-              <Route path="/invitations/accept" element={<InvitationAcceptPage />} />
-              <Route path="/api/invitations/accept" element={<InvitationAcceptPage />} />
+              <Route
+                path="/invitations"
+                element={
+                  <ProtectedRoute>
+                    <InvitationAcceptPage />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/invitations/accept"
+                element={
+                  <ProtectedRoute>
+                    <InvitationAcceptPage />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/api/invitations/accept"
+                element={
+                  <ProtectedRoute>
+                    <InvitationAcceptPage />
+                  </ProtectedRoute>
+                }
+              />
               <Route path="/onboarding-status" element={<OnboardingStatusPage />} />
 
               {/* Multi-Workspace & Role Context Selection */}

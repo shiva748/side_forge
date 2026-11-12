@@ -18,6 +18,10 @@ public interface OrganizationInvitationRepository extends JpaRepository<Organiza
 	Optional<OrganizationInvitation> findByIdAndOrganizationId(Long id, Long organizationId);
 
 	@Lock(LockModeType.PESSIMISTIC_WRITE)
+	@Query("SELECT i FROM OrganizationInvitation i WHERE i.id = :id")
+	Optional<OrganizationInvitation> findByIdForUpdate(@Param("id") Long id);
+
+	@Lock(LockModeType.PESSIMISTIC_WRITE)
 	@Query("SELECT i FROM OrganizationInvitation i WHERE i.id = :id AND i.organizationId = :organizationId")
 	Optional<OrganizationInvitation> findByIdAndOrganizationIdForUpdate(
 			@Param("id") Long id, @Param("organizationId") Long organizationId);

@@ -100,6 +100,7 @@ public final class InvitationDtos {
 			InvitationStatus status,
 			Instant expiresAt,
 			Long invitedByUserId,
+			String invitedByName,
 			Long onboardingRequestId,
 			int resendCount,
 			Instant lastSentAt,

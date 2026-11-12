@@ -368,6 +368,7 @@ export interface InvitationResponse {
   status: InvitationStatus;
   expiresAt: string;
   invitedByUserId: number;
+  invitedByName?: string | null;
   onboardingRequestId: number | null;
   resendCount: number;
   lastSentAt: string;

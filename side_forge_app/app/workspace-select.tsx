@@ -173,11 +173,12 @@ export default function WorkspaceSelectScreen() {
                   marginTop: 2,
                 }}
               >
-                Use your invitation token to activate your new school membership.
+                Review and accept or decline your school invitations in your
+                invitation inbox.
               </Text>
             </View>
             <AppButton
-              label="Enter Token"
+              label="Open Inbox"
               size="sm"
               onPress={() => navigateTo('/invitations')}
             />
@@ -190,8 +191,8 @@ export default function WorkspaceSelectScreen() {
           <EmptyState
             icon={<Building2 size={iconSizes.xl} color={colors.primary} />}
             title="No Active School Workspaces"
-            description="Your account does not have an active Parent, Teacher, or School Administration membership yet. If your school sent you an invitation token, verify it below."
-            actionLabel="Accept School Invitation"
+            description="Your account does not have an active Parent, Teacher, or School Administration membership yet. Check your Invitation Inbox to review any pending school invitations."
+            actionLabel="Open Invitation Inbox"
             onActionPress={() => navigateTo('/invitations')}
           />
         </View>
@@ -327,7 +328,11 @@ export default function WorkspaceSelectScreen() {
 
       <View style={{ gap: spacing.sm, marginTop: spacing.xs }}>
         <AppButton
-          label="Have an Invitation Token?"
+          label={
+            pendingInvites.length > 0
+              ? `Invitation Inbox (${pendingInvites.length} Pending)`
+              : 'Invitation Inbox'
+          }
           variant="secondary"
           fullWidth
           leftIcon={<Ticket size={iconSizes.sm} color={colors.secondaryText} />}

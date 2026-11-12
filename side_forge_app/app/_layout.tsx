@@ -1,11 +1,9 @@
 import React, { useEffect } from 'react';
 import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
 import { Stack, useRouter, useSegments } from 'expo-router';
-import * as Linking from 'expo-linking';
 import { AppProviders } from '@/providers/AppProviders';
 import { useAppTheme } from '@/theme';
 import { useAuthWorkspaceStore } from '@/store/useAuthWorkspaceStore';
-import { extractInvitationTokenFromInput } from '@/services/pushNotifications';
 import { getWorkspaceHomeHref } from '@/utils/navigationGuard';
 
 function RootNavigationCoordinator() {
@@ -21,36 +19,6 @@ function RootNavigationCoordinator() {
   const hasOnlyUnsupportedRoles = useAuthWorkspaceStore(
     (s) => s.hasOnlyUnsupportedRoles
   );
-  const pendingInvitationToken = useAuthWorkspaceStore(
-    (s) => s.pendingInvitationToken
-  );
-  const setPendingInvitationToken = useAuthWorkspaceStore(
-    (s) => s.setPendingInvitationToken
-  );
-
-  // Handle incoming deep links (`sideforge://invitations?token=...`)
-  // Unauthenticated deep links preserve the token and redirect to Login first.
-  useEffect(() => {
-    const handleUrl = (url: string | null) => {
-      if (!url) return;
-      if (url.includes('invitation') || url.includes('token=')) {
-        const token = extractInvitationTokenFromInput(url);
-        if (token) {
-          void setPendingInvitationToken(token);
-          const currentStatus = useAuthWorkspaceStore.getState().status;
-          if (currentStatus === 'AUTHENTICATED') {
-            router.replace({ pathname: '/invitations', params: { token } });
-          } else if (currentStatus === 'UNAUTHENTICATED') {
-            router.replace('/(auth)/login');
-          }
-        }
-      }
-    };
-
-    Linking.getInitialURL().then(handleUrl).catch(() => {});
-    const sub = Linking.addEventListener('url', (event) => handleUrl(event.url));
-    return () => sub.remove();
-  }, [router, setPendingInvitationToken]);
 
   // Enforce Auth & Workspace routing boundaries
   useEffect(() => {
@@ -63,8 +31,6 @@ function RootNavigationCoordinator() {
     const inSettings = firstSegment === 'settings';
 
     if (status === 'UNAUTHENTICATED') {
-      // Unauthenticated users may ONLY access /(auth)/* screens.
-      // Invitation acceptance (/invitations) is strictly authenticated-only.
       if (!inAuthGroup) {
         try {
           if (router.canDismiss()) {
@@ -79,17 +45,6 @@ function RootNavigationCoordinator() {
     }
 
     // AUTHENTICATED:
-    // If an invitation deep link was preserved prior to login, continue to /invitations first.
-    if (pendingInvitationToken) {
-      if (!inInvitationScreen) {
-        router.replace({
-          pathname: '/invitations',
-          params: { token: pendingInvitationToken },
-        });
-      }
-      return;
-    }
-
     if (
       needsWorkspaceSelection ||
       hasOnlyUnsupportedRoles ||
@@ -124,7 +79,6 @@ function RootNavigationCoordinator() {
     activeWorkspace,
     needsWorkspaceSelection,
     hasOnlyUnsupportedRoles,
-    pendingInvitationToken,
     segments,
     router,
   ]);

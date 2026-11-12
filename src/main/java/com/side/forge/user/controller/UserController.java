@@ -2,6 +2,7 @@ package com.side.forge.user.controller;
 
 import java.util.List;
 
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
@@ -14,7 +15,9 @@ import org.springframework.web.multipart.MultipartFile;
 import com.side.forge.common.dto.ApiResponse;
 import com.side.forge.common.dto.PagedResponse;
 import com.side.forge.common.utils.AuthenticationUtils;
+import com.side.forge.invitation.dto.InvitationDtos.InvitationAcceptanceResponse;
 import com.side.forge.invitation.dto.InvitationDtos.InvitationResponse;
+import com.side.forge.invitation.entity.InvitationStatus;
 import com.side.forge.invitation.service.InvitationService;
 import com.side.forge.notification.dto.NotificationDtos.*;
 import com.side.forge.notification.entity.NotificationCategory;
@@ -44,6 +47,12 @@ public class UserController {
 	private final UserService userService;
 	private final InvitationService invitationService;
 	private final NotificationService notificationService;
+
+	@Value("${spring.application.token.expiry}")
+	private long tokenExpiry;
+
+	@Value("${forge.security.cookie-secure:true}")
+	private boolean cookieSecure;
 
 	@GetMapping
 	public ResponseEntity<ApiResponse<UserResponse>> myProfile(Authentication authentication) {
@@ -120,10 +129,42 @@ public class UserController {
 	}
 
 	@GetMapping("/invitations")
-	public ResponseEntity<ApiResponse<List<InvitationResponse>>> myPendingInvitations(Authentication authentication) {
+	public ResponseEntity<ApiResponse<List<InvitationResponse>>> myInvitations(
+			Authentication authentication,
+			@RequestParam(required = false) InvitationStatus status) {
 		return ResponseEntity.ok(new ApiResponse<>(
-				true, "Pending invitations retrieved successfully",
-				invitationService.getMyPendingInvitations(authentication)));
+				true, "Invitations retrieved successfully",
+				invitationService.getMyInvitations(authentication, status)));
+	}
+
+	@GetMapping("/invitations/{invitationId}")
+	public ResponseEntity<ApiResponse<InvitationResponse>> myInvitationById(
+			Authentication authentication,
+			@PathVariable @Positive Long invitationId) {
+		return ResponseEntity.ok(new ApiResponse<>(
+				true, "Invitation retrieved successfully",
+				invitationService.getMyInvitationById(invitationId, authentication)));
+	}
+
+	@PostMapping("/invitations/{invitationId}/accept")
+	public ResponseEntity<ApiResponse<InvitationAcceptanceResponse>> acceptMyInvitation(
+			Authentication authentication,
+			@PathVariable @Positive Long invitationId) {
+		InvitationAcceptanceResponse accepted = invitationService.acceptMyInvitationById(invitationId, authentication);
+		String secureAttr = cookieSecure ? " Secure;" : "";
+		return ResponseEntity.ok()
+				.header("Set-Cookie",
+						String.format("jwt=%s; Path=/; Max-Age=%d; HttpOnly;%s SameSite=Lax",
+								accepted.accessToken(), tokenExpiry, secureAttr))
+				.body(new ApiResponse<>(true, "Invitation accepted and membership activated successfully", accepted));
+	}
+
+	@PostMapping("/invitations/{invitationId}/reject")
+	public ResponseEntity<ApiResponse<InvitationResponse>> rejectMyInvitation(
+			Authentication authentication,
+			@PathVariable @Positive Long invitationId) {
+		InvitationResponse rejected = invitationService.rejectMyInvitationById(invitationId, authentication);
+		return ResponseEntity.ok(new ApiResponse<>(true, "Invitation declined successfully", rejected));
 	}
 
 	@GetMapping("/notifications")

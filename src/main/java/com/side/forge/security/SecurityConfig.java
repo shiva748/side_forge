@@ -41,13 +41,13 @@ public class SecurityConfig {
 						.authenticationEntryPoint(new HttpStatusEntryPoint(HttpStatus.UNAUTHORIZED)))
 				.authorizeHttpRequests(auth -> auth
 						.requestMatchers("/error").permitAll()
-						.requestMatchers("/api/auth/**", "/api/public/**", "/api/invitations/**").permitAll()
+						.requestMatchers("/api/auth/**", "/api/public/**").permitAll()
 						.requestMatchers(HttpMethod.POST, "/api/organizations/onboarding").permitAll()
 						.requestMatchers(
                                 "/", "/index.html", "/favicon.ico", "/assets/**",
                                 "/swagger-ui.html", "/swagger-ui/**", "/v3/api-docs/**", "/v3/api-docs.yaml"
                         ).permitAll()
-						.requestMatchers("/api/platform/**", "/api/organizations/**", "/api/me/**").authenticated()
+						.requestMatchers("/api/platform/**", "/api/organizations/**", "/api/me/**", "/api/invitations/**").authenticated()
 						.anyRequest().authenticated())
 				.addFilterBefore(jwtFilter, UsernamePasswordAuthenticationFilter.class)
 				.addFilterAfter(authorizationContextFilter, ExceptionTranslationFilter.class);

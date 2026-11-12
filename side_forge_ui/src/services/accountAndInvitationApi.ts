@@ -67,13 +67,57 @@ export const accountAndInvitationApi = {
   },
 
   /**
+   * Lists invitations belonging to the currently authenticated user
+   * via `GET /api/me/invitations` (with optional status filter).
+   */
+  getMyInvitations(status?: string): Promise<InvitationResponse[]> {
+    return apiClient.get<InvitationResponse[]>('/api/me/invitations', {
+      params: status ? { status } : undefined,
+      suppressUnauthorizedEvent: true,
+    });
+  },
+
+  /**
    * Lists pending invitations belonging to the currently authenticated user
-   * via `GET /api/me/invitations`.
+   * via `GET /api/me/invitations?status=PENDING`.
    */
   getMyPendingInvitations(): Promise<InvitationResponse[]> {
     return apiClient.get<InvitationResponse[]>('/api/me/invitations', {
+      params: { status: 'PENDING' },
       suppressUnauthorizedEvent: true,
     });
+  },
+
+  /**
+   * Retrieves a specific invitation belonging to the authenticated user
+   * via `GET /api/me/invitations/{invitationId}`.
+   */
+  getMyInvitationById(invitationId: number): Promise<InvitationResponse> {
+    return apiClient.get<InvitationResponse>(
+      `/api/me/invitations/${invitationId}`
+    );
+  },
+
+  /**
+   * Accepts a pending invitation belonging to the authenticated user
+   * via `POST /api/me/invitations/{invitationId}/accept`.
+   */
+  acceptMyInvitationById(
+    invitationId: number
+  ): Promise<InvitationAcceptanceResponse> {
+    return apiClient.post<InvitationAcceptanceResponse>(
+      `/api/me/invitations/${invitationId}/accept`
+    );
+  },
+
+  /**
+   * Rejects/declines a pending invitation belonging to the authenticated user
+   * via `POST /api/me/invitations/{invitationId}/reject`.
+   */
+  rejectMyInvitationById(invitationId: number): Promise<InvitationResponse> {
+    return apiClient.post<InvitationResponse>(
+      `/api/me/invitations/${invitationId}/reject`
+    );
   },
 
   // =========================================================================

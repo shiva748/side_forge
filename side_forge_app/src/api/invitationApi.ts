@@ -1,42 +1,45 @@
 import { apiClient } from './client';
 import type {
-  AcceptInvitationRequest,
   InvitationAcceptanceResponse,
   InvitationResponse,
-  InvitationVerificationResponse,
-  RejectInvitationRequest,
+  InvitationStatus,
 } from '@/types/invitation';
 
 export const invitationApi = {
-  verifyToken: async (token: string): Promise<InvitationVerificationResponse> => {
-    const encoded = encodeURIComponent(token.trim());
-    const res = await apiClient.get<InvitationVerificationResponse>(
-      `/api/invitations/verify?token=${encoded}`
+  getMyInvitations: async (
+    status?: InvitationStatus
+  ): Promise<InvitationResponse[]> => {
+    const query = status ? `?status=${encodeURIComponent(status)}` : '';
+    const res = await apiClient.get<InvitationResponse[]>(
+      `/api/me/invitations${query}`
     );
-    if (!res.data) {
-      throw new Error('Invitation verification returned empty data.');
-    }
-    const raw = res.data;
-    return {
-      ...raw,
-      valid: raw.valid ?? raw.status === 'PENDING',
-      roleName: raw.roleName ?? raw.roleCode,
-      recipientEmail: raw.recipientEmail ?? raw.email,
-      existingAccount: raw.existingAccount ?? raw.existingUserAccount,
-    };
-  },
-
-  getMyPendingInvitations: async (): Promise<InvitationResponse[]> => {
-    const res = await apiClient.get<InvitationResponse[]>('/api/me/invitations');
     return res.data ?? [];
   },
 
-  acceptInvitation: async (
-    payload: AcceptInvitationRequest
+  getMyPendingInvitations: async (): Promise<InvitationResponse[]> => {
+    const res = await apiClient.get<InvitationResponse[]>(
+      '/api/me/invitations?status=PENDING'
+    );
+    return res.data ?? [];
+  },
+
+  getMyInvitationById: async (
+    invitationId: number
+  ): Promise<InvitationResponse> => {
+    const res = await apiClient.get<InvitationResponse>(
+      `/api/me/invitations/${invitationId}`
+    );
+    if (!res.data) {
+      throw new Error('Invitation details not found.');
+    }
+    return res.data;
+  },
+
+  acceptMyInvitation: async (
+    invitationId: number
   ): Promise<InvitationAcceptanceResponse> => {
     const res = await apiClient.post<InvitationAcceptanceResponse>(
-      '/api/invitations/accept',
-      payload
+      `/api/me/invitations/${invitationId}/accept`
     );
     if (!res.data) {
       throw new Error('Invitation acceptance failed.');
@@ -44,12 +47,11 @@ export const invitationApi = {
     return res.data;
   },
 
-  rejectInvitation: async (
-    payload: RejectInvitationRequest
+  rejectMyInvitation: async (
+    invitationId: number
   ): Promise<InvitationResponse> => {
     const res = await apiClient.post<InvitationResponse>(
-      '/api/invitations/reject',
-      payload
+      `/api/me/invitations/${invitationId}/reject`
     );
     if (!res.data) {
       throw new Error('Invitation rejection failed.');
@@ -57,4 +59,5 @@ export const invitationApi = {
     return res.data;
   },
 };
+
 

@@ -364,7 +364,11 @@ export const OnboardingStatusPage: React.FC = () => {
                   <li>
                     <span className="font-semibold text-slate-800">Joining an existing school?</span>{' '}
                     Ask your school&apos;s administrator to send an invitation to{' '}
-                    <span className="font-mono">{user.email}</span> and accept the invitation link.
+                    <span className="font-mono">{user.email}</span> and review it in your{' '}
+                    <Link to="/invitations" className="text-indigo-600 font-semibold hover:underline">
+                      Invitations Inbox
+                    </Link>
+                    .
                   </li>
                 </ol>
 

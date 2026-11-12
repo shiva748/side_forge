@@ -3,6 +3,8 @@ import type { QueryClient } from '@tanstack/react-query';
 import { STORAGE_KEYS } from '@/constants/env';
 import { secureStorage } from '@/utils/secureStorage';
 import { authApi } from '@/api/authApi';
+import { invitationApi } from '@/api/invitationApi';
+import type { InvitationResponse } from '@/types/invitation';
 import {
   buildMobileWorkspaces,
   mapRoleCodeToMobileExperience,
@@ -24,25 +26,23 @@ export interface AuthWorkspaceState {
   needsWorkspaceSelection: boolean;
   hasOnlyUnsupportedRoles: boolean;
   selectedChildId: number | null;
-  pendingInvitationToken: string | null;
+  pendingInvitations: InvitationResponse[];
+  pendingInvitationsCount: number;
   authError: string | null;
 
   clearAuthError: () => void;
-  setPendingInvitationToken: (token: string | null) => Promise<void>;
   bootstrapSession: () => Promise<void>;
   login: (
     emailOrCredentials: LoginRequest | string,
     password?: string
   ) => Promise<void>;
-  completeInvitationAcceptance: (
-    params?:
-      | {
-          accessToken?: string;
-          organizationId?: number;
-          roleCode?: string;
-        }
-      | UserResponse
-  ) => Promise<void>;
+  completeInvitationAcceptance: (params?: {
+    accessToken?: string;
+    organizationId?: number;
+    roleCode?: string;
+    switchImmediately?: boolean;
+  }) => Promise<void>;
+  refreshPendingInvitations: () => Promise<InvitationResponse[]>;
   selectWorkspace: (
     workspaceOrKey: MobileWorkspace | string,
     queryClient?: QueryClient
@@ -92,39 +92,41 @@ export const useAuthWorkspaceStore = create<AuthWorkspaceState>((set, get) => ({
   needsWorkspaceSelection: false,
   hasOnlyUnsupportedRoles: false,
   selectedChildId: null,
-  pendingInvitationToken: null,
+  pendingInvitations: [],
+  pendingInvitationsCount: 0,
   authError: null,
 
   clearAuthError: () => set({ authError: null }),
 
-  setPendingInvitationToken: async (token) => {
-    const trimmed = token?.trim() || null;
-    if (trimmed) {
-      await secureStorage.setAsync(
-        STORAGE_KEYS.PENDING_INVITATION_TOKEN,
-        trimmed
-      );
-    } else {
-      await secureStorage.removeAsync(STORAGE_KEYS.PENDING_INVITATION_TOKEN);
+  refreshPendingInvitations: async () => {
+    try {
+      const list = await invitationApi.getMyPendingInvitations();
+      const pending = list.filter((i) => i.status === 'PENDING');
+      set({
+        pendingInvitations: pending,
+        pendingInvitationsCount: pending.length,
+      });
+      return pending;
+    } catch {
+      return get().pendingInvitations;
     }
-    set({ pendingInvitationToken: trimmed });
   },
 
   bootstrapSession: async () => {
     set({ status: 'BOOTSTRAPPING' });
-    const [, , , , storedPendingToken] = await Promise.all([
+    await Promise.all([
       secureStorage.getAsync(STORAGE_KEYS.ACCESS_TOKEN),
       secureStorage.getAsync(STORAGE_KEYS.ACTIVE_ORG_ID),
       secureStorage.getAsync(STORAGE_KEYS.ACTIVE_ROLE_EXPERIENCE),
       secureStorage.getAsync(STORAGE_KEYS.CUSTOM_API_BASE_URL),
-      secureStorage.getAsync(STORAGE_KEYS.PENDING_INVITATION_TOKEN),
     ]);
-    if (storedPendingToken) {
-      set({ pendingInvitationToken: storedPendingToken });
-    }
 
     try {
-      const user = await authApi.getCurrentUser();
+      const [user, pendingList] = await Promise.all([
+        authApi.getCurrentUser(),
+        invitationApi.getMyPendingInvitations().catch(() => []),
+      ]);
+      const pending = pendingList.filter((i) => i.status === 'PENDING');
       const memberships = user.organizations ?? [];
       const workspaces = buildMobileWorkspaces(memberships);
       const storedOrg = secureStorage.getSync(STORAGE_KEYS.ACTIVE_ORG_ID);
@@ -148,6 +150,8 @@ export const useAuthWorkspaceStore = create<AuthWorkspaceState>((set, get) => ({
         hasOnlyUnsupportedRoles:
           workspaces.length === 0 &&
           ((user.systemRoles?.length ?? 0) > 0 || memberships.length > 0),
+        pendingInvitations: pending,
+        pendingInvitationsCount: pending.length,
         authError: null,
       });
     } catch {
@@ -160,6 +164,8 @@ export const useAuthWorkspaceStore = create<AuthWorkspaceState>((set, get) => ({
         activeWorkspace: null,
         needsWorkspaceSelection: false,
         hasOnlyUnsupportedRoles: false,
+        pendingInvitations: [],
+        pendingInvitationsCount: 0,
       });
     }
   },
@@ -182,30 +188,41 @@ export const useAuthWorkspaceStore = create<AuthWorkspaceState>((set, get) => ({
   },
 
   completeInvitationAcceptance: async (params) => {
-    if (params && 'accessToken' in params && params.accessToken) {
+    if (params?.accessToken) {
       await secureStorage.setAsync(
         STORAGE_KEYS.ACCESS_TOKEN,
         params.accessToken
       );
     }
-    if (params && 'organizationId' in params && params.organizationId) {
+    // Only switch the active workspace automatically if explicitly requested
+    // or if the user did not have an active workspace prior to acceptance.
+    const existingActive = get().activeWorkspace;
+    if (params?.switchImmediately && params.organizationId) {
       await secureStorage.setAsync(
         STORAGE_KEYS.ACTIVE_ORG_ID,
         String(params.organizationId)
       );
-    }
-    if (params && 'roleCode' in params && params.roleCode) {
-      const mappedExp = mapRoleCodeToMobileExperience(params.roleCode);
-      if (mappedExp) {
-        await secureStorage.setAsync(
-          STORAGE_KEYS.ACTIVE_ROLE_EXPERIENCE,
-          mappedExp
-        );
+      if (params.roleCode) {
+        const mappedExp = mapRoleCodeToMobileExperience(params.roleCode);
+        if (mappedExp) {
+          await secureStorage.setAsync(
+            STORAGE_KEYS.ACTIVE_ROLE_EXPERIENCE,
+            mappedExp
+          );
+        }
       }
+    } else if (existingActive) {
+      await secureStorage.setAsync(
+        STORAGE_KEYS.ACTIVE_ORG_ID,
+        String(existingActive.organizationId)
+      );
+      await secureStorage.setAsync(
+        STORAGE_KEYS.ACTIVE_ROLE_EXPERIENCE,
+        existingActive.experience
+      );
     }
-    await secureStorage.removeAsync(STORAGE_KEYS.PENDING_INVITATION_TOKEN);
-    set({ pendingInvitationToken: null });
-    await get().bootstrapSession();
+    await get().refreshUserAndMemberships();
+    await get().refreshPendingInvitations();
   },
 
   selectWorkspace: async (workspaceOrKey, queryClient) => {
@@ -233,7 +250,11 @@ export const useAuthWorkspaceStore = create<AuthWorkspaceState>((set, get) => ({
   setSelectedChildId: (childId) => set({ selectedChildId: childId }),
 
   refreshUserAndMemberships: async () => {
-    const user = await authApi.getCurrentUser();
+    const [user, pendingList] = await Promise.all([
+      authApi.getCurrentUser(),
+      invitationApi.getMyPendingInvitations().catch(() => []),
+    ]);
+    const pending = pendingList.filter((i) => i.status === 'PENDING');
     const memberships = user.organizations ?? [];
     const workspaces = buildMobileWorkspaces(memberships);
     const current = get().activeWorkspace;
@@ -251,6 +272,8 @@ export const useAuthWorkspaceStore = create<AuthWorkspaceState>((set, get) => ({
       workspaces,
       activeWorkspace: stillValid,
       needsWorkspaceSelection: !stillValid && workspaces.length > 0,
+      pendingInvitations: pending,
+      pendingInvitationsCount: pending.length,
     });
   },
 
@@ -268,7 +291,6 @@ export const useAuthWorkspaceStore = create<AuthWorkspaceState>((set, get) => ({
       secureStorage.removeAsync(STORAGE_KEYS.ACCESS_TOKEN),
       secureStorage.removeAsync(STORAGE_KEYS.ACTIVE_ORG_ID),
       secureStorage.removeAsync(STORAGE_KEYS.ACTIVE_ROLE_EXPERIENCE),
-      secureStorage.removeAsync(STORAGE_KEYS.PENDING_INVITATION_TOKEN),
     ]);
     queryClient?.clear();
     set({
@@ -280,7 +302,8 @@ export const useAuthWorkspaceStore = create<AuthWorkspaceState>((set, get) => ({
       needsWorkspaceSelection: false,
       hasOnlyUnsupportedRoles: false,
       selectedChildId: null,
-      pendingInvitationToken: null,
+      pendingInvitations: [],
+      pendingInvitationsCount: 0,
     });
   },
 }));

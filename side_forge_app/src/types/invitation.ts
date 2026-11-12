@@ -15,6 +15,8 @@ export type InvitationTargetType =
   | 'STAFF'
   | 'TEACHER'
   | 'GUARDIAN'
+  | 'STUDENT'
+  | 'MEMBER'
   | 'GENERAL';
 
 export interface InvitationResponse {
@@ -30,7 +32,10 @@ export interface InvitationResponse {
   recipientPhone: string | null;
   status: InvitationStatus;
   expiresAt: string;
+  invitedByUserId?: number | null;
+  invitedByName?: string | null;
   acceptedAt: string | null;
+  revokedAt?: string | null;
   createdAt: string;
 }
 

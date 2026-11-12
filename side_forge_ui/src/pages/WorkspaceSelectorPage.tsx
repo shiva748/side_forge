@@ -252,10 +252,7 @@ export const WorkspaceSelectorPage: React.FC = () => {
             <Button
               size="sm"
               variant="primary"
-              onClick={() => {
-                setAccountModalTab('invitations');
-                setAccountModalOpen(true);
-              }}
+              onClick={() => navigate('/invitations')}
             >
               Review Invitations
             </Button>
