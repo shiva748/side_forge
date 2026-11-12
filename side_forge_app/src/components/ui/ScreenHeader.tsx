@@ -13,12 +13,6 @@ export interface ScreenHeaderProps {
   showMenuButton?: boolean;
   onMenuPress?: () => void;
   rightAction?: React.ReactNode;
-  /**
-   * Deprecated props retained as optional no-ops so callers do not break;
-   * workspace switching and settings live exclusively inside the hamburger menu.
-   */
-  showWorkspaceBadge?: boolean;
-  showSettingsAction?: boolean;
 }
 
 export function ScreenHeader({

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import {
   Modal,
   Pressable,
@@ -11,27 +11,41 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useQueryClient } from '@tanstack/react-query';
 import {
   ArrowLeftRight,
-  Bell,
-  Building2,
-  CheckCircle2,
   ChevronRight,
-  KeyRound,
   LogOut,
-  Palette,
   Settings,
-  Ticket,
-  User,
   X,
 } from 'lucide-react-native';
 import { useAppTheme } from '@/theme';
 import { useAuthWorkspaceStore } from '@/store/useAuthWorkspaceStore';
-import { formatRoleCodeLabel, type MobileWorkspace } from '@/types/auth';
-import { useSafeNavigation } from '@/utils/navigationGuard';
-import { StatusBadge } from '@/components/ui/StatusBadge';
+import { formatRoleCodeLabel } from '@/types/auth';
+import {
+  getRoleNavigationItems,
+  isRoleNavigationItemActive,
+  type RoleNavigationItemConfig,
+} from '@/constants/roleNavigation';
+import {
+  normalizeRoutePath,
+  useSafeNavigation,
+} from '@/utils/navigationGuard';
+import { UserAvatar } from '@/components/ui/UserAvatar';
 
 export interface HamburgerMenuDrawerProps {
   visible: boolean;
   onClose: () => void;
+}
+
+function resolvePrimaryRoleLabel(
+  experience?: string,
+  roles?: string[]
+): string {
+  if (experience === 'PARENT') return 'Parent';
+  if (experience === 'TEACHER') return 'Teacher';
+  if (roles && roles.length > 0 && roles[0]) {
+    return formatRoleCodeLabel(roles[0]);
+  }
+  if (experience === 'SCHOOL_ADMIN') return 'School Administrator';
+  return 'Member';
 }
 
 export function HamburgerMenuDrawer({
@@ -40,55 +54,68 @@ export function HamburgerMenuDrawer({
 }: HamburgerMenuDrawerProps) {
   const insets = useSafeAreaInsets();
   const queryClient = useQueryClient();
-  const { colors, spacing, typography, radius, iconSizes, preference } =
+  const { colors, spacing, typography, radius, iconSizes, touchTargets } =
     useAppTheme();
-  const { navigateTo, resetToWorkspaceHome, resetToLogin } =
+  const { pathname, currentSection, navigateTo, resetToLogin } =
     useSafeNavigation();
 
   const user = useAuthWorkspaceStore((s) => s.user);
   const activeWorkspace = useAuthWorkspaceStore((s) => s.activeWorkspace);
-  const workspaces = useAuthWorkspaceStore((s) => s.workspaces);
-  const pendingInvitationsCount = useAuthWorkspaceStore(
-    (s) => s.pendingInvitationsCount
+  const profilePhotoVersion = useAuthWorkspaceStore(
+    (s) => s.profilePhotoVersion
   );
-  const selectWorkspace = useAuthWorkspaceStore((s) => s.selectWorkspace);
   const logout = useAuthWorkspaceStore((s) => s.logout);
 
-  const [switchingKey, setSwitchingKey] = useState<string | null>(null);
   const [loggingOut, setLoggingOut] = useState(false);
 
-  const themeLabel =
-    preference === 'system'
-      ? 'System Default'
-      : preference === 'dark'
-      ? 'Dark Mode'
-      : 'Light Mode';
+  const fullName = useMemo(() => {
+    const joined = [user?.firstName, user?.lastName]
+      .filter(Boolean)
+      .join(' ')
+      .trim();
+    return joined || 'User Account';
+  }, [user?.firstName, user?.lastName]);
 
-  const handleOpenRoute = (href: string) => {
+  const roleLabel = useMemo(
+    () =>
+      resolvePrimaryRoleLabel(
+        activeWorkspace?.experience,
+        activeWorkspace?.roles
+      ),
+    [activeWorkspace?.experience, activeWorkspace?.roles]
+  );
+
+  const roleNavItems = useMemo(
+    () => getRoleNavigationItems(activeWorkspace),
+    [activeWorkspace]
+  );
+
+  const normalizedPath = normalizeRoutePath(pathname || '/');
+  const isProfileActive =
+    normalizedPath === '/profile' || normalizedPath === '/settings/profile';
+  const isWorkspaceSelectActive = normalizedPath === '/workspace-select';
+  const isSettingsActive =
+    normalizedPath === '/settings' ||
+    (normalizedPath.startsWith('/settings/') && !isProfileActive);
+
+  const handleOpenProfile = () => {
     onClose();
-    navigateTo(href);
+    navigateTo('/profile');
   };
 
-  const handleSelectWorkspace = async (workspace: MobileWorkspace) => {
-    if (switchingKey) return;
-    if (activeWorkspace?.key === workspace.key) {
-      onClose();
-      return;
-    }
+  const handleOpenWorkspaceSwitcher = () => {
+    onClose();
+    navigateTo('/workspace-select');
+  };
 
-    const authorized = workspaces.find((w) => w.key === workspace.key);
-    if (!authorized) {
-      return;
-    }
+  const handleOpenRoleItem = (item: RoleNavigationItemConfig) => {
+    onClose();
+    navigateTo(item.href, item.params ? { params: item.params } : undefined);
+  };
 
-    setSwitchingKey(authorized.key);
-    try {
-      await selectWorkspace(authorized, queryClient);
-      onClose();
-      resetToWorkspaceHome(authorized.experience);
-    } finally {
-      setSwitchingKey(null);
-    }
+  const handleOpenSettings = () => {
+    onClose();
+    navigateTo('/settings');
   };
 
   const handleLogout = async () => {
@@ -102,10 +129,6 @@ export function HamburgerMenuDrawer({
       setLoggingOut(false);
     }
   };
-
-  const otherWorkspaces = workspaces.filter(
-    (w) => w.key !== activeWorkspace?.key
-  );
 
   return (
     <Modal
@@ -121,14 +144,15 @@ export function HamburgerMenuDrawer({
             {
               backgroundColor: colors.surface,
               borderRightColor: colors.border,
-              paddingTop: Math.max(insets.top, spacing.md),
+              paddingTop: Math.max(insets.top, spacing.sm),
               paddingBottom: Math.max(insets.bottom, spacing.md),
             },
           ]}
         >
+          {/* A. Top Section: Clickable User Profile Header + Dismiss Action */}
           <View
             style={[
-              styles.drawerHeader,
+              styles.topBarRow,
               {
                 paddingHorizontal: spacing.md,
                 paddingBottom: spacing.sm,
@@ -136,404 +160,278 @@ export function HamburgerMenuDrawer({
               },
             ]}
           >
-            <View style={{ flex: 1 }}>
-              <Text
-                style={{
-                  color: colors.primaryText,
-                  fontSize: typography.fontSizes.xs,
-                  fontWeight: typography.fontWeights.bold,
-                  textTransform: 'uppercase',
-                  letterSpacing: 0.6,
-                }}
-              >
-                Side Forge
-              </Text>
-              <Text
-                numberOfLines={1}
-                style={{
-                  color: colors.textPrimary,
-                  fontSize: typography.fontSizes.md,
-                  fontWeight: typography.fontWeights.bold,
-                  marginTop: 2,
-                }}
-              >
-                {[user?.firstName, user?.lastName].filter(Boolean).join(' ') ||
-                  'Account Menu'}
-              </Text>
-              {user?.email ? (
-                <Text
-                  numberOfLines={1}
-                  style={{
-                    color: colors.textSecondary,
-                    fontSize: typography.fontSizes.xs,
-                    marginTop: 2,
-                  }}
-                >
-                  {user.email}
-                </Text>
-              ) : null}
-            </View>
-
             <Pressable
               accessibilityRole="button"
-              accessibilityLabel="Close menu"
-              hitSlop={10}
-              onPress={onClose}
-              style={[
-                styles.closeBtn,
+              accessibilityLabel={`Open personal profile for ${fullName}`}
+              onPress={handleOpenProfile}
+              style={({ pressed }) => [
+                styles.profilePressable,
                 {
-                  backgroundColor: colors.surfaceMuted,
-                  borderRadius: radius.sm,
+                  backgroundColor: isProfileActive
+                    ? colors.primarySoft
+                    : pressed
+                    ? colors.surfaceInteractivePressed
+                    : 'transparent',
+                  borderColor: isProfileActive
+                    ? colors.primarySoftBorder
+                    : 'transparent',
+                  borderRadius: radius.md,
+                  paddingVertical: spacing.xs,
+                  paddingHorizontal: spacing.xs,
                 },
               ]}
             >
-              <X size={iconSizes.md} color={colors.textSecondary} />
-            </Pressable>
-          </View>
-          <ScrollView
-            showsVerticalScrollIndicator={false}
-            contentContainerStyle={{
-              paddingHorizontal: spacing.md,
-              paddingVertical: spacing.md,
-              gap: spacing.lg,
-            }}
-          >
-            {/* 1. WORKSPACE SECTION */}
-            <View>
-              <Text
-                style={[
-                  styles.sectionTitle,
-                  {
-                    color: colors.textMuted,
-                    fontSize: typography.fontSizes.xs,
-                    fontWeight: typography.fontWeights.semibold,
-                    marginBottom: spacing.xs,
-                  },
-                ]}
-              >
-                Workspace
-              </Text>
+              <UserAvatar
+                firstName={user?.firstName}
+                lastName={user?.lastName}
+                profilePhotoUrl={user?.profilePhotoUrl}
+                profilePhotoFileId={user?.profilePhotoFileId}
+                photoVersion={profilePhotoVersion}
+                size={44}
+                highlighted={isProfileActive}
+              />
 
-              {activeWorkspace ? (
-                <View
-                  style={[
-                    styles.workspaceCard,
-                    {
-                      backgroundColor: colors.surfaceMuted,
-                      borderColor: colors.border,
-                      borderRadius: radius.md,
-                      padding: spacing.sm,
-                    },
-                  ]}
-                >
-                  <View style={styles.rowCenter}>
-                    <Building2 size={iconSizes.sm} color={colors.primary} />
-                    <Text
-                      numberOfLines={1}
-                      style={{
-                        color: colors.textPrimary,
-                        fontSize: typography.fontSizes.sm,
-                        fontWeight: typography.fontWeights.semibold,
-                        marginLeft: spacing.xs,
-                        flex: 1,
-                      }}
-                    >
-                      {activeWorkspace.organizationName}
-                    </Text>
-                  </View>
-                  <Text
-                    style={{
-                      color: colors.textSecondary,
-                      fontSize: typography.fontSizes.xs,
-                      marginTop: 4,
-                    }}
-                  >
-                    Workspace: {activeWorkspace.experienceLabel}
-                  </Text>
-                  <View
-                    style={[
-                      styles.badgesWrap,
-                      { marginTop: spacing.xs, gap: 6 },
-                    ]}
-                  >
-                    {activeWorkspace.roles.map((role) => (
-                      <StatusBadge
-                        key={role}
-                        label={formatRoleCodeLabel(role)}
-                        tone="primary"
-                      />
-                    ))}
-                  </View>
-                </View>
-              ) : null}
-              {otherWorkspaces.length > 0 ? (
-                <View style={{ marginTop: spacing.xs }}>
-                  <Text
-                    style={{
-                      color: colors.textSecondary,
-                      fontSize: typography.fontSizes.xs,
-                      fontWeight: typography.fontWeights.medium,
-                      marginBottom: 6,
-                    }}
-                  >
-                    Switch School or Role ({otherWorkspaces.length} available)
-                  </Text>
-                  <View style={{ gap: 6 }}>
-                    {otherWorkspaces.map((ws) => (
-                      <Pressable
-                        key={ws.key}
-                        accessibilityRole="button"
-                        disabled={Boolean(switchingKey)}
-                        onPress={() => handleSelectWorkspace(ws)}
-                        style={({ pressed }) => [
-                          styles.switchItem,
-                          {
-                            backgroundColor: pressed
-                              ? colors.surfaceInteractivePressed
-                              : colors.background,
-                            borderColor: colors.border,
-                            borderRadius: radius.md,
-                            paddingHorizontal: spacing.sm,
-                            paddingVertical: spacing.xs + 2,
-                          },
-                        ]}
-                      >
-                        <View style={{ flex: 1 }}>
-                          <Text
-                            numberOfLines={1}
-                            style={{
-                              color: colors.textPrimary,
-                              fontSize: typography.fontSizes.sm,
-                              fontWeight: typography.fontWeights.semibold,
-                            }}
-                          >
-                            {ws.organizationName}
-                          </Text>
-                          <Text
-                            numberOfLines={1}
-                            style={{
-                              color: colors.textSecondary,
-                              fontSize: typography.fontSizes.xs,
-                              marginTop: 2,
-                            }}
-                          >
-                            {ws.experienceLabel} •{' '}
-                            {ws.roles.map(formatRoleCodeLabel).join(', ')}
-                          </Text>
-                        </View>
-                        <ArrowLeftRight
-                          size={iconSizes.sm}
-                          color={colors.primaryText}
-                        />
-                      </Pressable>
-                    ))}
-                  </View>
-                </View>
-              ) : null}
-
-              <Pressable
-                accessibilityRole="button"
-                onPress={() => handleOpenRoute('/workspace-select')}
-                style={({ pressed }) => [
-                  styles.menuRow,
-                  {
-                    backgroundColor: pressed
-                      ? colors.surfaceInteractivePressed
-                      : 'transparent',
-                    borderRadius: radius.md,
-                    marginTop: spacing.xs,
-                    paddingVertical: spacing.xs + 2,
-                    paddingHorizontal: spacing.xs,
-                  },
-                ]}
-              >
-                <ArrowLeftRight size={iconSizes.sm} color={colors.primaryText} />
+              <View style={[styles.profileTextBlock, { marginLeft: spacing.sm }]}>
                 <Text
+                  numberOfLines={1}
                   style={{
-                    color: colors.primaryText,
-                    fontSize: typography.fontSizes.sm,
-                    fontWeight: typography.fontWeights.medium,
-                    marginLeft: spacing.sm,
-                    flex: 1,
+                    color: colors.textPrimary,
+                    fontSize: typography.fontSizes.base,
+                    fontWeight: typography.fontWeights.bold,
                   }}
                 >
-                  All Workspaces
+                  {fullName}
                 </Text>
-                <ChevronRight size={iconSizes.sm} color={colors.textMuted} />
-              </Pressable>
-
-              <Pressable
-                accessibilityRole="button"
-                onPress={() => handleOpenRoute('/invitations')}
-                style={({ pressed }) => [
-                  styles.menuRow,
-                  {
-                    backgroundColor: pressed
-                      ? colors.surfaceInteractivePressed
-                      : 'transparent',
-                    borderRadius: radius.md,
-                    marginTop: 2,
-                    paddingVertical: spacing.xs + 2,
-                    paddingHorizontal: spacing.xs,
-                  },
-                ]}
-              >
-                <Ticket size={iconSizes.sm} color={colors.primaryText} />
                 <Text
+                  numberOfLines={1}
                   style={{
                     color: colors.primaryText,
-                    fontSize: typography.fontSizes.sm,
-                    fontWeight: typography.fontWeights.medium,
-                    marginLeft: spacing.sm,
-                    flex: 1,
+                    fontSize: typography.fontSizes.xs,
+                    fontWeight: typography.fontWeights.semibold,
+                    marginTop: 1,
                   }}
                 >
-                  Invitations
+                  {roleLabel}
                 </Text>
-                {pendingInvitationsCount > 0 ? (
-                  <StatusBadge
-                    label={`${pendingInvitationsCount} Pending`}
-                    tone="warning"
-                    style={{ marginRight: spacing.xs }}
-                  />
-                ) : null}
-                <ChevronRight size={iconSizes.sm} color={colors.textMuted} />
-              </Pressable>
-            </View>
-            {/* 2. SETTINGS SECTION */}
-            <View>
-              <Text
-                style={[
-                  styles.sectionTitle,
-                  {
-                    color: colors.textMuted,
-                    fontSize: typography.fontSizes.xs,
-                    fontWeight: typography.fontWeights.semibold,
-                    marginBottom: spacing.xs,
-                  },
-                ]}
-              >
-                Settings
-              </Text>
-              <View
-                style={[
-                  styles.menuGroup,
-                  {
-                    borderColor: colors.border,
-                    borderRadius: radius.md,
-                    backgroundColor: colors.background,
-                  },
-                ]}
-              >
-                <DrawerMenuItem
-                  icon={<Settings size={iconSizes.sm} color={colors.primaryText} />}
-                  title="Settings Overview"
-                  subtitle="Appearance, profile & security"
-                  onPress={() => handleOpenRoute('/settings')}
-                  showDivider
-                />
-                <DrawerMenuItem
-                  icon={<Palette size={iconSizes.sm} color={colors.primaryText} />}
-                  title="Theme Appearance"
-                  subtitle={themeLabel}
-                  onPress={() => handleOpenRoute('/settings/appearance')}
-                  showDivider
-                />
-                <DrawerMenuItem
-                  icon={<User size={iconSizes.sm} color={colors.primaryText} />}
-                  title="Personal Profile"
-                  subtitle="Name & mobile number"
-                  onPress={() => handleOpenRoute('/settings/profile')}
-                  showDivider
-                />
-                <DrawerMenuItem
-                  icon={<KeyRound size={iconSizes.sm} color={colors.primaryText} />}
-                  title="Change Password"
-                  subtitle="Update your account password"
-                  onPress={() => handleOpenRoute('/settings/password')}
-                  showDivider
-                />
-                <DrawerMenuItem
-                  icon={<Bell size={iconSizes.sm} color={colors.primaryText} />}
-                  title="Notification Preferences"
-                  subtitle="Alerts & delivery channels"
-                  onPress={() => handleOpenRoute('/settings/notifications')}
-                />
-              </View>
-            </View>
-
-            {/* 3. ACCOUNT SECTION */}
-            <View>
-              <Text
-                style={[
-                  styles.sectionTitle,
-                  {
-                    color: colors.textMuted,
-                    fontSize: typography.fontSizes.xs,
-                    fontWeight: typography.fontWeights.semibold,
-                    marginBottom: spacing.xs,
-                  },
-                ]}
-              >
-                Account
-              </Text>
-              <View
-                style={[
-                  styles.menuGroup,
-                  {
-                    borderColor: colors.border,
-                    borderRadius: radius.md,
-                    backgroundColor: colors.background,
-                    padding: spacing.sm,
-                  },
-                ]}
-              >
-                <View style={[styles.rowCenter, { marginBottom: spacing.sm }]}>
-                  <CheckCircle2 size={iconSizes.sm} color={colors.success} />
+                {activeWorkspace?.organizationName ? (
                   <Text
                     numberOfLines={1}
                     style={{
                       color: colors.textSecondary,
                       fontSize: typography.fontSizes.xs,
-                      marginLeft: spacing.xs,
-                      flex: 1,
+                      marginTop: 1,
                     }}
                   >
-                    Signed in as {user?.email ?? 'authenticated user'}
+                    {activeWorkspace.organizationName}
                   </Text>
-                </View>
-                <Pressable
-                  accessibilityRole="button"
-                  disabled={loggingOut}
-                  onPress={handleLogout}
-                  style={({ pressed }) => [
-                    styles.logoutBtn,
+                ) : null}
+              </View>
+
+              <ChevronRight size={iconSizes.sm} color={colors.textMuted} />
+            </Pressable>
+
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Close navigation drawer"
+              hitSlop={8}
+              onPress={onClose}
+              style={({ pressed }) => [
+                styles.closeBtn,
+                {
+                  backgroundColor: pressed
+                    ? colors.surfaceInteractivePressed
+                    : colors.surfaceMuted,
+                  borderRadius: radius.sm,
+                  marginLeft: spacing.xs,
+                },
+              ]}
+            >
+              <X size={iconSizes.sm} color={colors.textSecondary} />
+            </Pressable>
+          </View>
+
+          {/* B. Workspace Switching Action */}
+          <View
+            style={{
+              paddingHorizontal: spacing.md,
+              paddingVertical: spacing.sm,
+              borderBottomWidth: 1,
+              borderBottomColor: colors.separator,
+            }}
+          >
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Switch School or Role"
+              onPress={handleOpenWorkspaceSwitcher}
+              style={({ pressed }) => [
+                styles.switchWorkspaceBtn,
+                {
+                  minHeight: touchTargets.buttonHeightSm + 4,
+                  backgroundColor: isWorkspaceSelectActive
+                    ? colors.primarySoft
+                    : pressed
+                    ? colors.surfaceInteractivePressed
+                    : colors.surfaceMuted,
+                  borderColor: isWorkspaceSelectActive
+                    ? colors.primarySoftBorder
+                    : colors.border,
+                  borderRadius: radius.md,
+                  paddingHorizontal: spacing.sm,
+                  paddingVertical: spacing.xs + 2,
+                },
+              ]}
+            >
+              <ArrowLeftRight
+                size={iconSizes.sm}
+                color={
+                  isWorkspaceSelectActive
+                    ? colors.primaryText
+                    : colors.textPrimary
+                }
+              />
+              <Text
+                numberOfLines={1}
+                style={{
+                  flex: 1,
+                  color: isWorkspaceSelectActive
+                    ? colors.primaryText
+                    : colors.textPrimary,
+                  fontSize: typography.fontSizes.sm,
+                  fontWeight: typography.fontWeights.semibold,
+                  marginLeft: spacing.xs + 2,
+                }}
+              >
+                Switch School / Role
+              </Text>
+              <ChevronRight size={iconSizes.sm} color={colors.textMuted} />
+            </Pressable>
+          </View>
+
+          {/* C. Scrollable Role-Specific Navigation + Settings */}
+          <ScrollView
+            showsVerticalScrollIndicator={false}
+            contentContainerStyle={{
+              paddingHorizontal: spacing.md,
+              paddingTop: spacing.sm,
+              paddingBottom: spacing.md,
+            }}
+          >
+            {roleNavItems.length > 0 ? (
+              <View style={{ marginBottom: spacing.sm }}>
+                <Text
+                  style={[
+                    styles.sectionLabel,
                     {
-                      backgroundColor: pressed
-                        ? colors.dangerPressed
-                        : colors.dangerSoft,
-                      borderColor: colors.dangerBorder,
-                      borderRadius: radius.md,
-                      paddingVertical: spacing.xs + 2,
-                      paddingHorizontal: spacing.sm,
+                      color: colors.textMuted,
+                      fontSize: typography.fontSizes.xs,
+                      fontWeight: typography.fontWeights.semibold,
+                      marginBottom: spacing.xxs + 2,
+                      paddingHorizontal: spacing.xs,
                     },
                   ]}
                 >
-                  <LogOut size={iconSizes.sm} color={colors.dangerText} />
-                  <Text
-                    style={{
-                      color: colors.dangerText,
-                      fontSize: typography.fontSizes.sm,
-                      fontWeight: typography.fontWeights.semibold,
-                      marginLeft: spacing.xs,
-                    }}
-                  >
-                    {loggingOut ? 'Signing Out...' : 'Sign Out'}
-                  </Text>
-                </Pressable>
+                  {activeWorkspace?.experience === 'PARENT'
+                    ? 'Parent Portal'
+                    : activeWorkspace?.experience === 'TEACHER'
+                    ? 'Teacher Workspace'
+                    : 'Administration'}
+                </Text>
+
+                <View style={{ gap: 2 }}>
+                  {roleNavItems.map((item) => {
+                    const active = isRoleNavigationItemActive(
+                      item,
+                      pathname,
+                      currentSection
+                    );
+                    const IconComp = item.Icon;
+                    return (
+                      <DrawerNavRow
+                        key={item.key}
+                        label={item.drawerLabel ?? item.title}
+                        icon={
+                          <IconComp
+                            size={iconSizes.md}
+                            color={
+                              active ? colors.primaryText : colors.textSecondary
+                            }
+                          />
+                        }
+                        active={active}
+                        onPress={() => handleOpenRoleItem(item)}
+                      />
+                    );
+                  })}
+                </View>
               </View>
-            </View>
+            ) : null}
+
+            <View
+              style={{
+                height: 1,
+                backgroundColor: colors.separator,
+                marginVertical: spacing.xs + 2,
+              }}
+            />
+
+            {/* D. Single Compact Settings Entry */}
+            <DrawerNavRow
+              label="Settings"
+              icon={
+                <Settings
+                  size={iconSizes.md}
+                  color={
+                    isSettingsActive ? colors.primaryText : colors.textSecondary
+                  }
+                />
+              }
+              active={isSettingsActive}
+              showChevron
+              onPress={handleOpenSettings}
+            />
           </ScrollView>
+
+          {/* Footer: Sign Out */}
+          <View
+            style={{
+              paddingHorizontal: spacing.md,
+              paddingTop: spacing.xs,
+              borderTopWidth: 1,
+              borderTopColor: colors.separator,
+            }}
+          >
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Sign Out"
+              disabled={loggingOut}
+              onPress={handleLogout}
+              style={({ pressed }) => [
+                styles.logoutBtn,
+                {
+                  minHeight: touchTargets.buttonHeightSm + 4,
+                  backgroundColor: pressed
+                    ? colors.dangerSoft
+                    : colors.backgroundSubtle,
+                  borderColor: colors.dangerBorder,
+                  borderRadius: radius.md,
+                  paddingHorizontal: spacing.sm,
+                  paddingVertical: spacing.xs + 2,
+                },
+              ]}
+            >
+              <LogOut size={iconSizes.sm} color={colors.dangerText} />
+              <Text
+                style={{
+                  color: colors.dangerText,
+                  fontSize: typography.fontSizes.sm,
+                  fontWeight: typography.fontWeights.semibold,
+                  marginLeft: spacing.xs,
+                }}
+              >
+                {loggingOut ? 'Signing Out...' : 'Sign Out'}
+              </Text>
+            </Pressable>
+          </View>
         </View>
 
         <Pressable
@@ -547,101 +445,130 @@ export function HamburgerMenuDrawer({
   );
 }
 
-function DrawerMenuItem({
+function DrawerNavRow({
   icon,
-  title,
-  subtitle,
+  label,
+  active = false,
+  showChevron = false,
   onPress,
-  showDivider = false,
 }: {
   icon: React.ReactNode;
-  title: string;
-  subtitle?: string;
+  label: string;
+  active?: boolean;
+  showChevron?: boolean;
   onPress: () => void;
-  showDivider?: boolean;
 }) {
-  const { colors, spacing, typography, iconSizes } = useAppTheme();
+  const { colors, spacing, typography, radius, iconSizes, touchTargets } =
+    useAppTheme();
 
   return (
     <Pressable
       accessibilityRole="button"
+      accessibilityState={{ selected: active }}
       onPress={onPress}
       style={({ pressed }) => [
-        styles.drawerMenuItem,
+        styles.navRow,
         {
-          backgroundColor: pressed
+          minHeight: touchTargets.minHeight,
+          backgroundColor: active
+            ? colors.primarySoft
+            : pressed
             ? colors.surfaceInteractivePressed
             : 'transparent',
+          borderColor: active ? colors.primarySoftBorder : 'transparent',
+          borderRadius: radius.md,
           paddingHorizontal: spacing.sm,
-          paddingVertical: spacing.sm,
-          borderBottomWidth: showDivider ? 1 : 0,
-          borderBottomColor: colors.separator,
+          paddingVertical: spacing.xs + 2,
         },
       ]}
     >
-      <View style={styles.drawerMenuIcon}>{icon}</View>
-      <View style={{ flex: 1, marginLeft: spacing.xs }}>
-        <Text
-          style={{
-            color: colors.textPrimary,
-            fontSize: typography.fontSizes.sm,
-            fontWeight: typography.fontWeights.semibold,
-          }}
-        >
-          {title}
-        </Text>
-        {subtitle ? (
-          <Text
-            numberOfLines={1}
-            style={{
-              color: colors.textSecondary,
-              fontSize: typography.fontSizes.xs,
-              marginTop: 1,
-            }}
-          >
-            {subtitle}
-          </Text>
-        ) : null}
-      </View>
-      <ChevronRight size={iconSizes.sm} color={colors.textMuted} />
+      <View style={styles.navIconWrap}>{icon}</View>
+      <Text
+        numberOfLines={1}
+        style={{
+          flex: 1,
+          color: active ? colors.primaryText : colors.textPrimary,
+          fontSize: typography.fontSizes.sm,
+          fontWeight: active
+            ? typography.fontWeights.bold
+            : typography.fontWeights.medium,
+          marginLeft: spacing.sm,
+        }}
+      >
+        {label}
+      </Text>
+      {active ? (
+        <View
+          style={[
+            styles.activeDot,
+            { backgroundColor: colors.primary, marginLeft: spacing.xs },
+          ]}
+        />
+      ) : showChevron ? (
+        <ChevronRight size={iconSizes.sm} color={colors.textMuted} />
+      ) : null}
     </Pressable>
   );
 }
 
 const styles = StyleSheet.create({
-  overlayRow: { flex: 1, flexDirection: 'row' },
+  overlayRow: {
+    flex: 1,
+    flexDirection: 'row',
+  },
   drawerSheet: {
-    width: '84%',
-    maxWidth: 340,
+    width: '82%',
+    maxWidth: 320,
     height: '100%',
     borderRightWidth: 1,
   },
-  backdrop: { flex: 1 },
-  drawerHeader: {
+  backdrop: {
+    flex: 1,
+  },
+  topBarRow: {
     flexDirection: 'row',
     alignItems: 'center',
     borderBottomWidth: 1,
   },
-  closeBtn: {
-    width: 36,
-    height: 36,
+  profilePressable: {
+    flex: 1,
+    flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-    marginLeft: 8,
+    borderWidth: 1,
   },
-  sectionTitle: { textTransform: 'uppercase', letterSpacing: 0.6 },
-  workspaceCard: { borderWidth: 1 },
-  rowCenter: { flexDirection: 'row', alignItems: 'center' },
-  badgesWrap: { flexDirection: 'row', flexWrap: 'wrap' },
-  switchItem: { flexDirection: 'row', alignItems: 'center', borderWidth: 1 },
-  menuRow: { flexDirection: 'row', alignItems: 'center' },
-  menuGroup: { borderWidth: 1, overflow: 'hidden' },
-  drawerMenuItem: { flexDirection: 'row', alignItems: 'center' },
-  drawerMenuIcon: {
-    width: 28,
-    height: 28,
+  profileTextBlock: {
+    flex: 1,
+  },
+  closeBtn: {
+    width: 34,
+    height: 34,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  switchWorkspaceBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderWidth: 1,
+  },
+  sectionLabel: {
+    textTransform: 'uppercase',
+    letterSpacing: 0.6,
+  },
+  navRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderWidth: 1,
+  },
+  navIconWrap: {
+    width: 24,
+    height: 24,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  activeDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
   },
   logoutBtn: {
     flexDirection: 'row',
@@ -650,4 +577,3 @@ const styles = StyleSheet.create({
     borderWidth: 1,
   },
 });
-

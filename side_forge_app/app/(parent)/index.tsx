@@ -14,6 +14,7 @@ import { useAppTheme } from '@/theme';
 import { useAuthWorkspaceStore } from '@/store/useAuthWorkspaceStore';
 import { parentPortalApi } from '@/api/parentPortalApi';
 import { queryKeys } from '@/api/queryKeys';
+import { getRoleNavigationItems } from '@/constants/roleNavigation';
 import { useSafeNavigation } from '@/utils/navigationGuard';
 import { AppShellHeader } from '@/components/workspace/WorkspaceTopBar';
 import {
@@ -188,68 +189,21 @@ export default function ParentDashboardScreen() {
 
   const unreadCount = dashboardData?.unreadNotificationCount ?? 0;
 
-  const tiles: FeatureTileItem[] = [
-    {
-      key: 'attendance',
-      title: 'Attendance',
-      description: 'Daily attendance status & monthly summary',
-      Icon: CalendarCheck,
-      tone: 'success',
+  const tiles = useMemo<FeatureTileItem[]>(() => {
+    const items = getRoleNavigationItems(activeWorkspace, {
+      homeGridOnly: true,
+    });
+    return items.map((item) => ({
+      key: item.key,
+      title: item.title,
+      description: item.description,
+      Icon: item.Icon,
+      tone: item.tone,
+      badge: item.badge,
       onPress: () =>
-        navigateTo('/(parent)/academics', {
-          params: { section: 'attendance' },
-        }),
-    },
-    {
-      key: 'homework',
-      title: 'Homework',
-      description: 'Assigned tasks & submission status',
-      Icon: FileSpreadsheet,
-      tone: 'info',
-      onPress: () =>
-        navigateTo('/(parent)/academics', {
-          params: { section: 'homework' },
-        }),
-    },
-    {
-      key: 'exams',
-      title: 'Exam Results',
-      description: 'Exam schedules & published report cards',
-      Icon: GraduationCap,
-      tone: 'warning',
-      onPress: () =>
-        navigateTo('/(parent)/academics', {
-          params: { section: 'exams' },
-        }),
-    },
-    {
-      key: 'fees',
-      title: 'Fees & Receipts',
-      description: 'Fee demands, balances & payment history',
-      Icon: CreditCard,
-      tone: 'success',
-      onPress: () => navigateTo('/(parent)/fees'),
-    },
-    {
-      key: 'timetable',
-      title: 'Timetable',
-      description: 'Weekly class & section period schedule',
-      Icon: Calendar,
-      tone: 'primary',
-      onPress: () =>
-        navigateTo('/(parent)/academics', {
-          params: { section: 'timetable' },
-        }),
-    },
-    {
-      key: 'updates',
-      title: 'Announcements',
-      description: 'School notices, circulars & alerts',
-      Icon: Bell,
-      tone: 'primary',
-      onPress: () => navigateTo('/(parent)/updates'),
-    },
-  ];
+        navigateTo(item.href, item.params ? { params: item.params } : undefined),
+    }));
+  }, [activeWorkspace, navigateTo]);
   const headerNotificationButton = (
     <Pressable
       accessibilityRole="button"

@@ -1,16 +1,8 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
-import {
-  Bell,
-  Building2,
-  Calendar,
-  ClipboardCheck,
-  FileText,
-  GraduationCap,
-  Users,
-} from 'lucide-react-native';
 import { useAppTheme } from '@/theme';
 import { useAuthWorkspaceStore } from '@/store/useAuthWorkspaceStore';
+import { getRoleNavigationItems } from '@/constants/roleNavigation';
 import { useSafeNavigation } from '@/utils/navigationGuard';
 import { AppShellHeader } from '@/components/workspace/WorkspaceTopBar';
 import {
@@ -27,58 +19,21 @@ export default function TeacherOverviewScreen() {
   const user = useAuthWorkspaceStore((s) => s.user);
   const activeWorkspace = useAuthWorkspaceStore((s) => s.activeWorkspace);
 
-  const tiles: FeatureTileItem[] = [
-    {
-      key: 'timetable',
-      title: 'Teaching Schedule',
-      description: 'Daily & weekly assigned class periods',
-      Icon: Calendar,
-      tone: 'primary',
-      onPress: () => navigateTo('/(teacher)/timetable'),
-    },
-    {
-      key: 'attendance',
-      title: 'Class Attendance',
-      description: 'Daily roll call & section attendance',
-      Icon: ClipboardCheck,
-      tone: 'success',
-      onPress: () => navigateTo('/(teacher)/classes'),
-    },
-    {
-      key: 'homework',
-      title: 'Homework & Grading',
-      description: 'Assign work & review student submissions',
-      Icon: FileText,
-      tone: 'info',
-      onPress: () => navigateTo('/(teacher)/homework'),
-    },
-    {
-      key: 'classes',
-      title: 'Assigned Classes',
-      description: 'Section student rosters & academic details',
-      Icon: Users,
-      tone: 'primary',
+  const tiles = useMemo<FeatureTileItem[]>(() => {
+    const items = getRoleNavigationItems(activeWorkspace, {
+      homeGridOnly: true,
+    });
+    return items.map((item) => ({
+      key: item.key,
+      title: item.title,
+      description: item.description,
+      Icon: item.Icon,
+      tone: item.tone,
+      badge: item.badge,
       onPress: () =>
-        navigateTo('/(teacher)/classes', { params: { section: 'roster' } }),
-    },
-    {
-      key: 'exams',
-      title: 'Examinations & Marks',
-      description: 'Subject mark entry & exam schedules',
-      Icon: GraduationCap,
-      tone: 'warning',
-      onPress: () =>
-        navigateTo('/(teacher)/homework', { params: { section: 'exams' } }),
-    },
-    {
-      key: 'workspaces',
-      title: 'Workspaces & Alerts',
-      description: 'Switch workspace or manage notifications',
-      Icon: Building2,
-      tone: 'info',
-      onPress: () => navigateTo('/workspace-select'),
-    },
-  ];
+        navigateTo(item.href, item.params ? { params: item.params } : undefined),
+    }));
+  }, [activeWorkspace, navigateTo]);
 
   return (
     <ScreenContainer

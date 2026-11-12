@@ -29,6 +29,7 @@ function RootNavigationCoordinator() {
     const inInvitationScreen = firstSegment === 'invitations';
     const inWorkspaceSelect = firstSegment === 'workspace-select';
     const inSettings = firstSegment === 'settings';
+    const inProfile = firstSegment === 'profile';
 
     if (status === 'UNAUTHENTICATED') {
       if (!inAuthGroup) {
@@ -50,7 +51,12 @@ function RootNavigationCoordinator() {
       hasOnlyUnsupportedRoles ||
       !activeWorkspace
     ) {
-      if (!inWorkspaceSelect && !inInvitationScreen && !inSettings) {
+      if (
+        !inWorkspaceSelect &&
+        !inInvitationScreen &&
+        !inSettings &&
+        !inProfile
+      ) {
         router.replace('/workspace-select');
       }
       return;
@@ -69,6 +75,7 @@ function RootNavigationCoordinator() {
       (firstSegment !== targetGroup &&
         !inWorkspaceSelect &&
         !inSettings &&
+        !inProfile &&
         !inInvitationScreen)
     ) {
       router.replace(getWorkspaceHomeHref(activeWorkspace.experience));
@@ -127,6 +134,10 @@ function RootNavigationCoordinator() {
       />
       <Stack.Screen
         name="settings"
+        options={{ animation: 'slide_from_right' }}
+      />
+      <Stack.Screen
+        name="profile"
         options={{ animation: 'slide_from_right' }}
       />
     </Stack>

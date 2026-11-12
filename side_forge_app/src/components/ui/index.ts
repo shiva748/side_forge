@@ -8,4 +8,6 @@ export * from './StateViews';
 export * from './BottomSheetModal';
 export * from './SelectorControl';
 export * from './FeatureTile';
+export * from './UserAvatar';
+
 

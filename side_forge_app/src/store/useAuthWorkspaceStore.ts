@@ -28,9 +28,11 @@ export interface AuthWorkspaceState {
   selectedChildId: number | null;
   pendingInvitations: InvitationResponse[];
   pendingInvitationsCount: number;
+  profilePhotoVersion: number;
   authError: string | null;
 
   clearAuthError: () => void;
+  bumpProfilePhotoVersion: () => void;
   bootstrapSession: () => Promise<void>;
   login: (
     emailOrCredentials: LoginRequest | string,
@@ -94,9 +96,12 @@ export const useAuthWorkspaceStore = create<AuthWorkspaceState>((set, get) => ({
   selectedChildId: null,
   pendingInvitations: [],
   pendingInvitationsCount: 0,
+  profilePhotoVersion: 0,
   authError: null,
 
   clearAuthError: () => set({ authError: null }),
+  bumpProfilePhotoVersion: () =>
+    set((state) => ({ profilePhotoVersion: state.profilePhotoVersion + 1 })),
 
   refreshPendingInvitations: async () => {
     try {

@@ -161,17 +161,15 @@ export default function ParentHomeworkScreen() {
       parentPortalApi.getChildHomeworkDashboard(
         organizationId,
         activeChildId!,
-        {
-          academicSessionId: effectiveSessionId ?? undefined,
-        }
+        effectiveSessionId ?? undefined
       ),
     enabled: organizationId > 0 && activeChildId !== null,
   });
 
   const homeworkData = homeworkQuery.data;
   const allHomeworkItems = useMemo(
-    () => homeworkData?.homeworkItems ?? [],
-    [homeworkData?.homeworkItems]
+    () => homeworkData?.assignments ?? [],
+    [homeworkData?.assignments]
   );
 
   // Child-scoped Homework Detail query when an assignment is selected
@@ -329,7 +327,7 @@ export default function ParentHomeworkScreen() {
           title="No Linked Children Yet"
           description="Once your school links your child's student profile to your guardian account, their homework assignments, submission status, and teacher feedback will appear here."
           actionLabel="Check Invitations"
-          onActionPress={() => navigateTo('/settings/invitations')}
+          onActionPress={() => navigateTo('/invitations')}
         />
       ) : (
         <>

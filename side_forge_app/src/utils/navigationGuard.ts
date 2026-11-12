@@ -1,5 +1,10 @@
 import { useCallback } from 'react';
-import { usePathname, useRouter, type Href } from 'expo-router';
+import {
+  useGlobalSearchParams,
+  usePathname,
+  useRouter,
+  type Href,
+} from 'expo-router';
 import type { MobileRoleExperience } from '@/types/auth';
 
 /**
@@ -25,11 +30,16 @@ export function getWorkspaceHomeHref(
 
 /**
  * Navigation helper that prevents pushing duplicate instances of the current
- * route or creating recursive Settings <-> Sub-screen navigation stacks.
+ * route or creating recursive Settings / Profile / Workspace navigation stacks.
  */
 export function useSafeNavigation() {
   const router = useRouter();
   const pathname = usePathname();
+  const globalParams = useGlobalSearchParams<{ section?: string }>();
+  const currentSection =
+    typeof globalParams.section === 'string' && globalParams.section.length > 0
+      ? globalParams.section
+      : null;
 
   const navigateTo = useCallback(
     (
@@ -38,14 +48,27 @@ export function useSafeNavigation() {
     ) => {
       const targetNormalized = normalizeRoutePath(href);
       const currentNormalized = normalizeRoutePath(pathname || '/');
+      const targetSection = options?.params?.section ?? null;
 
-      if (targetNormalized === currentNormalized && !options?.params) {
+      // Prevent duplicate navigation when already on the exact same route and section
+      if (
+        targetNormalized === currentNormalized &&
+        targetSection === currentSection
+      ) {
         return;
       }
 
+      // When navigating to a base route (no section param) from a sectioned state
+      // on the same path, explicitly clear `section` so the screen updates.
+      const effectiveParams =
+        options?.params ??
+        (targetNormalized === currentNormalized && currentSection
+          ? { section: '' }
+          : undefined);
+
       const fullHref = (
-        options?.params
-          ? { pathname: href as string, params: options.params }
+        effectiveParams
+          ? { pathname: href as string, params: effectiveParams }
           : href
       ) as Href;
 
@@ -54,9 +77,8 @@ export function useSafeNavigation() {
         return;
       }
 
-      // If navigating to a top-level utility route (/settings or /workspace-select)
-      // while already inside that utility hierarchy, replace/navigate cleanly
-      // instead of stacking duplicate screens.
+      // If navigating to /settings while already inside a /settings/* sub-screen,
+      // pop back to Settings Overview instead of stacking duplicate screens.
       if (
         targetNormalized === '/settings' &&
         currentNormalized.startsWith('/settings/')
@@ -69,11 +91,24 @@ export function useSafeNavigation() {
         return;
       }
 
+      // Avoid stacking utility screens (/profile, /settings, /workspace-select)
+      // endlessly on top of each other when switching between them from the drawer.
+      const isTargetUtility =
+        targetNormalized === '/profile' ||
+        targetNormalized.startsWith('/settings') ||
+        targetNormalized === '/workspace-select';
+      const isCurrentUtility =
+        currentNormalized === '/profile' ||
+        currentNormalized.startsWith('/settings') ||
+        currentNormalized === '/workspace-select';
+
       if (
-        (targetNormalized.startsWith('/settings') &&
-          currentNormalized === '/workspace-select') ||
-        (targetNormalized === '/workspace-select' &&
-          currentNormalized.startsWith('/settings'))
+        isTargetUtility &&
+        isCurrentUtility &&
+        !(
+          currentNormalized === '/settings' &&
+          targetNormalized.startsWith('/settings/')
+        )
       ) {
         router.replace(fullHref);
         return;
@@ -92,7 +127,7 @@ export function useSafeNavigation() {
 
       router.push(fullHref);
     },
-    [pathname, router]
+    [pathname, currentSection, router]
   );
 
   const goBackOrFallback = useCallback(
@@ -133,9 +168,11 @@ export function useSafeNavigation() {
 
   return {
     pathname,
+    currentSection,
     navigateTo,
     goBackOrFallback,
     resetToWorkspaceHome,
     resetToLogin,
   };
 }
+

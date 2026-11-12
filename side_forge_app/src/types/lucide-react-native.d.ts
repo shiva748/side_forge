@@ -24,6 +24,7 @@ declare module 'lucide-react-native' {
   export const Building2: LucideIcon;
   export const Calendar: LucideIcon;
   export const CalendarCheck: LucideIcon;
+  export const Camera: LucideIcon;
   export const Check: LucideIcon;
   export const CheckCircle2: LucideIcon;
   export const ChevronDown: LucideIcon;
@@ -69,6 +70,8 @@ declare module 'lucide-react-native' {
   export const Sparkles: LucideIcon;
   export const Sun: LucideIcon;
   export const Ticket: LucideIcon;
+  export const Trash2: LucideIcon;
+  export const Upload: LucideIcon;
   export const User: LucideIcon;
   export const UserCheck: LucideIcon;
   export const UserPlus: LucideIcon;

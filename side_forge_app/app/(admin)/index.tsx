@@ -1,18 +1,9 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
-import {
-  Activity,
-  Award,
-  Bell,
-  Building2,
-  Calendar,
-  ClipboardCheck,
-  CreditCard,
-  Users,
-} from 'lucide-react-native';
 import { useAppTheme } from '@/theme';
 import { useAuthWorkspaceStore } from '@/store/useAuthWorkspaceStore';
 import { formatRoleCodeLabel } from '@/types/auth';
+import { getRoleNavigationItems } from '@/constants/roleNavigation';
 import { useSafeNavigation } from '@/utils/navigationGuard';
 import { AppShellHeader } from '@/components/workspace/WorkspaceTopBar';
 import {
@@ -29,84 +20,21 @@ export default function SchoolAdminOverviewScreen() {
   const user = useAuthWorkspaceStore((s) => s.user);
   const activeWorkspace = useAuthWorkspaceStore((s) => s.activeWorkspace);
 
-  const tiles: FeatureTileItem[] = [
-    {
-      key: 'directory',
-      title: 'Students & Staff',
-      description: 'Student profiles, guardian records & staff directory',
-      Icon: Users,
-      tone: 'primary',
-      onPress: () => navigateTo('/(admin)/directory'),
-    },
-    {
-      key: 'operations',
-      title: 'Daily Operations',
-      description: 'School operations & daily activity overview',
-      Icon: Activity,
-      tone: 'info',
-      onPress: () => navigateTo('/(admin)/operations'),
-    },
-    {
-      key: 'attendance',
-      title: 'Attendance',
-      description: 'Student and staff attendance tracking',
-      Icon: ClipboardCheck,
-      tone: 'success',
+  const tiles = useMemo<FeatureTileItem[]>(() => {
+    const items = getRoleNavigationItems(activeWorkspace, {
+      homeGridOnly: true,
+    });
+    return items.map((item) => ({
+      key: item.key,
+      title: item.title,
+      description: item.description,
+      Icon: item.Icon,
+      tone: item.tone,
+      badge: item.badge,
       onPress: () =>
-        navigateTo('/(admin)/operations', {
-          params: { section: 'attendance' },
-        }),
-    },
-    {
-      key: 'timetable',
-      title: 'Timetable',
-      description: 'Class & section schedules and period slots',
-      Icon: Calendar,
-      tone: 'primary',
-      onPress: () =>
-        navigateTo('/(admin)/operations', {
-          params: { section: 'timetable' },
-        }),
-    },
-    {
-      key: 'examinations',
-      title: 'Examinations',
-      description: 'Exam schedules, subject marks & report cards',
-      Icon: Award,
-      tone: 'warning',
-      onPress: () =>
-        navigateTo('/(admin)/operations', {
-          params: { section: 'examinations' },
-        }),
-    },
-    {
-      key: 'finance',
-      title: 'Fees & Finance',
-      description: 'Fee collections, outstanding dues & receipts',
-      Icon: CreditCard,
-      tone: 'success',
-      onPress: () => navigateTo('/(admin)/finance'),
-    },
-    {
-      key: 'communication',
-      title: 'Communication',
-      description: 'School announcements, notices & alerts',
-      Icon: Bell,
-      tone: 'info',
-      onPress: () =>
-        navigateTo('/(admin)/operations', {
-          params: { section: 'communication' },
-        }),
-    },
-    {
-      key: 'workspaces',
-      title: 'Workspaces',
-      description: 'Switch school or role & review invitations',
-      Icon: Building2,
-      tone: 'primary',
-      onPress: () => navigateTo('/workspace-select'),
-    },
-  ];
+        navigateTo(item.href, item.params ? { params: item.params } : undefined),
+    }));
+  }, [activeWorkspace, navigateTo]);
 
   const primaryRoleLabel = activeWorkspace?.roles?.[0]
     ? formatRoleCodeLabel(activeWorkspace.roles[0])
