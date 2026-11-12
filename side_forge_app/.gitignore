@@ -1,0 +1,31 @@
+# Expo
+.expo/
+dist/
+web-build/
+expo-env.d.ts.bak
+
+# Native builds
+android/
+ios/
+
+# Dependencies
+node_modules/
+
+# Environment local overrides
+.env
+.env.local
+.env.*.local
+
+# Logs & caches
+npm-debug.*
+*.jks
+*.p8
+*.p12
+*.key
+*.mobileprovision
+*.orig.*
+.metro-health-check*
+
+# macOS / Windows
+.DS_Store
+Thumbs.db
