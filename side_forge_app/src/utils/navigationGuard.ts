@@ -79,6 +79,17 @@ export function useSafeNavigation() {
         return;
       }
 
+      // Use router.navigate for tab/group routes so switching between tabs
+      // inside /(parent), /(teacher), or /(admin) works reliably in Expo Router.
+      if (
+        href.startsWith('/(parent)') ||
+        href.startsWith('/(teacher)') ||
+        href.startsWith('/(admin)')
+      ) {
+        router.navigate(fullHref);
+        return;
+      }
+
       router.push(fullHref);
     },
     [pathname, router]

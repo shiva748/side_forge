@@ -1,7 +1,13 @@
 import React from 'react';
 import { Tabs, Redirect } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Bell, BookOpen, CreditCard, Home } from 'lucide-react-native';
+import {
+  Bell,
+  BookOpen,
+  CalendarCheck,
+  CreditCard,
+  Home,
+} from 'lucide-react-native';
 import { useAppTheme } from '@/theme';
 import { useAuthWorkspaceStore } from '@/store/useAuthWorkspaceStore';
 
@@ -47,6 +53,15 @@ export default function ParentTabsLayout() {
         }}
       />
       <Tabs.Screen
+        name="attendance"
+        options={{
+          title: 'Attendance',
+          tabBarIcon: ({ color }) => (
+            <CalendarCheck size={iconSizes.md} color={color} />
+          ),
+        }}
+      />
+      <Tabs.Screen
         name="academics"
         options={{
           title: 'Academics',
@@ -71,6 +86,14 @@ export default function ParentTabsLayout() {
           tabBarIcon: ({ color }) => <Bell size={iconSizes.md} color={color} />,
         }}
       />
+      <Tabs.Screen
+        name="homework"
+        options={{
+          href: null,
+          title: 'Homework',
+        }}
+      />
     </Tabs>
   );
 }
+

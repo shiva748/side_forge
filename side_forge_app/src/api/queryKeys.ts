@@ -62,6 +62,120 @@ export const queryKeys = {
     ) =>
       ['org', organizationId, experience, 'fees', targetId ?? 'all'] as const,
   },
+  parentPortal: {
+    all: (organizationId: number) =>
+      ['org', organizationId, 'PARENT', 'portal'] as const,
+    dashboard: (
+      organizationId: number,
+      academicSessionId?: number | null
+    ) =>
+      [
+        'org',
+        organizationId,
+        'PARENT',
+        'portal',
+        'dashboard',
+        academicSessionId ?? 'current',
+      ] as const,
+    children: (
+      organizationId: number,
+      academicSessionId?: number | null
+    ) =>
+      [
+        'org',
+        organizationId,
+        'PARENT',
+        'portal',
+        'children',
+        academicSessionId ?? 'current',
+      ] as const,
+    childDashboard: (
+      organizationId: number,
+      studentId: number,
+      academicSessionId?: number | null
+    ) =>
+      [
+        'org',
+        organizationId,
+        'PARENT',
+        'portal',
+        'child',
+        studentId,
+        'dashboard',
+        academicSessionId ?? 'current',
+      ] as const,
+    childDetails: (organizationId: number, studentId: number) =>
+      [
+        'org',
+        organizationId,
+        'PARENT',
+        'portal',
+        'child',
+        studentId,
+        'details',
+      ] as const,
+    childTimetable: (
+      organizationId: number,
+      studentId: number,
+      academicSessionId?: number | null
+    ) =>
+      [
+        'org',
+        organizationId,
+        'PARENT',
+        'portal',
+        'child',
+        studentId,
+        'timetable',
+        academicSessionId ?? 'current',
+      ] as const,
+    childAttendance: (
+      organizationId: number,
+      studentId: number,
+      academicSessionId?: number | null
+    ) =>
+      [
+        'org',
+        organizationId,
+        'PARENT',
+        'portal',
+        'child',
+        studentId,
+        'attendance',
+        academicSessionId ?? 'current',
+      ] as const,
+    childHomework: (
+      organizationId: number,
+      studentId: number,
+      academicSessionId?: number | null
+    ) =>
+      [
+        'org',
+        organizationId,
+        'PARENT',
+        'portal',
+        'child',
+        studentId,
+        'homework',
+        academicSessionId ?? 'current',
+      ] as const,
+    childHomeworkDetail: (
+      organizationId: number,
+      studentId: number,
+      homeworkId: number
+    ) =>
+      [
+        'org',
+        organizationId,
+        'PARENT',
+        'portal',
+        'child',
+        studentId,
+        'homework',
+        homeworkId,
+        'detail',
+      ] as const,
+  },
 };
 
 export function createAppQueryClient(): QueryClient {

@@ -27,12 +27,15 @@ declare module 'lucide-react-native' {
   export const Check: LucideIcon;
   export const CheckCircle2: LucideIcon;
   export const ChevronDown: LucideIcon;
+  export const ChevronLeft: LucideIcon;
   export const ChevronRight: LucideIcon;
   export const ClipboardCheck: LucideIcon;
   export const Clock: LucideIcon;
   export const CreditCard: LucideIcon;
+  export const Download: LucideIcon;
   export const Eye: LucideIcon;
   export const EyeOff: LucideIcon;
+  export const FileCheck: LucideIcon;
   export const FileSpreadsheet: LucideIcon;
   export const FileText: LucideIcon;
   export const Globe: LucideIcon;
@@ -49,9 +52,11 @@ declare module 'lucide-react-native' {
   export const Mail: LucideIcon;
   export const Megaphone: LucideIcon;
   export const Menu: LucideIcon;
+  export const MessageSquare: LucideIcon;
   export const Monitor: LucideIcon;
   export const Moon: LucideIcon;
   export const Palette: LucideIcon;
+  export const Paperclip: LucideIcon;
   export const Phone: LucideIcon;
   export const RefreshCw: LucideIcon;
   export const Search: LucideIcon;
