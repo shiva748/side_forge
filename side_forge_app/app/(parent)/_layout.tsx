@@ -93,6 +93,13 @@ export default function ParentTabsLayout() {
           title: 'Homework',
         }}
       />
+      <Tabs.Screen
+        name="exams"
+        options={{
+          href: null,
+          title: 'Exams',
+        }}
+      />
     </Tabs>
   );
 }

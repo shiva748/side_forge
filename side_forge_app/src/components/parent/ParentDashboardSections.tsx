@@ -160,7 +160,11 @@ export function AcademicOverviewSection({
     .join(' • ');
 
   return (
-    <SurfaceCard elevation="subtle" style={{ marginBottom: spacing.md }}>
+    <SurfaceCard
+      elevation="subtle"
+      onPress={onOpenExams}
+      style={{ marginBottom: spacing.md }}
+    >
       <SectionCardHeader
         title="Academic Overview"
         subtitle={child.academicSessionName ?? 'Current Academic Session'}
@@ -331,7 +335,11 @@ export function AttendanceSummarySection({
   const hasWorkingDays = Boolean(summary && summary.applicableWorkingDays > 0);
 
   return (
-    <SurfaceCard elevation="subtle" style={{ marginBottom: spacing.md }}>
+    <SurfaceCard
+      elevation="subtle"
+      onPress={onOpenAttendance}
+      style={{ marginBottom: spacing.md }}
+    >
       <SectionCardHeader
         title="Attendance Summary"
         subtitle={
@@ -512,7 +520,11 @@ export function TodaysScheduleSection({
     todayDayName.charAt(0) + todayDayName.slice(1).toLowerCase();
 
   return (
-    <SurfaceCard elevation="subtle" style={{ marginBottom: spacing.md }}>
+    <SurfaceCard
+      elevation="subtle"
+      onPress={onOpenTimetable}
+      style={{ marginBottom: spacing.md }}
+    >
       <SectionCardHeader
         title="Today's Schedule"
         subtitle={
@@ -656,7 +668,11 @@ export function HomeworkOverviewSection({
   const totalActionable = card.pendingHomeworkCount + card.overdueHomeworkCount;
 
   return (
-    <SurfaceCard elevation="subtle" style={{ marginBottom: spacing.md }}>
+    <SurfaceCard
+      elevation="subtle"
+      onPress={onOpenHomework}
+      style={{ marginBottom: spacing.md }}
+    >
       <SectionCardHeader
         title="Homework Overview"
         subtitle={
@@ -812,7 +828,11 @@ export function FeeOverviewSection({
   const latestReceipt = card.recentPayments?.[0] ?? null;
 
   return (
-    <SurfaceCard elevation="subtle" style={{ marginBottom: spacing.md }}>
+    <SurfaceCard
+      elevation="subtle"
+      onPress={onOpenFees}
+      style={{ marginBottom: spacing.md }}
+    >
       <SectionCardHeader
         title="Fee Overview"
         subtitle={

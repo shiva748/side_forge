@@ -17,6 +17,12 @@ import {
 
 export type AuthStatus = 'BOOTSTRAPPING' | 'UNAUTHENTICATED' | 'AUTHENTICATED';
 
+export type ParentAcademicSection =
+  | 'homework'
+  | 'exams'
+  | 'timetable'
+  | 'attendance';
+
 export interface AuthWorkspaceState {
   status: AuthStatus;
   user: UserResponse | null;
@@ -26,6 +32,7 @@ export interface AuthWorkspaceState {
   needsWorkspaceSelection: boolean;
   hasOnlyUnsupportedRoles: boolean;
   selectedChildId: number | null;
+  parentAcademicSection: ParentAcademicSection;
   pendingInvitations: InvitationResponse[];
   pendingInvitationsCount: number;
   profilePhotoVersion: number;
@@ -33,6 +40,7 @@ export interface AuthWorkspaceState {
 
   clearAuthError: () => void;
   bumpProfilePhotoVersion: () => void;
+  setParentAcademicSection: (section: ParentAcademicSection) => void;
   bootstrapSession: () => Promise<void>;
   login: (
     emailOrCredentials: LoginRequest | string,
@@ -94,6 +102,7 @@ export const useAuthWorkspaceStore = create<AuthWorkspaceState>((set, get) => ({
   needsWorkspaceSelection: false,
   hasOnlyUnsupportedRoles: false,
   selectedChildId: null,
+  parentAcademicSection: 'homework',
   pendingInvitations: [],
   pendingInvitationsCount: 0,
   profilePhotoVersion: 0,
@@ -102,6 +111,8 @@ export const useAuthWorkspaceStore = create<AuthWorkspaceState>((set, get) => ({
   clearAuthError: () => set({ authError: null }),
   bumpProfilePhotoVersion: () =>
     set((state) => ({ profilePhotoVersion: state.profilePhotoVersion + 1 })),
+  setParentAcademicSection: (section) =>
+    set({ parentAcademicSection: section }),
 
   refreshPendingInvitations: async () => {
     try {

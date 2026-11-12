@@ -9,8 +9,11 @@ import type {
   LinkedChildSummaryResponse,
   ParentChildAttendanceResponse,
   ParentChildDetailResponse,
+  ParentChildExaminationsResponse,
   ParentChildHomeworkDetailResponse,
   ParentDashboardResponse,
+  ReportCardExportFormat,
+  ReportCardResponse,
   StudentHomeworkDashboardResponse,
 } from '@/types/parentPortal';
 
@@ -380,5 +383,80 @@ export const parentPortalApi = {
       blob,
       authorizedSource,
     };
+  },
+
+  getChildExaminations: async (
+    organizationId: number,
+    studentId: number,
+    academicSessionId?: number | null
+  ): Promise<ParentChildExaminationsResponse> => {
+    const query = academicSessionId
+      ? `?academicSessionId=${encodeURIComponent(String(academicSessionId))}`
+      : '';
+    const res = await apiClient.get<ParentChildExaminationsResponse>(
+      `/api/organizations/${organizationId}/parent-portal/children/${studentId}/examinations${query}`,
+      { organizationId }
+    );
+    if (!res.data) {
+      throw new Error('Unable to load student examinations and results.');
+    }
+    return res.data;
+  },
+
+  getChildReportCard: async (
+    organizationId: number,
+    studentId: number,
+    examinationId: number
+  ): Promise<ReportCardResponse> => {
+    const res = await apiClient.get<ReportCardResponse>(
+      `/api/organizations/${organizationId}/parent-portal/children/${studentId}/examinations/${examinationId}/report-card`,
+      { organizationId }
+    );
+    if (!res.data) {
+      throw new Error('Unable to load examination report card.');
+    }
+    return res.data;
+  },
+
+  buildChildReportCardDownloadEndpoint: (
+    organizationId: number,
+    studentId: number,
+    examinationId: number,
+    format: ReportCardExportFormat = 'PDF'
+  ): string =>
+    `/api/organizations/${organizationId}/parent-portal/children/${studentId}/examinations/${examinationId}/report-card/download?format=${encodeURIComponent(
+      format
+    )}`,
+
+  downloadChildReportCard: async (
+    organizationId: number,
+    studentId: number,
+    examinationId: number,
+    format: ReportCardExportFormat = 'PDF',
+    fallbackFilename?: string
+  ): Promise<AuthorizedAttachmentDownloadResult> => {
+    const ext =
+      format === 'CSV' ? 'csv' : format === 'EXCEL' ? 'xls' : 'pdf';
+    const defaultMime =
+      format === 'CSV'
+        ? 'text/csv'
+        : format === 'EXCEL'
+        ? 'application/vnd.ms-excel'
+        : 'application/pdf';
+    const resolvedFilename =
+      fallbackFilename ||
+      `report-card-student-${studentId}-exam-${examinationId}.${ext}`;
+    const endpointPath = parentPortalApi.buildChildReportCardDownloadEndpoint(
+      organizationId,
+      studentId,
+      examinationId,
+      format
+    );
+    return parentPortalApi.fetchAuthorizedHomeworkAttachment(
+      organizationId,
+      endpointPath,
+      resolvedFilename,
+      defaultMime
+    );
   },
 };

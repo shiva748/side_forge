@@ -6,6 +6,10 @@ import {
   type Href,
 } from 'expo-router';
 import type { MobileRoleExperience } from '@/types/auth';
+import {
+  useAuthWorkspaceStore,
+  type ParentAcademicSection,
+} from '@/store/useAuthWorkspaceStore';
 
 /**
  * Strips route group segments like `/(admin)` or `/(auth)` so paths can be
@@ -36,19 +40,58 @@ export function useSafeNavigation() {
   const router = useRouter();
   const pathname = usePathname();
   const globalParams = useGlobalSearchParams<{ section?: string }>();
-  const currentSection =
+  const parentAcademicSection = useAuthWorkspaceStore(
+    (s) => s.parentAcademicSection
+  );
+  const setParentAcademicSection = useAuthWorkspaceStore(
+    (s) => s.setParentAcademicSection
+  );
+
+  const urlSection =
     typeof globalParams.section === 'string' && globalParams.section.length > 0
       ? globalParams.section
       : null;
+
+  const currentNormalizedPath = normalizeRoutePath(pathname || '/');
+  const currentSection =
+    currentNormalizedPath === '/academics'
+      ? parentAcademicSection || urlSection
+      : urlSection;
 
   const navigateTo = useCallback(
     (
       href: string,
       options?: { replace?: boolean; params?: Record<string, string> }
     ) => {
-      const targetNormalized = normalizeRoutePath(href);
+      let resolvedHref = href;
+      let resolvedParams = options?.params ? { ...options.params } : undefined;
+
+      const rawNormalized = normalizeRoutePath(href);
+
+      // Map direct /(parent)/homework and /(parent)/exams routes to the visible
+      // /(parent)/academics tab while synchronizing parentAcademicSection in Zustand
+      // so tab switching works 100% reliably across Expo Router & React Navigation.
+      if (rawNormalized === '/homework') {
+        resolvedHref = '/(parent)/academics';
+        resolvedParams = { ...resolvedParams, section: 'homework' };
+      } else if (rawNormalized === '/exams') {
+        resolvedHref = '/(parent)/academics';
+        resolvedParams = { ...resolvedParams, section: 'exams' };
+      }
+
+      const targetNormalized = normalizeRoutePath(resolvedHref);
       const currentNormalized = normalizeRoutePath(pathname || '/');
-      const targetSection = options?.params?.section ?? null;
+      const targetSection = resolvedParams?.section ?? null;
+
+      if (
+        targetNormalized === '/academics' &&
+        (targetSection === 'homework' ||
+          targetSection === 'exams' ||
+          targetSection === 'timetable' ||
+          targetSection === 'attendance')
+      ) {
+        setParentAcademicSection(targetSection as ParentAcademicSection);
+      }
 
       // Prevent duplicate navigation when already on the exact same route and section
       if (
@@ -58,18 +101,31 @@ export function useSafeNavigation() {
         return;
       }
 
+      // When navigating to /(parent)/academics, parentAcademicSection in Zustand
+      // is the reactive source of truth for the active sub-module (homework, exams,
+      // timetable, attendance). Navigating with the plain string '/(parent)/academics'
+      // guarantees BottomTabNavigator switches tabs reliably across all platforms.
+      if (resolvedHref === '/(parent)/academics') {
+        if (options?.replace) {
+          router.replace('/(parent)/academics');
+        } else {
+          router.navigate('/(parent)/academics');
+        }
+        return;
+      }
+
       // When navigating to a base route (no section param) from a sectioned state
       // on the same path, explicitly clear `section` so the screen updates.
       const effectiveParams =
-        options?.params ??
+        resolvedParams ??
         (targetNormalized === currentNormalized && currentSection
           ? { section: '' }
           : undefined);
 
       const fullHref = (
         effectiveParams
-          ? { pathname: href as string, params: effectiveParams }
-          : href
+          ? { pathname: resolvedHref as string, params: effectiveParams }
+          : resolvedHref
       ) as Href;
 
       if (options?.replace) {
@@ -117,9 +173,9 @@ export function useSafeNavigation() {
       // Use router.navigate for tab/group routes so switching between tabs
       // inside /(parent), /(teacher), or /(admin) works reliably in Expo Router.
       if (
-        href.startsWith('/(parent)') ||
-        href.startsWith('/(teacher)') ||
-        href.startsWith('/(admin)')
+        resolvedHref.startsWith('/(parent)') ||
+        resolvedHref.startsWith('/(teacher)') ||
+        resolvedHref.startsWith('/(admin)')
       ) {
         router.navigate(fullHref);
         return;
@@ -127,7 +183,7 @@ export function useSafeNavigation() {
 
       router.push(fullHref);
     },
-    [pathname, currentSection, router]
+    [pathname, currentSection, router, setParentAcademicSection]
   );
 
   const goBackOrFallback = useCallback(

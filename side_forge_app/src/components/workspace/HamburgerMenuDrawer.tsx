@@ -100,22 +100,30 @@ export function HamburgerMenuDrawer({
 
   const handleOpenProfile = () => {
     onClose();
-    navigateTo('/profile');
+    requestAnimationFrame(() => {
+      navigateTo('/profile');
+    });
   };
 
   const handleOpenWorkspaceSwitcher = () => {
     onClose();
-    navigateTo('/workspace-select');
+    requestAnimationFrame(() => {
+      navigateTo('/workspace-select');
+    });
   };
 
   const handleOpenRoleItem = (item: RoleNavigationItemConfig) => {
     onClose();
-    navigateTo(item.href, item.params ? { params: item.params } : undefined);
+    requestAnimationFrame(() => {
+      navigateTo(item.href, item.params ? { params: item.params } : undefined);
+    });
   };
 
   const handleOpenSettings = () => {
     onClose();
-    navigateTo('/settings');
+    requestAnimationFrame(() => {
+      navigateTo('/settings');
+    });
   };
 
   const handleLogout = async () => {

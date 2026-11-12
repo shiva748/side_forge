@@ -175,6 +175,37 @@ export const queryKeys = {
         homeworkId,
         'detail',
       ] as const,
+    childExaminations: (
+      organizationId: number,
+      studentId: number,
+      academicSessionId?: number | null
+    ) =>
+      [
+        'org',
+        organizationId,
+        'PARENT',
+        'portal',
+        'child',
+        studentId,
+        'examinations',
+        academicSessionId ?? 'current',
+      ] as const,
+    childReportCard: (
+      organizationId: number,
+      studentId: number,
+      examinationId: number
+    ) =>
+      [
+        'org',
+        organizationId,
+        'PARENT',
+        'portal',
+        'child',
+        studentId,
+        'examinations',
+        examinationId,
+        'report-card',
+      ] as const,
   },
 };
 

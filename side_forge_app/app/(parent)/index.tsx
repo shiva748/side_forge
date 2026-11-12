@@ -365,11 +365,7 @@ export default function ParentDashboardScreen() {
 
               <AttendanceSummarySection
                 card={activeChildCard}
-                onOpenAttendance={() =>
-                  navigateTo('/(parent)/academics', {
-                    params: { section: 'attendance' },
-                  })
-                }
+                onOpenAttendance={() => navigateTo('/(parent)/attendance')}
               />
 
               <TodaysScheduleSection
@@ -387,7 +383,11 @@ export default function ParentDashboardScreen() {
 
               <HomeworkOverviewSection
                 card={activeChildCard}
-                onOpenHomework={() => navigateTo('/(parent)/homework')}
+                onOpenHomework={() =>
+                  navigateTo('/(parent)/academics', {
+                    params: { section: 'homework' },
+                  })
+                }
               />
 
               <FeeOverviewSection

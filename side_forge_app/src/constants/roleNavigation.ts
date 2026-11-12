@@ -370,7 +370,8 @@ const PARENT_ITEMS: RoleNavigationItemConfig[] = [
     title: 'Homework',
     drawerLabel: 'Homework',
     description: 'Assigned tasks, due dates & submissions',
-    href: '/(parent)/homework',
+    href: '/(parent)/academics',
+    params: { section: 'homework' },
     Icon: FileSpreadsheet,
     tone: 'info',
     includeOnHomeGrid: true,
@@ -379,7 +380,7 @@ const PARENT_ITEMS: RoleNavigationItemConfig[] = [
   {
     key: 'exams',
     title: 'Exam Results',
-    drawerLabel: 'Academics & Exam Results',
+    drawerLabel: 'Exams & Report Cards',
     description: 'Exam schedules & published report cards',
     href: '/(parent)/academics',
     params: { section: 'exams' },
@@ -536,15 +537,7 @@ export function isRoleNavigationItemActive(
       item.key === 'attendance' &&
       normalizedTarget === '/attendance' &&
       normalizedCurrent === '/academics' &&
-      (!currentSectionParam || currentSectionParam === 'attendance')
-    ) {
-      return true;
-    }
-    if (
-      item.key === 'homework' &&
-      normalizedTarget === '/homework' &&
-      normalizedCurrent === '/academics' &&
-      currentSectionParam === 'homework'
+      currentSectionParam === 'attendance'
     ) {
       return true;
     }

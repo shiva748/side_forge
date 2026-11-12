@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { View } from 'react-native';
 import {
   BookOpen,
@@ -9,8 +9,13 @@ import {
 } from 'lucide-react-native';
 import { useLocalSearchParams } from 'expo-router';
 import { useAppTheme } from '@/theme';
+import {
+  useAuthWorkspaceStore,
+  type ParentAcademicSection,
+} from '@/store/useAuthWorkspaceStore';
 import { useSafeNavigation } from '@/utils/navigationGuard';
 import { AppShellHeader } from '@/components/workspace/WorkspaceTopBar';
+import { ParentAcademicSubNavBar } from '@/components/parent/ParentAcademicSubNavBar';
 import {
   EmptyState,
   FeatureTileGrid,
@@ -18,23 +23,45 @@ import {
   ScreenContainer,
 } from '@/components/ui';
 import ParentAttendanceScreen from './attendance';
+import ParentExamsScreen from './exams';
 import ParentHomeworkScreen from './homework';
 
 export default function ParentAcademicsScreen() {
   const { colors, spacing, iconSizes } = useAppTheme();
   const { navigateTo } = useSafeNavigation();
   const params = useLocalSearchParams<{ section?: string }>();
+  const parentAcademicSection = useAuthWorkspaceStore(
+    (s) => s.parentAcademicSection
+  );
+  const setParentAcademicSection = useAuthWorkspaceStore(
+    (s) => s.setParentAcademicSection
+  );
 
-  // Render the full Parent Attendance experience when opened from the
-  // Attendance tile/summary or when no sub-section is specified yet.
-  if (!params.section || params.section === 'attendance') {
+  // Sync URL query param if externally provided (e.g., deep link or browser URL)
+  useEffect(() => {
+    const raw = params.section;
+    if (
+      raw === 'homework' ||
+      raw === 'exams' ||
+      raw === 'timetable' ||
+      raw === 'attendance'
+    ) {
+      setParentAcademicSection(raw as ParentAcademicSection);
+    }
+  }, [params.section, setParentAcademicSection]);
+
+  const activeSection = parentAcademicSection || params.section || 'homework';
+
+  if (activeSection === 'attendance') {
     return <ParentAttendanceScreen />;
   }
 
-  // Render the full Parent Homework & Assignments experience when opened
-  // with section === 'homework'.
-  if (params.section === 'homework') {
+  if (activeSection === 'homework') {
     return <ParentHomeworkScreen />;
+  }
+
+  if (activeSection === 'exams') {
+    return <ParentExamsScreen />;
   }
 
   const academicTiles: FeatureTileItem[] = [
@@ -118,6 +145,8 @@ export default function ParentAcademicsScreen() {
         />
       }
     >
+      <ParentAcademicSubNavBar activeSection="timetable" />
+
       <View style={{ marginBottom: spacing.md }}>
         <FeatureTileGrid tiles={academicTiles} />
       </View>

@@ -229,6 +229,46 @@ export interface ParentChildHomeworkDetailResponse {
   studentSubmissionFiles: StoredFileResponse[];
 }
 
+export type ExaminationStatus =
+  | 'DRAFT'
+  | 'SCHEDULED'
+  | 'IN_PROGRESS'
+  | 'COMPLETED'
+  | 'PUBLISHED';
+
+export type ExaminationType =
+  | 'UNIT_TEST'
+  | 'MONTHLY_TEST'
+  | 'QUARTERLY'
+  | 'MID_TERM'
+  | 'HALF_YEARLY'
+  | 'ANNUAL'
+  | 'PRACTICAL'
+  | 'FINAL'
+  | 'OTHER';
+
+export type MarkEntryStatus = 'PRESENT' | 'ABSENT' | 'EXEMPTED';
+
+export type ReportCardExportFormat = 'PDF' | 'CSV' | 'EXCEL';
+
+export interface ExamScheduleResponse {
+  id: number;
+  organizationId: number;
+  examinationId: number;
+  subjectId: number;
+  subjectName: string;
+  subjectCode: string | null;
+  examDate: string;
+  startTime: string;
+  endTime: string;
+  maxMarks: number;
+  passingMarks: number;
+  invigilatorTeacherId: number | null;
+  room: string | null;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
 export interface ExaminationResponse {
   id: number;
   organizationId: number;
@@ -236,19 +276,52 @@ export interface ExaminationResponse {
   academicSessionName: string | null;
   classId: number;
   className: string | null;
+  gradingScaleId?: number | null;
+  gradingScaleName?: string | null;
   name: string;
-  examType: string;
+  examType: ExaminationType | string;
   startDate: string;
   endDate: string;
-  status: string;
+  status: ExaminationStatus | string;
   instructions: string | null;
+  finalizedAt?: string | null;
+  publishedAt?: string | null;
+  publishedBy?: number | null;
+  schedules?: ExamScheduleResponse[];
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface ExamMarkResponse {
+  id: number;
+  organizationId: number;
+  examinationId: number;
+  examScheduleId: number;
+  subjectId: number;
+  subjectName: string;
+  subjectCode: string | null;
+  studentId: number;
+  admissionNumber: string;
+  studentFirstName: string;
+  studentLastName: string | null;
+  entryStatus: MarkEntryStatus | string;
+  marksObtained: number | null;
+  maxMarks: number;
+  passingMarks: number;
+  grade: string | null;
+  passed: boolean;
+  enteredBy: number | null;
+  updatedBy: number | null;
+  remarks: string | null;
+  createdAt?: string;
+  updatedAt?: string;
 }
 
 export interface ReportCardResponse {
   examinationId: number;
   examinationName: string;
-  examType: string;
-  examinationStatus: string;
+  examType: ExaminationType | string;
+  examinationStatus: ExaminationStatus | string;
   academicSessionId: number;
   academicSessionName: string | null;
   classId: number;
@@ -261,6 +334,19 @@ export interface ReportCardResponse {
   percentage: number;
   overallGrade: string | null;
   overallPassed: boolean;
+  subjectMarks?: ExamMarkResponse[];
+}
+
+export interface ParentChildExaminationsResponse {
+  studentId: number;
+  admissionNumber: string;
+  studentName: string;
+  academicSessionId: number;
+  academicSessionName: string | null;
+  classId: number;
+  className: string | null;
+  upcomingExaminations: ExaminationResponse[];
+  publishedResults: ReportCardResponse[];
 }
 export interface PaymentAllocationResponse {
   id: number;

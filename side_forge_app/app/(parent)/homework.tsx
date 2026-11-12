@@ -12,6 +12,7 @@ import {
   ChildSwitcherBanner,
   type ChildBannerOption,
 } from '@/components/workspace/ChildSwitcherBanner';
+import { ParentAcademicSubNavBar } from '@/components/parent/ParentAcademicSubNavBar';
 import {
   HomeworkAssignmentListSection,
   HomeworkDetailSheetModal,
@@ -307,6 +308,8 @@ export default function ParentHomeworkScreen() {
         />
       }
     >
+      <ParentAcademicSubNavBar activeSection="homework" />
+
       {childrenQuery.isLoading ? (
         <LoadingStateView message="Loading linked student profile..." />
       ) : childrenQuery.isError ? (
