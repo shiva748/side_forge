@@ -42,6 +42,7 @@ import com.side.forge.notification.repository.InAppNotificationRepository;
 import com.side.forge.notification.repository.UserNotificationPreferenceRepository;
 import com.side.forge.notification.spi.NotificationDeliveryGateway;
 import com.side.forge.notification.spi.NotificationDeliveryGateway.NotificationDispatchEvent;
+import com.side.forge.notification.websocket.RealtimeNotificationPresenceRegistry;
 import com.side.forge.organization.academic.common.AcademicTenantAccessValidator;
 import com.side.forge.organization.academic.session.entity.AcademicSession;
 import com.side.forge.organization.academic.session.entity.AcademicSessionStatus;
@@ -101,6 +102,7 @@ public class NotificationService {
 	private final TeacherProfileRepository teacherProfileRepository;
 	private final UserRepository userRepository;
 	private final List<NotificationDeliveryGateway> deliveryGateways;
+	private final RealtimeNotificationPresenceRegistry presenceRegistry;
 
 	@Transactional(readOnly = true)
 	public PagedResponse<NotificationResponse> getUserNotifications(
@@ -182,6 +184,7 @@ public class NotificationService {
 			notif.setRead(true);
 			notif.setReadAt(Instant.now());
 			notif = notificationRepository.saveAndFlush(notif);
+			broadcastUnreadCountIfConnected(userId, notif.getOrganizationId());
 		}
 		return toResponse(notif);
 	}
@@ -206,8 +209,19 @@ public class NotificationService {
 		}
 		if (!unread.isEmpty()) {
 			notificationRepository.saveAllAndFlush(unread);
+			broadcastUnreadCountIfConnected(userId, orgId);
 		}
 		return new MarkAllReadResponse(orgId, unread.size());
+	}
+
+	private void broadcastUnreadCountIfConnected(Long userId, Long orgId) {
+		if (presenceRegistry == null || userId == null) {
+			return;
+		}
+		long remaining = orgId != null
+				? notificationRepository.countByRecipientUserIdAndOrganizationIdAndReadFalse(userId, orgId)
+				: notificationRepository.countByRecipientUserIdAndReadFalse(userId);
+		presenceRegistry.broadcastUnreadCountToUser(userId, orgId, remaining);
 	}
 
 	@Transactional(readOnly = true)
@@ -236,7 +250,7 @@ public class NotificationService {
 						cat, pref.isInAppEnabled(), parseChannels(pref.getEnabledChannels()), pref.getUpdatedAt()));
 			} else {
 				states.add(new CategoryPreferenceState(
-						cat, true, Set.of(NotificationDeliveryChannel.IN_APP), null));
+						cat, true, Set.of(NotificationDeliveryChannel.IN_APP, NotificationDeliveryChannel.PUSH), null));
 			}
 		}
 		return new NotificationPreferenceResponse(userId, orgId, states);
@@ -266,7 +280,7 @@ public class NotificationService {
 			boolean enabled = Boolean.TRUE.equals(item.enabled());
 			pref.setInAppEnabled(enabled);
 			Set<NotificationDeliveryChannel> channels = (item.channels() == null || item.channels().isEmpty())
-					? (enabled ? Set.of(NotificationDeliveryChannel.IN_APP) : Set.of())
+					? (enabled ? Set.of(NotificationDeliveryChannel.IN_APP, NotificationDeliveryChannel.PUSH) : Set.of())
 					: item.channels();
 			pref.setEnabledChannels(serializeChannels(channels));
 			preferenceRepository.saveAndFlush(pref);
@@ -977,7 +991,7 @@ public class NotificationService {
 		Optional<UserNotificationPreference> globalPref = preferenceRepository
 				.findByUserIdAndOrganizationIdAndCategory(userId, GLOBAL_ORG_PREFERENCE_ID, category);
 		return globalPref.map(p -> parseChannels(p.getEnabledChannels()))
-				.orElse(Set.of(NotificationDeliveryChannel.IN_APP));
+				.orElse(Set.of(NotificationDeliveryChannel.IN_APP, NotificationDeliveryChannel.PUSH));
 	}
 
 	private Set<NotificationDeliveryChannel> parseChannels(String csv) {

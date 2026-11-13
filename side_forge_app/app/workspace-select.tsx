@@ -61,7 +61,6 @@ export default function WorkspaceSelectScreen() {
     useSafeNavigation();
 
   const status = useAuthWorkspaceStore((s) => s.status);
-  const user = useAuthWorkspaceStore((s) => s.user);
   const workspaces = useAuthWorkspaceStore((s) => s.workspaces);
   const activeWorkspace = useAuthWorkspaceStore((s) => s.activeWorkspace);
   const selectWorkspace = useAuthWorkspaceStore((s) => s.selectWorkspace);
@@ -139,8 +138,8 @@ export default function WorkspaceSelectScreen() {
         <ScreenHeader
           title={hasActiveWorkspace ? 'Switch Workspace' : 'Select Workspace'}
           subtitle={
-            user?.email
-              ? `Signed in as ${user.email}`
+            hasActiveWorkspace
+              ? 'Switch between your school memberships'
               : 'Choose your school and role'
           }
           showBack={hasActiveWorkspace}

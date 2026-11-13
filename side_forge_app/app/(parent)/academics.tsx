@@ -25,6 +25,7 @@ import {
 import ParentAttendanceScreen from './attendance';
 import ParentExamsScreen from './exams';
 import ParentHomeworkScreen from './homework';
+import ParentTimetableScreen from './timetable';
 
 export default function ParentAcademicsScreen() {
   const { colors, spacing, iconSizes } = useAppTheme();
@@ -62,6 +63,10 @@ export default function ParentAcademicsScreen() {
 
   if (activeSection === 'exams') {
     return <ParentExamsScreen />;
+  }
+
+  if (activeSection === 'timetable') {
+    return <ParentTimetableScreen />;
   }
 
   const academicTiles: FeatureTileItem[] = [

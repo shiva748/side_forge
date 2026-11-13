@@ -77,6 +77,9 @@ export function useSafeNavigation() {
       } else if (rawNormalized === '/exams') {
         resolvedHref = '/(parent)/academics';
         resolvedParams = { ...resolvedParams, section: 'exams' };
+      } else if (rawNormalized === '/timetable') {
+        resolvedHref = '/(parent)/academics';
+        resolvedParams = { ...resolvedParams, section: 'timetable' };
       }
 
       const targetNormalized = normalizeRoutePath(resolvedHref);

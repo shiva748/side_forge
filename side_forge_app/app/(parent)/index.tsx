@@ -213,7 +213,11 @@ export default function ParentDashboardScreen() {
           : 'Open announcements and notifications'
       }
       hitSlop={8}
-      onPress={() => navigateTo('/(parent)/updates')}
+      onPress={() =>
+        navigateTo('/(parent)/updates', {
+          params: { tab: 'notifications' },
+        })
+      }
       style={({ pressed }) => [
         styles.notifPill,
         {
@@ -403,6 +407,19 @@ export default function ParentDashboardScreen() {
             notifications={dashboardData?.recentNotifications ?? []}
             unreadCount={unreadCount}
             onOpenUpdates={() => navigateTo('/(parent)/updates')}
+            onSelectAnnouncement={(ann) =>
+              navigateTo('/(parent)/updates', {
+                params: {
+                  tab: 'announcements',
+                  announcementId: String(ann.id),
+                },
+              })
+            }
+            onOpenNotifications={() =>
+              navigateTo('/(parent)/updates', {
+                params: { tab: 'notifications' },
+              })
+            }
           />
         </>
       )}

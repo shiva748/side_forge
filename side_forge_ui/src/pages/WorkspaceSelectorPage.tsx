@@ -270,8 +270,7 @@ export const WorkspaceSelectorPage: React.FC = () => {
                 Select a workspace to continue
               </h1>
               <p className="text-xs sm:text-sm text-slate-500">
-                Signed in as <span className="font-medium text-slate-700">{fullName}</span>. Choose
-                the platform or school organization context you want to work in.
+                Choose the platform or school organization context you want to work in.
               </p>
             </div>
             <div className="shrink-0 self-start">

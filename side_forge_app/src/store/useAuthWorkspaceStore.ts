@@ -4,6 +4,8 @@ import { STORAGE_KEYS } from '@/constants/env';
 import { secureStorage } from '@/utils/secureStorage';
 import { authApi } from '@/api/authApi';
 import { invitationApi } from '@/api/invitationApi';
+import { deactivateCurrentDeviceInstallationOnLogout } from '@/services/pushNotifications';
+import { realtimeNotificationClient } from '@/services/realtimeNotificationClient';
 import type { InvitationResponse } from '@/types/invitation';
 import {
   buildMobileWorkspaces,
@@ -295,6 +297,12 @@ export const useAuthWorkspaceStore = create<AuthWorkspaceState>((set, get) => ({
 
   logout: async (queryClient) => {
     try {
+      realtimeNotificationClient.stop(true);
+      await deactivateCurrentDeviceInstallationOnLogout();
+    } catch {
+      // Ignore installation cleanup errors during logout
+    }
+    try {
       await authApi.logout();
     } catch {
       // Ignore network errors during logout
@@ -303,6 +311,7 @@ export const useAuthWorkspaceStore = create<AuthWorkspaceState>((set, get) => ({
   },
 
   handleUnauthorizedSession: async (queryClient) => {
+    realtimeNotificationClient.stop(false);
     await Promise.all([
       secureStorage.removeAsync(STORAGE_KEYS.ACCESS_TOKEN),
       secureStorage.removeAsync(STORAGE_KEYS.ACTIVE_ORG_ID),

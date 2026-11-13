@@ -22,6 +22,7 @@ import com.side.forge.invitation.service.InvitationService;
 import com.side.forge.notification.dto.NotificationDtos.*;
 import com.side.forge.notification.entity.NotificationCategory;
 import com.side.forge.notification.entity.NotificationType;
+import com.side.forge.notification.service.NotificationDeviceInstallationService;
 import com.side.forge.notification.service.NotificationService;
 import com.side.forge.storage.dto.StorageDtos.DownloadedFilePayload;
 import com.side.forge.storage.dto.StorageDtos.StoredFileResponse;
@@ -47,6 +48,7 @@ public class UserController {
 	private final UserService userService;
 	private final InvitationService invitationService;
 	private final NotificationService notificationService;
+	private final NotificationDeviceInstallationService deviceInstallationService;
 
 	@Value("${spring.application.token.expiry}")
 	private long tokenExpiry;
@@ -226,6 +228,46 @@ public class UserController {
 		return ResponseEntity.ok(new ApiResponse<>(
 				true, "Notification preferences updated successfully",
 				notificationService.updateUserPreferences(userId, null, request)));
+	}
+
+	@PostMapping("/device-installations")
+	public ResponseEntity<ApiResponse<DeviceInstallationResponse>> registerMyDeviceInstallation(
+			Authentication authentication,
+			@Valid @RequestBody RegisterDeviceInstallationRequest request) {
+		Long userId = AuthenticationUtils.getAuthenticatedUserId(authentication);
+		return ResponseEntity.ok(new ApiResponse<>(
+				true, "Device installation registered successfully",
+				deviceInstallationService.registerOrUpdateInstallation(userId, request)));
+	}
+
+	@GetMapping("/device-installations")
+	public ResponseEntity<ApiResponse<List<DeviceInstallationResponse>>> getMyDeviceInstallations(
+			Authentication authentication) {
+		Long userId = AuthenticationUtils.getAuthenticatedUserId(authentication);
+		return ResponseEntity.ok(new ApiResponse<>(
+				true, "Device installations retrieved successfully",
+				deviceInstallationService.getActiveInstallationsForUser(userId)));
+	}
+
+	@DeleteMapping("/device-installations/{installationId}")
+	public ResponseEntity<ApiResponse<Void>> deactivateMyDeviceInstallation(
+			Authentication authentication,
+			@PathVariable String installationId) {
+		Long userId = AuthenticationUtils.getAuthenticatedUserId(authentication);
+		deviceInstallationService.deactivateInstallation(userId, installationId);
+		return ResponseEntity.ok(new ApiResponse<>(
+				true, "Device installation deactivated successfully", null));
+	}
+
+	@PostMapping("/notifications/{notificationId}/delivery-ack")
+	public ResponseEntity<ApiResponse<Void>> acknowledgeMyNotificationDelivery(
+			Authentication authentication,
+			@PathVariable @Positive Long notificationId,
+			@Valid @RequestBody NotificationDeliveryAckRequest request) {
+		Long userId = AuthenticationUtils.getAuthenticatedUserId(authentication);
+		deviceInstallationService.acknowledgeDelivery(userId, notificationId, request);
+		return ResponseEntity.ok(new ApiResponse<>(
+				true, "Notification delivery acknowledged", null));
 	}
 }
 

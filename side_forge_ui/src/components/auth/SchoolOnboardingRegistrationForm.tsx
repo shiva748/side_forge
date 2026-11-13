@@ -363,8 +363,8 @@ export const SchoolOnboardingRegistrationForm: React.FC<
           privileges are provisioned only after Platform Administration approves your institution.
           {isAuthenticated && user && (
             <span className="block mt-1 font-medium text-indigo-800">
-              • Signed in as <span className="font-mono">{user.email}</span>: your account will be
-              linked as the applicant (<span className="font-mono">requestedBy</span>).
+              • Your active account will be linked as the applicant (
+              <span className="font-mono">requestedBy</span>).
             </span>
           )}
         </div>

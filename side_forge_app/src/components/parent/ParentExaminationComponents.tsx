@@ -1,5 +1,5 @@
 import React, { useMemo } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import {
   AlertCircle,
   Award,
@@ -420,40 +420,30 @@ export function ExaminationOverviewSummaryCard({
     [items]
   );
 
-  const filterTiles: Array<{
+  const filterChips: Array<{
     key: ExamStatusFilter;
     label: string;
     count: number;
-    accentColor: string;
-    bgTint: string;
   }> = [
     {
       key: 'ALL',
-      label: 'All Exams',
+      label: 'All',
       count: counts.all,
-      accentColor: colors.primary,
-      bgTint: colors.primarySoft,
     },
     {
       key: 'PUBLISHED',
       label: 'Published',
       count: counts.published,
-      accentColor: colors.success,
-      bgTint: colors.successSoft,
     },
     {
       key: 'AWAITING_RESULTS',
       label: 'Awaiting',
       count: counts.awaiting,
-      accentColor: colors.warning,
-      bgTint: colors.warningSoft,
     },
     {
       key: 'UPCOMING',
       label: 'Upcoming',
       count: counts.upcoming,
-      accentColor: colors.info,
-      bgTint: colors.infoSoft,
     },
   ];
 
@@ -473,7 +463,7 @@ export function ExaminationOverviewSummaryCard({
           >
             <GraduationCap size={iconSizes.md} color={colors.warning} />
           </View>
-          <View style={{ flex: 1 }}>
+          <View style={{ flex: 1, minWidth: 0 }}>
             <Text
               style={{
                 color: colors.textPrimary,
@@ -490,7 +480,7 @@ export function ExaminationOverviewSummaryCard({
                 marginTop: 2,
               }}
             >
-              Tap a status bucket below to filter exams & published report cards
+              Filter exams by status.
             </Text>
           </View>
         </View>
@@ -632,64 +622,84 @@ export function ExaminationOverviewSummaryCard({
         </Pressable>
       ) : null}
 
-      <View
-        style={[
-          styles.bucketGrid,
-          { marginTop: spacing.md, gap: spacing.xs },
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        style={{ marginTop: spacing.sm }}
+        contentContainerStyle={[
+          styles.filterChipsRow,
+          { gap: spacing.xs },
         ]}
       >
-        {filterTiles.map((tile) => {
-          const isSelected = activeStatusFilter === tile.key;
+        {filterChips.map((chip) => {
+          const isSelected = activeStatusFilter === chip.key;
           return (
             <Pressable
-              key={tile.key}
-              accessibilityRole="button"
+              key={chip.key}
+              accessibilityRole="tab"
               accessibilityState={{ selected: isSelected }}
-              accessibilityLabel={`Filter by ${tile.label}: ${tile.count} examinations`}
-              onPress={() => onSelectStatusFilter(tile.key)}
+              accessibilityLabel={`${chip.label}: ${chip.count} exams`}
+              onPress={() => onSelectStatusFilter(chip.key)}
               style={({ pressed }) => [
-                styles.bucketTile,
+                styles.filterChip,
                 {
                   backgroundColor: isSelected
-                    ? tile.bgTint
+                    ? colors.primary
                     : colors.surfaceMuted,
-                  borderColor: isSelected ? tile.accentColor : colors.border,
-                  borderWidth: isSelected ? 1.5 : 1,
-                  borderRadius: radius.md,
-                  paddingVertical: spacing.sm,
-                  paddingHorizontal: spacing.sm,
-                  opacity: pressed ? 0.88 : 1,
+                  borderColor: isSelected ? colors.primary : colors.border,
+                  borderRadius: radius.full,
+                  paddingVertical: 7,
+                  paddingHorizontal: spacing.sm + 2,
+                  opacity: pressed ? 0.85 : 1,
                 },
               ]}
             >
               <Text
                 style={{
-                  color: tile.accentColor,
-                  fontSize: typography.fontSizes.lg,
-                  fontWeight: typography.fontWeights.bold,
-                }}
-              >
-                {tile.count}
-              </Text>
-              <Text
-                numberOfLines={1}
-                style={{
                   color: isSelected
-                    ? colors.textPrimary
-                    : colors.textSecondary,
+                    ? colors.textOnPrimary
+                    : colors.textPrimary,
                   fontSize: typography.fontSizes.xs,
                   fontWeight: isSelected
                     ? typography.fontWeights.bold
-                    : typography.fontWeights.medium,
-                  marginTop: 2,
+                    : typography.fontWeights.semibold,
                 }}
               >
-                {tile.label}
+                {chip.label}
               </Text>
+              <View
+                style={[
+                  styles.filterChipCountBadge,
+                  {
+                    backgroundColor: isSelected
+                      ? colors.primarySoft
+                      : colors.surface,
+                    borderColor: isSelected
+                      ? 'transparent'
+                      : colors.borderSubtle,
+                    borderRadius: radius.full,
+                    paddingHorizontal: 6,
+                    paddingVertical: 1,
+                    marginLeft: 6,
+                  },
+                ]}
+              >
+                <Text
+                  style={{
+                    color: isSelected
+                      ? colors.primaryText
+                      : colors.textSecondary,
+                    fontSize: 11,
+                    fontWeight: typography.fontWeights.bold,
+                  }}
+                >
+                  {chip.count}
+                </Text>
+              </View>
             </Pressable>
           );
         })}
-      </View>
+      </ScrollView>
     </SurfaceCard>
   );
 }
@@ -1346,12 +1356,16 @@ function UnpublishedExamCard({
 export function ExaminationListSection({
   items,
   totalOriginalCount,
+  activeStatusFilter = 'ALL',
+  hasSearchOrTypeFilter = false,
   sectionName,
   onSelectExam,
   onResetFilters,
 }: {
   items: UnifiedParentExamItem[];
   totalOriginalCount: number;
+  activeStatusFilter?: ExamStatusFilter;
+  hasSearchOrTypeFilter?: boolean;
   sectionName?: string | null;
   onSelectExam: (item: UnifiedParentExamItem) => void;
   onResetFilters: () => void;
@@ -1359,22 +1373,82 @@ export function ExaminationListSection({
   const { colors, spacing, typography, iconSizes } = useAppTheme();
 
   if (totalOriginalCount === 0) {
+    const emptyByStatus = (() => {
+      if (activeStatusFilter === 'PUBLISHED') {
+        return {
+          title: 'No Published Results',
+          description: 'No published report cards are available yet.',
+        };
+      }
+      if (activeStatusFilter === 'AWAITING_RESULTS') {
+        return {
+          title: 'No Results Pending',
+          description: 'No completed exams are currently awaiting results.',
+        };
+      }
+      if (activeStatusFilter === 'UPCOMING') {
+        return {
+          title: 'No Upcoming Exams',
+          description: 'No upcoming exams are scheduled right now.',
+        };
+      }
+      return {
+        title: 'No Exams Yet',
+        description: 'No upcoming exams or published results are available.',
+      };
+    })();
+
     return (
       <EmptyState
         icon={<GraduationCap size={iconSizes.xl} color={colors.primary} />}
-        title="No Examinations Scheduled Yet"
-        description="No upcoming examinations or published report card results are recorded for this student in the selected academic session."
+        title={emptyByStatus.title}
+        description={emptyByStatus.description}
+        actionLabel={activeStatusFilter !== 'ALL' ? 'Show All' : undefined}
+        onActionPress={
+          activeStatusFilter !== 'ALL' ? onResetFilters : undefined
+        }
         style={{ marginBottom: spacing.md }}
       />
     );
   }
 
   if (items.length === 0) {
+    const filteredEmpty = (() => {
+      if (hasSearchOrTypeFilter) {
+        return {
+          title: 'No Matching Exams',
+          description: 'No exams match your current search or filter.',
+        };
+      }
+      if (activeStatusFilter === 'PUBLISHED') {
+        return {
+          title: 'No Published Results',
+          description: 'No published report cards are available yet.',
+        };
+      }
+      if (activeStatusFilter === 'AWAITING_RESULTS') {
+        return {
+          title: 'No Results Pending',
+          description: 'No completed exams are currently awaiting results.',
+        };
+      }
+      if (activeStatusFilter === 'UPCOMING') {
+        return {
+          title: 'No Upcoming Exams',
+          description: 'No upcoming exams are scheduled right now.',
+        };
+      }
+      return {
+        title: 'No Exams Yet',
+        description: 'No upcoming exams or published results are available.',
+      };
+    })();
+
     return (
       <EmptyState
         icon={<BookOpen size={iconSizes.xl} color={colors.primary} />}
-        title="No Matching Examinations"
-        description="No examinations or results match your active status, exam type, or search filter."
+        title={filteredEmpty.title}
+        description={filteredEmpty.description}
         actionLabel="Reset Filters"
         onActionPress={onResetFilters}
         style={{ marginBottom: spacing.md }}
@@ -1463,15 +1537,23 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     borderTopWidth: 1,
   },
-  bucketGrid: {
+  filterChipsRow: {
     flexDirection: 'row',
-    flexWrap: 'wrap',
+    alignItems: 'center',
+    flexGrow: 1,
   },
-  bucketTile: {
-    flex: 1,
-    minWidth: 74,
+  filterChip: {
+    flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
+    borderWidth: 1,
+    minHeight: 36,
+  },
+  filterChipCountBadge: {
+    minWidth: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
   },
   activeFilterFooter: {
     flexDirection: 'row',

@@ -6,6 +6,7 @@ import type {
   ChildAttendanceQueryParams,
   ChildDashboardCard,
   ChildFeesQueryParams,
+  ChildTimetableUnavailableKind,
   ClassTimetableResponse,
   FeePaymentReceiptResponse,
   FeeReceiptExportFormat,
@@ -16,6 +17,7 @@ import type {
   ParentChildHomeworkDetailResponse,
   ParentChildOfflinePaymentOverviewResponse,
   ParentConsolidatedFeesResponse,
+  ParentAnnouncementsQueryParams,
   ParentDashboardResponse,
   ParentFeePaymentSubmissionResponse,
   PickedPaymentProofAsset,
@@ -25,11 +27,29 @@ import type {
   StudentFinancialProfileResponse,
   StudentHomeworkDashboardResponse,
   SubmitOfflineFeePaymentRequest,
+  TimetableConfigResponse,
 } from '@/types/parentPortal';
 
 export interface ChildTimetableResult {
   timetable: ClassTimetableResponse | null;
   unavailableReason: string | null;
+  unavailableKind?: ChildTimetableUnavailableKind | null;
+}
+
+function classifyTimetableUnavailableReason(
+  message: string | null | undefined
+): ChildTimetableUnavailableKind {
+  const lower = (message ?? '').toLowerCase();
+  if (lower.includes('not been published') || lower.includes('draft')) {
+    return 'NOT_PUBLISHED';
+  }
+  if (lower.includes('not enrolled')) {
+    return 'NOT_ENROLLED';
+  }
+  if (lower.includes('no timetable') || lower.includes('not found')) {
+    return 'NOT_CONFIGURED';
+  }
+  return 'UNAVAILABLE';
 }
 
 export interface AuthorizedAttachmentDownloadResult {
@@ -228,9 +248,20 @@ export const parentPortalApi = {
         `/api/organizations/${organizationId}/parent-portal/children/${studentId}/timetable${query}`,
         { organizationId }
       );
+      const data = res.data ?? null;
+      // Never expose draft or unpublished timetable data to parents
+      if (data && data.status && data.status !== 'PUBLISHED') {
+        return {
+          timetable: null,
+          unavailableReason:
+            "Timetable for the student's class has not been published yet.",
+          unavailableKind: 'NOT_PUBLISHED',
+        };
+      }
       return {
-        timetable: res.data ?? null,
+        timetable: data,
         unavailableReason: null,
+        unavailableKind: null,
       };
     } catch (err) {
       if (
@@ -240,20 +271,111 @@ export const parentPortalApi = {
         return {
           timetable: null,
           unavailableReason: err.message,
+          unavailableKind: classifyTimetableUnavailableReason(err.message),
         };
       }
       throw err;
     }
   },
 
+  getTimetableConfig: async (
+    organizationId: number,
+    configId: number
+  ): Promise<TimetableConfigResponse | null> => {
+    try {
+      const res = await apiClient.get<TimetableConfigResponse>(
+        `/api/organizations/${organizationId}/timetable-configs/${configId}`,
+        { organizationId }
+      );
+      return res.data ?? null;
+    } catch (err) {
+      if (
+        err instanceof ApiClientError &&
+        (err.status === 403 || err.status === 404)
+      ) {
+        return null;
+      }
+      throw err;
+    }
+  },
+
   getParentAnnouncements: async (
-    organizationId: number
+    organizationId: number,
+    params?: ParentAnnouncementsQueryParams
   ): Promise<AnnouncementResponse[]> => {
+    const queryParts: string[] = [];
+    if (typeof params?.importantOnly === 'boolean') {
+      queryParts.push(`importantOnly=${String(params.importantOnly)}`);
+    }
+    if (params?.referenceDate) {
+      queryParts.push(
+        `referenceDate=${encodeURIComponent(params.referenceDate)}`
+      );
+    }
+    const query = queryParts.length > 0 ? `?${queryParts.join('&')}` : '';
     const res = await apiClient.get<AnnouncementResponse[]>(
-      `/api/organizations/${organizationId}/parent-portal/announcements`,
+      `/api/organizations/${organizationId}/parent-portal/announcements${query}`,
       { organizationId }
     );
-    return res.data ?? [];
+    // Never expose draft or unpublished announcements to parents
+    return (res.data ?? []).filter(
+      (ann) => !ann.status || ann.status === 'PUBLISHED'
+    );
+  },
+
+  getParentAnnouncementById: async (
+    organizationId: number,
+    announcementId: number
+  ): Promise<AnnouncementResponse | null> => {
+    try {
+      const res = await apiClient.get<AnnouncementResponse>(
+        `/api/organizations/${organizationId}/announcements/${announcementId}`,
+        { organizationId }
+      );
+      const data = res.data ?? null;
+      if (data && data.status && data.status !== 'PUBLISHED') {
+        return null;
+      }
+      return data;
+    } catch (err) {
+      if (
+        err instanceof ApiClientError &&
+        (err.status === 403 || err.status === 404)
+      ) {
+        const list = await parentPortalApi.getParentAnnouncements(
+          organizationId
+        );
+        return list.find((a) => a.id === announcementId) ?? null;
+      }
+      throw err;
+    }
+  },
+
+  buildAnnouncementAttachmentEndpoint: (
+    organizationId: number,
+    announcementId: number,
+    fileId: number
+  ): string =>
+    `/api/organizations/${organizationId}/parent-portal/announcements/${announcementId}/attachments/${fileId}`,
+
+  downloadParentAnnouncementAttachment: async (
+    organizationId: number,
+    announcementId: number,
+    fileId: number,
+    fallbackFilename: string,
+    fallbackContentType: string
+  ): Promise<AuthorizedAttachmentDownloadResult> => {
+    const endpointPath = parentPortalApi.buildAnnouncementAttachmentEndpoint(
+      organizationId,
+      announcementId,
+      fileId
+    );
+    return parentPortalApi.fetchAuthorizedHomeworkAttachment(
+      organizationId,
+      endpointPath,
+      fallbackFilename,
+      fallbackContentType
+    );
   },
 
   buildAuthorizedChildPhotoSource: (

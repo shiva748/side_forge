@@ -45,6 +45,7 @@ import {
 } from '../school/OrganizationStatusBanner';
 import { Badge, CounterLabel, RoleTag } from '../ui/Badge';
 import { TruncatedText } from '../ui/TruncatedText';
+import { webRealtimeNotifications } from '../../services/realtimeNotifications';
 
 const SIDEBAR_COLLAPSED_STORAGE_KEY = 'sideforge.sidebarCollapsed';
 
@@ -425,10 +426,31 @@ export const AppShell: React.FC<AppShellProps> = ({
 
   const handleLogout = async () => {
     setIsUserMenuOpen(false);
+    webRealtimeNotifications.stop();
     await logout();
     toast.info('Signed out', 'Your session has been closed.');
     navigate('/login', { replace: true });
   };
+
+  useEffect(() => {
+    if (!user) {
+      webRealtimeNotifications.stop();
+      return;
+    }
+    const orgId = activeOrganization?.organizationId ?? null;
+    webRealtimeNotifications.start(orgId);
+    webRealtimeNotifications.updateOrganization(orgId);
+
+    const unsubscribe = webRealtimeNotifications.subscribe((frame) => {
+      if (frame.type === 'NOTIFICATION' && frame.notification) {
+        toast.info(frame.notification.title, frame.notification.message);
+      }
+    });
+
+    return () => {
+      unsubscribe();
+    };
+  }, [user, activeOrganization?.organizationId, toast]);
 
   const fullName = [user?.firstName, user?.lastName].filter(Boolean).join(' ') || user?.email || 'User';
 

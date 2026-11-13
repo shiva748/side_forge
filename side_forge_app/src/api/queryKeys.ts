@@ -19,10 +19,29 @@ export const queryKeys = {
   notifications: {
     personal: () => ['notifications', 'personal'] as const,
     personalUnread: () => ['notifications', 'personal', 'unread'] as const,
-    orgList: (organizationId: number, experience: MobileRoleExperience) =>
-      ['org', organizationId, experience, 'notifications', 'list'] as const,
+    personalPreferences: () =>
+      ['notifications', 'personal', 'preferences'] as const,
+    orgList: (
+      organizationId: number,
+      experience: MobileRoleExperience,
+      category?: string | null,
+      unreadOnly?: boolean | null,
+      page?: number
+    ) =>
+      [
+        'org',
+        organizationId,
+        experience,
+        'notifications',
+        'list',
+        category ?? 'ALL',
+        unreadOnly === true ? 'UNREAD' : unreadOnly === false ? 'READ' : 'ALL',
+        page ?? 0,
+      ] as const,
     orgUnread: (organizationId: number, experience: MobileRoleExperience) =>
       ['org', organizationId, experience, 'notifications', 'unread'] as const,
+    orgPreferences: (organizationId: number) =>
+      ['org', organizationId, 'notifications', 'preferences'] as const,
   },
   workspace: {
     scope: (organizationId: number, experience: MobileRoleExperience) =>
@@ -128,6 +147,15 @@ export const queryKeys = {
         studentId,
         'timetable',
         academicSessionId ?? 'current',
+      ] as const,
+    timetableConfig: (organizationId: number, configId: number) =>
+      [
+        'org',
+        organizationId,
+        'PARENT',
+        'portal',
+        'timetable-config',
+        configId,
       ] as const,
     childAttendance: (
       organizationId: number,
@@ -270,6 +298,27 @@ export const queryKeys = {
         'fees',
         'offline-submissions',
         academicSessionId ?? 'current',
+      ] as const,
+    announcements: (
+      organizationId: number,
+      importantOnly?: boolean | null
+    ) =>
+      [
+        'org',
+        organizationId,
+        'PARENT',
+        'portal',
+        'announcements',
+        importantOnly ? 'important' : 'all',
+      ] as const,
+    announcementDetail: (organizationId: number, announcementId: number) =>
+      [
+        'org',
+        organizationId,
+        'PARENT',
+        'portal',
+        'announcements',
+        announcementId,
       ] as const,
   },
 };

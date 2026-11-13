@@ -38,8 +38,16 @@ export const ENV = {
   DEFAULT_API_BASE_URL: normalizeBaseUrl(
     process.env.EXPO_PUBLIC_API_BASE_URL || DEFAULT_DEV_BASE_URL
   ),
+  WS_NOTIFICATIONS_URL: (
+    process.env.EXPO_PUBLIC_WS_NOTIFICATIONS_URL || ''
+  ).trim(),
   DEEP_LINK_SCHEME: process.env.EXPO_PUBLIC_DEEP_LINK_SCHEME || 'sideforge',
+  ANDROID_NOTIFICATION_CHANNEL_ID:
+    process.env.EXPO_PUBLIC_ANDROID_NOTIFICATION_CHANNEL_ID ||
+    'sideforge-default',
   REQUEST_TIMEOUT_MS: 12000,
+  WS_HEARTBEAT_INTERVAL_MS: 20000,
+  WS_RECONNECT_BASE_DELAY_MS: 3000,
 } as const;
 
 export const STORAGE_KEYS = {
@@ -49,5 +57,7 @@ export const STORAGE_KEYS = {
   ACTIVE_ROLE_EXPERIENCE: 'sideforge.mobile.activeRoleExperience',
   CUSTOM_API_BASE_URL: 'sideforge.mobile.customApiBaseUrl',
   PENDING_INVITATION_TOKEN: 'sideforge.mobile.pendingInvitationToken',
+  INSTALLATION_ID: 'sideforge.mobile.installationId',
+  PUSH_REGISTRATION_STATE: 'sideforge.mobile.pushRegistrationState',
 } as const;
 

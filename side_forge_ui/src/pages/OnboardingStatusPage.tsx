@@ -189,8 +189,7 @@ export const OnboardingStatusPage: React.FC = () => {
                 Account &amp; Onboarding Status
               </h1>
               <p className="text-sm text-slate-500">
-                Signed in as <span className="font-semibold text-slate-700">{fullName}</span> (
-                {user.email})
+                Review your organization memberships and school onboarding requests.
               </p>
             </div>
 

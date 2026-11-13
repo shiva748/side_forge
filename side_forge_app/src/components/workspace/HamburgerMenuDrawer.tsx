@@ -11,7 +11,7 @@ import {
   View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useQueryClient } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   ArrowLeftRight,
   ChevronRight,
@@ -20,6 +20,8 @@ import {
 } from 'lucide-react-native';
 import { useAppTheme } from '@/theme';
 import { useAuthWorkspaceStore } from '@/store/useAuthWorkspaceStore';
+import { notificationApi } from '@/api/notificationApi';
+import { queryKeys } from '@/api/queryKeys';
 import { formatRoleCodeLabel } from '@/types/auth';
 import {
   getRoleNavigationItems,
@@ -124,6 +126,17 @@ export function HamburgerMenuDrawer({
     () => getRoleNavigationItems(activeWorkspace),
     [activeWorkspace]
   );
+
+  const organizationId = activeWorkspace?.organizationId ?? 0;
+  const experience = activeWorkspace?.experience ?? 'PARENT';
+
+  const unreadQuery = useQuery({
+    queryKey: queryKeys.notifications.orgUnread(organizationId, experience),
+    queryFn: () => notificationApi.getOrganizationUnreadCount(organizationId),
+    enabled: organizationId > 0 && visible,
+  });
+
+  const unreadCount = unreadQuery.data?.unreadCount ?? 0;
 
   const normalizedPath = normalizeRoutePath(pathname || '/');
   const isProfileActive =
@@ -405,6 +418,7 @@ export function HamburgerMenuDrawer({
                           />
                         }
                         active={active}
+                        badgeCount={item.key === 'updates' ? unreadCount : 0}
                         onPress={() => handleOpenRoleItem(item)}
                       />
                     );
@@ -490,12 +504,14 @@ function DrawerNavRow({
   label,
   active = false,
   showChevron = false,
+  badgeCount = 0,
   onPress,
 }: {
   icon: React.ReactNode;
   label: string;
   active?: boolean;
   showChevron?: boolean;
+  badgeCount?: number;
   onPress: () => void;
 }) {
   const { colors, spacing, typography, radius, iconSizes, touchTargets } =
@@ -537,6 +553,29 @@ function DrawerNavRow({
       >
         {label}
       </Text>
+      {badgeCount > 0 ? (
+        <View
+          style={{
+            backgroundColor: colors.warningSoft,
+            borderColor: colors.warningBorder,
+            borderWidth: 1,
+            borderRadius: radius.full,
+            paddingHorizontal: 6,
+            paddingVertical: 1,
+            marginLeft: spacing.xs,
+          }}
+        >
+          <Text
+            style={{
+              color: colors.warningText,
+              fontSize: 10,
+              fontWeight: typography.fontWeights.bold,
+            }}
+          >
+            {badgeCount > 99 ? '99+' : badgeCount}
+          </Text>
+        </View>
+      ) : null}
       {active ? (
         <View
           style={[

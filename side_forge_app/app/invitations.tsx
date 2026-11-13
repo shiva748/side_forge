@@ -286,11 +286,7 @@ export default function InvitationsInboxScreen() {
       header={
         <ScreenHeader
           title="Invitations"
-          subtitle={
-            user?.email
-              ? `Invitation inbox for ${user.email}`
-              : 'Review & manage your school invitations'
-          }
+          subtitle="Review & manage your school invitations"
           showBack
           onBackPress={() =>
             goBackOrFallback(activeWorkspace ? '/' : '/workspace-select')
@@ -636,7 +632,7 @@ export default function InvitationsInboxScreen() {
                       lineHeight: typography.lineHeights.xs,
                     }}
                   >
-                    Accepting links your account ({user?.email}) to{' '}
+                    Accepting links your account to{' '}
                     {selectedInvitation.organizationName} as{' '}
                     {formatRoleCodeLabel(selectedInvitation.roleCode)} and adds
                     it to your Workspace Switcher without affecting your

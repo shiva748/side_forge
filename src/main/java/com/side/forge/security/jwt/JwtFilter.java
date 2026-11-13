@@ -44,7 +44,7 @@ public class JwtFilter extends OncePerRequestFilter {
 			return;
 		}
 
-		String token = extractJwtFromCookies(request);
+		String token = extractJwtFromRequest(request, path);
 		if (token != null && SecurityContextHolder.getContext().getAuthentication() == null) {
 			try {
 				if (jwtService.validateToken(token)) {
@@ -61,7 +61,7 @@ public class JwtFilter extends OncePerRequestFilter {
 					}
 				}
 			} catch (JwtException | IllegalArgumentException exception) {
-				// Treat malformed/expired cookies as unauthenticated. Protected
+				// Treat malformed/expired tokens as unauthenticated. Protected
 				// endpoints will be rejected by Spring Security with HTTP 401.
 				SecurityContextHolder.clearContext();
 			}
@@ -70,13 +70,25 @@ public class JwtFilter extends OncePerRequestFilter {
 		filterChain.doFilter(request, response);
 	}
 
-	private String extractJwtFromCookies(HttpServletRequest request) {
-		if (request.getCookies() == null) {
-			return null;
+	private String extractJwtFromRequest(HttpServletRequest request, String path) {
+		if (request.getCookies() != null) {
+			for (Cookie cookie : request.getCookies()) {
+				if ("jwt".equals(cookie.getName()) && cookie.getValue() != null && !cookie.getValue().isBlank()) {
+					return cookie.getValue().trim();
+				}
+			}
 		}
-		for (Cookie cookie : request.getCookies()) {
-			if ("jwt".equals(cookie.getName())) {
-				return cookie.getValue();
+		String authHeader = request.getHeader("Authorization");
+		if (authHeader != null && authHeader.regionMatches(true, 0, "Bearer ", 0, 7)) {
+			String bearer = authHeader.substring(7).trim();
+			if (!bearer.isEmpty()) {
+				return bearer;
+			}
+		}
+		if (path != null && path.startsWith("/ws/")) {
+			String queryToken = request.getParameter("token");
+			if (queryToken != null && !queryToken.isBlank()) {
+				return queryToken.trim();
 			}
 		}
 		return null;

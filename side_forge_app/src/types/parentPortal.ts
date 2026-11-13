@@ -657,18 +657,41 @@ export interface PickedPaymentProofAsset {
   webFile?: File | null;
 }
 
+export type AnnouncementAudience =
+  | 'ALL'
+  | 'PARENTS'
+  | 'STUDENTS'
+  | 'TEACHERS'
+  | 'STAFF'
+  | 'SPECIFIC_CLASSES'
+  | 'SPECIFIC_STUDENTS';
+
+export type AnnouncementStatus = 'DRAFT' | 'PUBLISHED';
+
+export interface ParentAnnouncementsQueryParams {
+  importantOnly?: boolean | null;
+  referenceDate?: string | null;
+}
+
 export interface AnnouncementResponse {
   id: number;
   organizationId: number;
   academicSessionId: number | null;
   title: string;
   description: string;
-  status: string;
-  targetAudience: string;
+  status: AnnouncementStatus | string;
+  targetAudience: AnnouncementAudience | string;
+  targetClassIds?: number[];
+  targetStudentIds?: number[];
   important: boolean;
   publicationDate: string;
   expiryDate: string | null;
   publishedAt: string | null;
+  publishedBy?: number | null;
+  createdBy?: number | null;
+  attachments?: StoredFileResponse[];
+  createdAt?: string | null;
+  updatedAt?: string | null;
 }
 
 export interface ChildDashboardCard {
@@ -742,6 +765,48 @@ export type DayOfWeekName =
   | 'SATURDAY'
   | 'SUNDAY';
 
+export type PeriodType =
+  | 'TEACHING'
+  | 'SHORT_BREAK'
+  | 'LUNCH_BREAK'
+  | 'ASSEMBLY';
+
+export type TimetableStatus = 'DRAFT' | 'PUBLISHED' | 'ARCHIVED';
+
+export type ChildTimetableUnavailableKind =
+  | 'NOT_PUBLISHED'
+  | 'NOT_CONFIGURED'
+  | 'NOT_ENROLLED'
+  | 'UNAVAILABLE';
+
+export interface TimetablePeriodResponse {
+  id: number;
+  organizationId: number;
+  timetableConfigId: number;
+  name: string;
+  periodOrder: number;
+  startTime: string;
+  endTime: string;
+  periodType: PeriodType;
+  breakPeriod: boolean;
+  createdAt?: string | null;
+  updatedAt?: string | null;
+}
+
+export interface TimetableConfigResponse {
+  id: number;
+  organizationId: number;
+  name: string;
+  workingDays: DayOfWeekName[];
+  dayStartTime: string;
+  dayEndTime: string;
+  description: string | null;
+  active: boolean;
+  periods: TimetablePeriodResponse[];
+  createdAt?: string | null;
+  updatedAt?: string | null;
+}
+
 export interface TimetableSlotResponse {
   id: number;
   organizationId: number;
@@ -765,6 +830,8 @@ export interface TimetableSlotResponse {
   teacherLastName: string | null;
   room: string | null;
   remarks: string | null;
+  createdAt?: string | null;
+  updatedAt?: string | null;
 }
 
 export interface ClassTimetableResponse {
@@ -779,7 +846,13 @@ export interface ClassTimetableResponse {
   sectionName: string | null;
   timetableConfigId: number;
   timetableConfigName: string | null;
-  status: 'DRAFT' | 'PUBLISHED' | 'ARCHIVED' | string;
+  status: TimetableStatus | string;
+  revisionNumber?: number | null;
+  publishedAt?: string | null;
+  publishedBy?: number | null;
+  notes?: string | null;
   slots: TimetableSlotResponse[];
+  createdAt?: string | null;
+  updatedAt?: string | null;
 }
 

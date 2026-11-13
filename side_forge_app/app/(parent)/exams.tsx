@@ -437,6 +437,10 @@ export default function ParentExamsScreen() {
               <ExaminationListSection
                 items={filteredExamItems}
                 totalOriginalCount={unifiedExamItems.length}
+                activeStatusFilter={activeStatusFilter}
+                hasSearchOrTypeFilter={
+                  selectedExamType !== 'ALL' || searchQuery.trim().length > 0
+                }
                 sectionName={resolvedSectionName}
                 onSelectExam={(item) => setSelectedExamItem(item)}
                 onResetFilters={handleResetFilters}

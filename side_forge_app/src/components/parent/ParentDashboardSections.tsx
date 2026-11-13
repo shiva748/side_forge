@@ -971,11 +971,15 @@ export function AnnouncementsSection({
   notifications,
   unreadCount,
   onOpenUpdates,
+  onSelectAnnouncement,
+  onOpenNotifications,
 }: {
   announcements: AnnouncementResponse[];
   notifications: NotificationItem[];
   unreadCount: number;
   onOpenUpdates: () => void;
+  onSelectAnnouncement?: (ann: AnnouncementResponse) => void;
+  onOpenNotifications?: () => void;
 }) {
   const { colors, spacing, typography, radius, iconSizes } = useAppTheme();
 
@@ -1000,9 +1004,16 @@ export function AnnouncementsSection({
       ) : (
         <View style={{ gap: spacing.xs }}>
           {announcements.slice(0, 3).map((ann) => (
-            <View
+            <Pressable
               key={ann.id}
-              style={[
+              accessibilityRole="button"
+              accessibilityLabel={`Open announcement ${ann.title}`}
+              onPress={() =>
+                onSelectAnnouncement
+                  ? onSelectAnnouncement(ann)
+                  : onOpenUpdates()
+              }
+              style={({ pressed }) => [
                 styles.itemRow,
                 {
                   backgroundColor: colors.background,
@@ -1011,6 +1022,7 @@ export function AnnouncementsSection({
                     : colors.border,
                   borderRadius: radius.md,
                   padding: spacing.sm,
+                  opacity: pressed ? 0.85 : 1,
                 },
               ]}
             >
@@ -1046,20 +1058,27 @@ export function AnnouncementsSection({
               >
                 {ann.description}
               </Text>
-            </View>
+            </Pressable>
           ))}
 
           {announcements.length === 0 &&
             notifications.slice(0, 2).map((notif) => (
-              <View
+              <Pressable
                 key={notif.id}
-                style={[
+                accessibilityRole="button"
+                onPress={() =>
+                  onOpenNotifications
+                    ? onOpenNotifications()
+                    : onOpenUpdates()
+                }
+                style={({ pressed }) => [
                   styles.itemRow,
                   {
                     backgroundColor: colors.background,
                     borderColor: colors.border,
                     borderRadius: radius.md,
                     padding: spacing.sm,
+                    opacity: pressed ? 0.85 : 1,
                   },
                 ]}
               >
@@ -1099,7 +1118,7 @@ export function AnnouncementsSection({
                 >
                   {notif.message}
                 </Text>
-              </View>
+              </Pressable>
             ))}
         </View>
       )}

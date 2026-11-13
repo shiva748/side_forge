@@ -144,7 +144,7 @@ export const UserAccountRegistrationForm: React.FC<UserAccountRegistrationFormPr
   if (isAuthenticated && activeUser && !registeredAccount) {
     return (
       <div className="space-y-5">
-        <InlineAlert variant="info" title={`Signed in as ${activeUser.email}`}>
+        <InlineAlert variant="info" title="Active Account Session">
           You already have an active user account session. Creating a user account does not
           automatically grant <span className="font-mono font-semibold">SCHOOL_ADMIN</span> access.
           If you are registering a new school, submit a School Onboarding Application so your

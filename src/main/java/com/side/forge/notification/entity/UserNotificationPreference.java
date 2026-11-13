@@ -41,5 +41,5 @@ public class UserNotificationPreference extends AuditableEntity {
 	private boolean inAppEnabled = true;
 
 	@Column(name = "enabled_channels", nullable = false, length = 200)
-	private String enabledChannels = "IN_APP";
+	private String enabledChannels = "IN_APP,PUSH";
 }
