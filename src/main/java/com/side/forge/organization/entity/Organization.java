@@ -46,4 +46,22 @@ public class Organization extends AuditableEntity {
 	@Enumerated(EnumType.STRING)
 	@Column(nullable = false, length = 20)
 	private OrganizationStatus status = OrganizationStatus.PENDING;
+
+	@Column(name = "fee_upi_id", length = 120)
+	private String feeUpiId;
+
+	@Column(name = "fee_payee_name", length = 150)
+	private String feePayeeName;
+
+	@Column(name = "fee_bank_name", length = 150)
+	private String feeBankName;
+
+	@Column(name = "fee_bank_account_number", length = 60)
+	private String feeBankAccountNumber;
+
+	@Column(name = "fee_bank_ifsc_code", length = 30)
+	private String feeBankIfscCode;
+
+	@Column(name = "fee_payment_instructions", length = 1000)
+	private String feePaymentInstructions;
 }

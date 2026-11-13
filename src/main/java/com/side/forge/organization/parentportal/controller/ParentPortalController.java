@@ -298,6 +298,57 @@ public class ParentPortalController {
 	}
 
 	@RequirePermission(PermissionCode.PARENT_CHILD_VIEW)
+	@GetMapping("/api/organizations/{organizationId}/parent-portal/children/{studentId}/fees/payment-submissions")
+	public ResponseEntity<ApiResponse<ParentChildOfflinePaymentOverviewResponse>> getChildOfflinePaymentOverview(
+			@PathVariable @Positive Long organizationId,
+			@PathVariable @Positive Long studentId,
+			@RequestParam(required = false) @Positive Long academicSessionId) {
+		return ResponseEntity.ok(new ApiResponse<>(true,
+				"Offline payment instructions and parent payment submissions retrieved successfully",
+				parentPortalService.getChildOfflinePaymentOverview(organizationId, studentId, academicSessionId)));
+	}
+
+	@RequirePermission(PermissionCode.PARENT_CHILD_VIEW)
+	@PostMapping("/api/organizations/{organizationId}/parent-portal/children/{studentId}/fees/payment-submissions")
+	public ResponseEntity<ApiResponse<ParentFeePaymentSubmissionResponse>> submitChildOfflinePayment(
+			@PathVariable @Positive Long organizationId,
+			@PathVariable @Positive Long studentId,
+			@Valid @RequestBody SubmitOfflineFeePaymentRequest request) {
+		return ResponseEntity.status(HttpStatus.CREATED)
+				.body(new ApiResponse<>(true,
+						"Offline payment reference submitted for school verification",
+						parentPortalService.submitChildOfflinePayment(organizationId, studentId, request)));
+	}
+
+	@RequirePermission(PermissionCode.PARENT_CHILD_VIEW)
+	@PostMapping(
+			value = "/api/organizations/{organizationId}/parent-portal/children/{studentId}/fees/payment-submissions/{submissionId}/proof",
+			consumes = MediaType.MULTIPART_FORM_DATA_VALUE
+	)
+	public ResponseEntity<ApiResponse<StoredFileResponse>> uploadChildOfflinePaymentProof(
+			@PathVariable @Positive Long organizationId,
+			@PathVariable @Positive Long studentId,
+			@PathVariable @Positive Long submissionId,
+			@RequestParam("file") MultipartFile file) {
+		return ResponseEntity.status(HttpStatus.CREATED)
+				.body(new ApiResponse<>(true,
+						"Offline payment proof uploaded successfully",
+						parentPortalService.uploadChildOfflinePaymentProof(
+								organizationId, studentId, submissionId, file)));
+	}
+
+	@RequirePermission(PermissionCode.PARENT_CHILD_VIEW)
+	@GetMapping("/api/organizations/{organizationId}/parent-portal/children/{studentId}/fees/payment-submissions/{submissionId}/proof/{fileId}")
+	public ResponseEntity<byte[]> downloadChildOfflinePaymentProof(
+			@PathVariable @Positive Long organizationId,
+			@PathVariable @Positive Long studentId,
+			@PathVariable @Positive Long submissionId,
+			@PathVariable @Positive Long fileId) {
+		return toFileResponse(parentPortalService.downloadChildOfflinePaymentProof(
+				organizationId, studentId, submissionId, fileId), false);
+	}
+
+	@RequirePermission(PermissionCode.PARENT_CHILD_VIEW)
 	@GetMapping("/api/organizations/{organizationId}/parent-portal/children/{studentId}/timetable")
 	public ResponseEntity<ApiResponse<ClassTimetableResponse>> getChildTimetable(
 			@PathVariable @Positive Long organizationId,

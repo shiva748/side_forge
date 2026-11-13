@@ -5,16 +5,26 @@ import type {
   AnnouncementResponse,
   ChildAttendanceQueryParams,
   ChildDashboardCard,
+  ChildFeesQueryParams,
   ClassTimetableResponse,
+  FeePaymentReceiptResponse,
+  FeeReceiptExportFormat,
   LinkedChildSummaryResponse,
   ParentChildAttendanceResponse,
   ParentChildDetailResponse,
   ParentChildExaminationsResponse,
   ParentChildHomeworkDetailResponse,
+  ParentChildOfflinePaymentOverviewResponse,
+  ParentConsolidatedFeesResponse,
   ParentDashboardResponse,
+  ParentFeePaymentSubmissionResponse,
+  PickedPaymentProofAsset,
   ReportCardExportFormat,
   ReportCardResponse,
+  StoredFileResponse,
+  StudentFinancialProfileResponse,
   StudentHomeworkDashboardResponse,
+  SubmitOfflineFeePaymentRequest,
 } from '@/types/parentPortal';
 
 export interface ChildTimetableResult {
@@ -457,6 +467,202 @@ export const parentPortalApi = {
       endpointPath,
       resolvedFilename,
       defaultMime
+    );
+  },
+
+  getConsolidatedFeesOverview: async (
+    organizationId: number,
+    academicSessionId?: number | null
+  ): Promise<ParentConsolidatedFeesResponse> => {
+    const query = academicSessionId
+      ? `?academicSessionId=${encodeURIComponent(String(academicSessionId))}`
+      : '';
+    const res = await apiClient.get<ParentConsolidatedFeesResponse>(
+      `/api/organizations/${organizationId}/parent-portal/fees${query}`,
+      { organizationId }
+    );
+    if (!res.data) {
+      throw new Error('Unable to load consolidated family fee overview.');
+    }
+    return res.data;
+  },
+
+  getChildFinancialProfile: async (
+    organizationId: number,
+    studentId: number,
+    params?: ChildFeesQueryParams
+  ): Promise<StudentFinancialProfileResponse> => {
+    const searchParams = new URLSearchParams();
+    if (params?.academicSessionId) {
+      searchParams.set('academicSessionId', String(params.academicSessionId));
+    }
+    if (params?.startDate) {
+      searchParams.set('startDate', params.startDate);
+    }
+    if (params?.endDate) {
+      searchParams.set('endDate', params.endDate);
+    }
+    const qs = searchParams.toString();
+    const query = qs ? `?${qs}` : '';
+    const res = await apiClient.get<StudentFinancialProfileResponse>(
+      `/api/organizations/${organizationId}/parent-portal/children/${studentId}/fees${query}`,
+      { organizationId }
+    );
+    if (!res.data) {
+      throw new Error('Unable to load student fee statement and demands.');
+    }
+    return res.data;
+  },
+
+  getChildPaymentReceipt: async (
+    organizationId: number,
+    studentId: number,
+    paymentId: number
+  ): Promise<FeePaymentReceiptResponse> => {
+    const res = await apiClient.get<FeePaymentReceiptResponse>(
+      `/api/organizations/${organizationId}/parent-portal/children/${studentId}/fees/payments/${paymentId}/receipt`,
+      { organizationId }
+    );
+    if (!res.data) {
+      throw new Error('Unable to load fee payment receipt details.');
+    }
+    return res.data;
+  },
+
+  buildChildPaymentReceiptDownloadEndpoint: (
+    organizationId: number,
+    studentId: number,
+    paymentId: number,
+    format: FeeReceiptExportFormat = 'PDF'
+  ): string =>
+    `/api/organizations/${organizationId}/parent-portal/children/${studentId}/fees/payments/${paymentId}/receipt/download?format=${encodeURIComponent(
+      format
+    )}`,
+
+  downloadChildPaymentReceipt: async (
+    organizationId: number,
+    studentId: number,
+    paymentId: number,
+    format: FeeReceiptExportFormat = 'PDF',
+    fallbackFilename?: string
+  ): Promise<AuthorizedAttachmentDownloadResult> => {
+    const ext =
+      format === 'CSV' ? 'csv' : format === 'EXCEL' ? 'xls' : 'pdf';
+    const defaultMime =
+      format === 'CSV'
+        ? 'text/csv'
+        : format === 'EXCEL'
+        ? 'application/vnd.ms-excel'
+        : 'application/pdf';
+    const resolvedFilename =
+      fallbackFilename ||
+      `fee-receipt-student-${studentId}-payment-${paymentId}.${ext}`;
+    const endpointPath =
+      parentPortalApi.buildChildPaymentReceiptDownloadEndpoint(
+        organizationId,
+        studentId,
+        paymentId,
+        format
+      );
+    return parentPortalApi.fetchAuthorizedHomeworkAttachment(
+      organizationId,
+      endpointPath,
+      resolvedFilename,
+      defaultMime
+    );
+  },
+
+  getChildOfflinePaymentOverview: async (
+    organizationId: number,
+    studentId: number,
+    academicSessionId?: number | null
+  ): Promise<ParentChildOfflinePaymentOverviewResponse> => {
+    const query = academicSessionId
+      ? `?academicSessionId=${encodeURIComponent(String(academicSessionId))}`
+      : '';
+    const res = await apiClient.get<ParentChildOfflinePaymentOverviewResponse>(
+      `/api/organizations/${organizationId}/parent-portal/children/${studentId}/fees/payment-submissions${query}`,
+      { organizationId }
+    );
+    if (!res.data) {
+      throw new Error(
+        'Unable to load school payment instructions and submitted references.'
+      );
+    }
+    return res.data;
+  },
+
+  submitChildOfflinePayment: async (
+    organizationId: number,
+    studentId: number,
+    payload: SubmitOfflineFeePaymentRequest
+  ): Promise<ParentFeePaymentSubmissionResponse> => {
+    const res = await apiClient.post<ParentFeePaymentSubmissionResponse>(
+      `/api/organizations/${organizationId}/parent-portal/children/${studentId}/fees/payment-submissions`,
+      payload,
+      { organizationId }
+    );
+    if (!res.data) {
+      throw new Error('Unable to submit offline payment reference.');
+    }
+    return res.data;
+  },
+
+  uploadChildOfflinePaymentProof: async (
+    organizationId: number,
+    studentId: number,
+    submissionId: number,
+    asset: PickedPaymentProofAsset
+  ): Promise<StoredFileResponse> => {
+    const formData = new FormData();
+    if (asset.webFile) {
+      formData.append('file', asset.webFile, asset.name);
+    } else {
+      formData.append('file', {
+        uri: asset.uri,
+        name: asset.name || 'payment-proof.jpg',
+        type: asset.mimeType || 'image/jpeg',
+      } as unknown as Blob);
+    }
+    const res = await apiClient.post<StoredFileResponse>(
+      `/api/organizations/${organizationId}/parent-portal/children/${studentId}/fees/payment-submissions/${submissionId}/proof`,
+      formData,
+      { organizationId }
+    );
+    if (!res.data) {
+      throw new Error('Unable to upload payment proof attachment.');
+    }
+    return res.data;
+  },
+
+  buildOfflinePaymentProofDownloadEndpoint: (
+    organizationId: number,
+    studentId: number,
+    submissionId: number,
+    fileId: number
+  ): string =>
+    `/api/organizations/${organizationId}/parent-portal/children/${studentId}/fees/payment-submissions/${submissionId}/proof/${fileId}`,
+
+  downloadOfflinePaymentProof: async (
+    organizationId: number,
+    studentId: number,
+    submissionId: number,
+    fileId: number,
+    fallbackFilename?: string,
+    fallbackContentType?: string
+  ): Promise<AuthorizedAttachmentDownloadResult> => {
+    const endpointPath =
+      parentPortalApi.buildOfflinePaymentProofDownloadEndpoint(
+        organizationId,
+        studentId,
+        submissionId,
+        fileId
+      );
+    return parentPortalApi.fetchAuthorizedHomeworkAttachment(
+      organizationId,
+      endpointPath,
+      fallbackFilename || `payment-proof-${submissionId}-${fileId}.pdf`,
+      fallbackContentType || 'application/octet-stream'
     );
   },
 };

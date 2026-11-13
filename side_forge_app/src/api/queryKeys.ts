@@ -206,6 +206,71 @@ export const queryKeys = {
         examinationId,
         'report-card',
       ] as const,
+    consolidatedFees: (
+      organizationId: number,
+      academicSessionId?: number | null
+    ) =>
+      [
+        'org',
+        organizationId,
+        'PARENT',
+        'portal',
+        'fees',
+        'consolidated',
+        academicSessionId ?? 'current',
+      ] as const,
+    childFees: (
+      organizationId: number,
+      studentId: number,
+      academicSessionId?: number | null,
+      startDate?: string | null,
+      endDate?: string | null
+    ) =>
+      [
+        'org',
+        organizationId,
+        'PARENT',
+        'portal',
+        'child',
+        studentId,
+        'fees',
+        academicSessionId ?? 'current',
+        startDate ?? 'all',
+        endDate ?? 'all',
+      ] as const,
+    childPaymentReceipt: (
+      organizationId: number,
+      studentId: number,
+      paymentId: number
+    ) =>
+      [
+        'org',
+        organizationId,
+        'PARENT',
+        'portal',
+        'child',
+        studentId,
+        'fees',
+        'payment',
+        paymentId,
+        'receipt',
+      ] as const,
+    childOfflinePaymentSubmissions: (
+      organizationId: number,
+      studentId: number,
+      academicSessionId?: number | null
+    ) =>
+      [
+        'org',
+        organizationId,
+        'PARENT',
+        'portal',
+        'child',
+        studentId,
+        'fees',
+        'offline-submissions',
+        academicSessionId ?? 'current',
+      ] as const,
   },
 };
 

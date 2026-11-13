@@ -45,6 +45,10 @@ import com.side.forge.organization.examination.service.ExaminationService;
 import com.side.forge.organization.fees.dto.*;
 import com.side.forge.organization.fees.dto.RecordFeePaymentRequest.FeePaymentReceiptResponse;
 import com.side.forge.organization.fees.dto.RecordFeePaymentRequest.PaymentAllocationResponse;
+import com.side.forge.organization.fees.entity.*;
+import com.side.forge.organization.fees.repository.FeePaymentRepository;
+import com.side.forge.organization.fees.repository.ParentFeePaymentSubmissionRepository;
+import com.side.forge.organization.fees.repository.StudentFeeDemandRepository;
 import com.side.forge.organization.fees.service.FeeManagementService;
 import com.side.forge.organization.homework.dto.HomeworkDtos.*;
 import com.side.forge.organization.homework.entity.HomeworkSubmissionStatus;
@@ -73,6 +77,7 @@ import com.side.forge.organization.timetable.entity.*;
 import com.side.forge.organization.timetable.repository.ClassTimetableRepository;
 import com.side.forge.organization.timetable.service.TimetableService;
 import com.side.forge.storage.dto.StorageDtos.*;
+import com.side.forge.storage.entity.FileResourceCategory;
 import com.side.forge.storage.service.FileManagementService;
 import com.side.forge.user.service.UserService;
 
@@ -82,6 +87,8 @@ import lombok.RequiredArgsConstructor;
 @Service
 @RequiredArgsConstructor
 public class ParentPortalService {
+
+	public static final String RESOURCE_FEE_PAYMENT_SUBMISSION_PROOF = "PARENT_FEE_PAYMENT_SUBMISSION";
 
 	private final ParentChildAccessValidator parentChildValidator;
 	private final AcademicTenantAccessValidator tenantValidator;
@@ -103,6 +110,9 @@ public class ParentPortalService {
 	private final HomeworkService homeworkService;
 	private final ExaminationService examinationService;
 	private final FeeManagementService feeManagementService;
+	private final ParentFeePaymentSubmissionRepository feePaymentSubmissionRepository;
+	private final FeePaymentRepository feePaymentRepository;
+	private final StudentFeeDemandRepository feeDemandRepository;
 	private final TimetableService timetableService;
 	private final ClassTimetableRepository classTimetableRepository;
 	private final AnnouncementService announcementService;
@@ -607,6 +617,228 @@ public class ParentPortalService {
 				Map.of(
 						"Receipt Number", String.valueOf(receipt.receiptNumber()),
 						"Total Paid", String.valueOf(receipt.totalAmount())));
+	}
+
+	@RequirePermission(PermissionCode.PARENT_CHILD_VIEW)
+	@Transactional(readOnly = true)
+	public ParentChildOfflinePaymentOverviewResponse getChildOfflinePaymentOverview(
+			Long orgId, Long studentId, Long academicSessionId) {
+		LinkedChildContext ctx = parentChildValidator.requireLinkedChild(orgId, studentId);
+		Student student = ctx.student();
+		Organization org = tenantValidator.requireOrganization(orgId);
+		AcademicSession session = resolveSessionForStudent(orgId, studentId, academicSessionId);
+
+		SchoolOfflinePaymentInstructionsResponse instructions = buildSchoolOfflinePaymentInstructions(org);
+		List<ParentFeePaymentSubmission> entities = feePaymentSubmissionRepository
+				.findAllByOrganizationIdAndAcademicSessionIdAndStudentIdOrderByCreatedAtDescIdDesc(
+						orgId, session.getId(), studentId);
+
+		List<ParentFeePaymentSubmissionResponse> submissions = entities.stream()
+				.map(sub -> toOfflineSubmissionResponse(orgId, sub, session, student))
+				.toList();
+
+		return new ParentChildOfflinePaymentOverviewResponse(
+				student.getId(),
+				fullName(student.getFirstName(), student.getMiddleName(), student.getLastName()),
+				session.getId(),
+				session.getName(),
+				instructions,
+				submissions);
+	}
+
+	@RequirePermission(PermissionCode.PARENT_CHILD_VIEW)
+	@Transactional
+	public ParentFeePaymentSubmissionResponse submitChildOfflinePayment(
+			Long orgId, Long studentId, SubmitOfflineFeePaymentRequest request) {
+		LinkedChildContext ctx = parentChildValidator.requireLinkedChild(orgId, studentId);
+		Student student = ctx.student();
+		AcademicSession session = resolveSessionForStudent(orgId, studentId, request.academicSessionId());
+		StudentEnrollment enrollment = enrollmentRepository
+				.findByOrganizationIdAndAcademicSessionIdAndStudentId(orgId, session.getId(), studentId)
+				.orElseThrow(() -> new IllegalStateException("Student is not enrolled in this academic session"));
+
+		String normalizedUtr = tenantValidator
+				.normalizeRequiredText(request.utrOrReferenceNumber(), "UTR or transaction reference number")
+				.toUpperCase(Locale.ROOT);
+
+		if (feePaymentSubmissionRepository.existsByOrganizationIdAndUtrOrReferenceNumberIgnoreCaseAndStatusIn(
+				orgId,
+				normalizedUtr,
+				List.of(OfflinePaymentSubmissionStatus.PENDING_VERIFICATION, OfflinePaymentSubmissionStatus.APPROVED))
+				|| feePaymentRepository.existsByOrganizationIdAndReferenceNumberIgnoreCaseAndStatusIn(
+						orgId,
+						normalizedUtr,
+						List.of(PaymentStatus.COMPLETED, PaymentStatus.PARTIALLY_REFUNDED))) {
+			throw new IllegalStateException(
+					"Duplicate payment reference detected: UTR / reference '" + normalizedUtr
+							+ "' has already been submitted or recorded for this school.");
+		}
+
+		List<Long> validDemandIds = new ArrayList<>();
+		if (request.targetDemandIds() != null && !request.targetDemandIds().isEmpty()) {
+			Set<Long> uniqueIds = new LinkedHashSet<>(request.targetDemandIds());
+			List<StudentFeeDemand> demands = feeDemandRepository.findAllById(uniqueIds);
+			if (demands.size() != uniqueIds.size()) {
+				throw new EntityNotFoundException("One or more selected fee demands were not found");
+			}
+			for (StudentFeeDemand d : demands) {
+				if (!orgId.equals(d.getOrganizationId())
+						|| !studentId.equals(d.getStudentId())
+						|| !session.getId().equals(d.getAcademicSessionId())) {
+					throw new AccessDeniedException(
+							"Selected fee demand does not belong to this student and academic session");
+				}
+				if (d.getStatus() == FeeDemandStatus.PAID
+						|| d.getStatus() == FeeDemandStatus.WAIVED
+						|| d.getStatus() == FeeDemandStatus.CANCELLED) {
+					throw new IllegalStateException(
+							"Cannot submit payment against demand in status " + d.getStatus());
+				}
+				validDemandIds.add(d.getId());
+			}
+		}
+
+		ParentFeePaymentSubmission sub = new ParentFeePaymentSubmission();
+		sub.setOrganizationId(orgId);
+		sub.setAcademicSessionId(session.getId());
+		sub.setStudentId(studentId);
+		sub.setEnrollmentId(enrollment.getId());
+		sub.setSubmittedByUserId(currentUser.getUserId());
+		sub.setPaymentDate(request.paymentDate());
+		sub.setAmount(request.amount().setScale(2, RoundingMode.HALF_UP));
+		sub.setPaymentMethod(request.paymentMethod());
+		sub.setUtrOrReferenceNumber(normalizedUtr);
+		sub.setTargetDemandIdsCsv(validDemandIds.isEmpty()
+				? null
+				: validDemandIds.stream().map(String::valueOf).collect(Collectors.joining(",")));
+		sub.setRemarks(tenantValidator.normalizeOptionalText(request.remarks()));
+		sub.setStatus(OfflinePaymentSubmissionStatus.PENDING_VERIFICATION);
+		sub = feePaymentSubmissionRepository.saveAndFlush(sub);
+
+		return toOfflineSubmissionResponse(orgId, sub, session, student);
+	}
+
+	@RequirePermission(PermissionCode.PARENT_CHILD_VIEW)
+	@Transactional
+	public StoredFileResponse uploadChildOfflinePaymentProof(
+			Long orgId, Long studentId, Long submissionId, MultipartFile file) {
+		parentChildValidator.requireLinkedChild(orgId, studentId);
+		ParentFeePaymentSubmission sub = feePaymentSubmissionRepository
+				.findByIdAndOrganizationId(submissionId, orgId)
+				.orElseThrow(() -> new EntityNotFoundException("Offline payment submission not found"));
+		if (!studentId.equals(sub.getStudentId())) {
+			throw new AccessDeniedException("Payment submission does not belong to the specified student");
+		}
+		if (sub.getStatus() != OfflinePaymentSubmissionStatus.PENDING_VERIFICATION) {
+			throw new IllegalStateException("Proof attachments can only be uploaded for submissions pending verification");
+		}
+		return fileManagementService.storeOrganizationFile(
+				orgId,
+				FileResourceCategory.STUDENT_DOCUMENT,
+				file,
+				RESOURCE_FEE_PAYMENT_SUBMISSION_PROOF,
+				sub.getId());
+	}
+
+	@RequirePermission(PermissionCode.PARENT_CHILD_VIEW)
+	@Transactional(readOnly = true)
+	public DownloadedFilePayload downloadChildOfflinePaymentProof(
+			Long orgId, Long studentId, Long submissionId, Long fileId) {
+		parentChildValidator.requireLinkedChild(orgId, studentId);
+		ParentFeePaymentSubmission sub = feePaymentSubmissionRepository
+				.findByIdAndOrganizationId(submissionId, orgId)
+				.orElseThrow(() -> new EntityNotFoundException("Offline payment submission not found"));
+		if (!studentId.equals(sub.getStudentId())) {
+			throw new AccessDeniedException("Payment submission does not belong to the specified student");
+		}
+		return fileManagementService.downloadOrganizationFileForAuthorizedResource(
+				orgId,
+				fileId,
+				RESOURCE_FEE_PAYMENT_SUBMISSION_PROOF,
+				sub.getId());
+	}
+
+	private SchoolOfflinePaymentInstructionsResponse buildSchoolOfflinePaymentInstructions(Organization org) {
+		String payeeName = (org.getFeePayeeName() != null && !org.getFeePayeeName().isBlank())
+				? org.getFeePayeeName()
+				: org.getName();
+		String branchOrAddress = String.join(", ",
+				Arrays.stream(new String[]{org.getAddress(), org.getCity(), org.getState()})
+						.filter(s -> s != null && !s.isBlank())
+						.toList());
+		String note = (org.getFeePaymentInstructions() != null && !org.getFeePaymentInstructions().isBlank())
+				? org.getFeePaymentInstructions()
+				: "After completing a UPI or bank transfer to the school account, submit your UTR / transaction reference number and optional payment receipt screenshot below. Submitted references remain Pending Verification until confirmed by the school accounts office.";
+		return new SchoolOfflinePaymentInstructionsResponse(
+				org.getId(),
+				org.getName(),
+				payeeName,
+				org.getFeeUpiId(),
+				org.getFeeBankName(),
+				org.getFeeBankAccountNumber(),
+				org.getFeeBankIfscCode(),
+				branchOrAddress,
+				org.getEmail(),
+				org.getPhoneNumber(),
+				List.of(
+						PaymentMethod.UPI,
+						PaymentMethod.BANK_TRANSFER,
+						PaymentMethod.CHEQUE,
+						PaymentMethod.CASH,
+						PaymentMethod.CARD),
+				note);
+	}
+
+	private ParentFeePaymentSubmissionResponse toOfflineSubmissionResponse(
+			Long orgId,
+			ParentFeePaymentSubmission sub,
+			AcademicSession session,
+			Student student) {
+		List<Long> targetDemandIds = new ArrayList<>();
+		if (sub.getTargetDemandIdsCsv() != null && !sub.getTargetDemandIdsCsv().isBlank()) {
+			for (String token : sub.getTargetDemandIdsCsv().split(",")) {
+				try {
+					targetDemandIds.add(Long.parseLong(token.trim()));
+				} catch (NumberFormatException ignored) {
+				}
+			}
+		}
+		String approvedReceiptNumber = null;
+		if (sub.getApprovedPaymentId() != null) {
+			approvedReceiptNumber = feePaymentRepository
+					.findByIdAndOrganizationId(sub.getApprovedPaymentId(), orgId)
+					.map(FeePayment::getReceiptNumber)
+					.orElse(null);
+		}
+		List<StoredFileResponse> proofFiles = fileManagementService.getFilesForResource(
+				orgId, RESOURCE_FEE_PAYMENT_SUBMISSION_PROOF, sub.getId());
+
+		return new ParentFeePaymentSubmissionResponse(
+				sub.getId(),
+				sub.getOrganizationId(),
+				sub.getAcademicSessionId(),
+				session != null ? session.getName() : null,
+				sub.getStudentId(),
+				student != null ? student.getAdmissionNumber() : null,
+				student != null
+						? fullName(student.getFirstName(), student.getMiddleName(), student.getLastName())
+						: null,
+				sub.getEnrollmentId(),
+				sub.getSubmittedByUserId(),
+				sub.getPaymentDate(),
+				sub.getAmount(),
+				sub.getPaymentMethod(),
+				sub.getUtrOrReferenceNumber(),
+				targetDemandIds,
+				sub.getRemarks(),
+				sub.getStatus(),
+				sub.getReviewedBy(),
+				sub.getReviewedAt(),
+				sub.getReviewRemarks(),
+				sub.getApprovedPaymentId(),
+				approvedReceiptNumber,
+				proofFiles,
+				sub.getCreatedAt());
 	}
 
 	@RequirePermission(PermissionCode.PARENT_CHILD_VIEW)

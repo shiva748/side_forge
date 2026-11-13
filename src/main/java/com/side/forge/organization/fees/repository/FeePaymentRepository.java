@@ -1,5 +1,6 @@
 package com.side.forge.organization.fees.repository;
 
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 
@@ -9,6 +10,7 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 import com.side.forge.organization.fees.entity.FeePayment;
+import com.side.forge.organization.fees.entity.PaymentStatus;
 
 import jakarta.persistence.LockModeType;
 
@@ -24,6 +26,19 @@ public interface FeePaymentRepository extends JpaRepository<FeePayment, Long> {
 	Optional<FeePayment> findByOrganizationIdAndReceiptNumber(Long organizationId, String receiptNumber);
 
 	Optional<FeePayment> findByOrganizationIdAndIdempotencyKey(Long organizationId, String idempotencyKey);
+
+	@Query("""
+			SELECT CASE WHEN COUNT(p) > 0 THEN true ELSE false END
+			FROM FeePayment p
+			WHERE p.organizationId = :organizationId
+			  AND p.referenceNumber IS NOT NULL
+			  AND UPPER(p.referenceNumber) = UPPER(:referenceNumber)
+			  AND p.status IN :statuses
+			""")
+	boolean existsByOrganizationIdAndReferenceNumberIgnoreCaseAndStatusIn(
+			@Param("organizationId") Long organizationId,
+			@Param("referenceNumber") String referenceNumber,
+			@Param("statuses") Collection<PaymentStatus> statuses);
 
 	List<FeePayment> findAllByOrganizationIdAndAcademicSessionIdAndStudentIdOrderByPaymentDateDescIdDesc(
 			Long organizationId, Long academicSessionId, Long studentId);

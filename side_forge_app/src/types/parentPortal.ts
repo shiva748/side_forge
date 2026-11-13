@@ -348,6 +348,156 @@ export interface ParentChildExaminationsResponse {
   upcomingExaminations: ExaminationResponse[];
   publishedResults: ReportCardResponse[];
 }
+export type FeeDemandStatus =
+  | 'PENDING'
+  | 'PARTIALLY_PAID'
+  | 'PAID'
+  | 'OVERDUE'
+  | 'WAIVED'
+  | 'CANCELLED'
+  | string;
+
+export type FeePaymentMethod =
+  | 'CASH'
+  | 'UPI'
+  | 'BANK_TRANSFER'
+  | 'CHEQUE'
+  | 'CARD'
+  | 'OTHER'
+  | string;
+
+export type FeePaymentStatus =
+  | 'COMPLETED'
+  | 'REVERSED'
+  | 'REFUNDED'
+  | 'PARTIALLY_REFUNDED'
+  | string;
+
+export type FeeCategory =
+  | 'TUITION'
+  | 'DEVELOPMENT'
+  | 'EXAMINATION'
+  | 'ADMISSION'
+  | 'TRANSPORT'
+  | 'LIBRARY'
+  | 'LAB'
+  | 'SPORTS'
+  | 'OTHER'
+  | string;
+
+export type FeeFrequency = 'MONTHLY' | 'YEARLY' | 'ONE_TIME' | string;
+
+export type ConcessionType =
+  | 'PERCENTAGE'
+  | 'FIXED_AMOUNT'
+  | 'FULL_WAIVER'
+  | 'PARTIAL_WAIVER'
+  | string;
+
+export type LateFeeType = 'NONE' | 'FIXED_AMOUNT' | 'PER_DAY' | string;
+
+export type OneTimeTriggerCondition =
+  | 'ON_ADMISSION'
+  | 'ON_ENROLLMENT'
+  | 'MANUAL'
+  | string;
+
+export type FeeStructureStatus = 'DRAFT' | 'PUBLISHED' | 'ARCHIVED' | string;
+
+export type FeeReceiptExportFormat = 'PDF' | 'CSV' | 'EXCEL';
+
+export interface FeeComponentResponse {
+  id: number;
+  name: string;
+  code: string;
+  category: FeeCategory;
+  frequency: FeeFrequency;
+  amount: number;
+  applicableMonths: number[] | null;
+  dueDayOfMonth: number | null;
+  dueDate: string | null;
+  oneTimeTrigger: OneTimeTriggerCondition | null;
+  lateFeeType: LateFeeType | null;
+  lateFeeAmount: number | null;
+  lateFeeGraceDays: number;
+  lateFeeCap: number | null;
+  optionalComponent: boolean;
+  displayOrder: number;
+}
+
+export interface ClassFeeStructureResponse {
+  id: number;
+  organizationId: number;
+  academicSessionId: number;
+  academicSessionName: string | null;
+  classId: number;
+  className: string | null;
+  name: string;
+  versionNumber: number;
+  status: FeeStructureStatus;
+  effectiveFromDate: string | null;
+  publishedAt: string | null;
+  publishedBy: number | null;
+  notes: string | null;
+  totalMonthlyAmount: number;
+  totalYearlyAmount: number;
+  totalOneTimeAmount: number;
+  totalAnnualEstimatedAmount: number;
+  components: FeeComponentResponse[];
+  createdAt?: string | null;
+  updatedAt?: string | null;
+}
+
+export interface ConcessionResponse {
+  id: number;
+  organizationId: number;
+  academicSessionId: number;
+  studentId: number;
+  enrollmentId: number;
+  componentCode: string | null;
+  concessionType: ConcessionType;
+  value: number;
+  applicableFromMonth: number | null;
+  applicableToMonth: number | null;
+  reason: string;
+  approvedBy: number | null;
+  approvedAt: string | null;
+  active: boolean;
+}
+
+export interface StudentFeeDemandResponse {
+  id: number;
+  organizationId: number;
+  academicSessionId: number;
+  classId: number;
+  className: string | null;
+  enrollmentId: number;
+  studentId: number;
+  admissionNumber: string;
+  studentName: string;
+  feeStructureId: number;
+  feeStructureVersion: number;
+  componentId: number;
+  componentCode: string;
+  componentName: string;
+  category: FeeCategory;
+  frequency: FeeFrequency;
+  billingYear: number;
+  billingMonth: number;
+  periodLabel: string;
+  dueDate: string;
+  baseAmount: number;
+  concessionAmount: number;
+  lateFeeAmount: number;
+  netPayableAmount: number;
+  paidAmount: number;
+  outstandingAmount: number;
+  status: FeeDemandStatus;
+  remarks: string | null;
+  createdAt?: string | null;
+  updatedAt?: string | null;
+}
+
 export interface PaymentAllocationResponse {
   id: number;
   demandId: number;
@@ -366,16 +516,145 @@ export interface FeePaymentReceiptResponse {
   studentId: number;
   admissionNumber: string;
   studentName: string;
+  enrollmentId?: number | null;
   receiptNumber: string;
+  idempotencyKey?: string | null;
   paymentDate: string;
   totalAmount: number;
   allocatedAmount: number;
   unappliedCreditAmount: number;
   refundedAmount: number;
-  paymentMethod: string;
+  paymentMethod: FeePaymentMethod;
   referenceNumber: string | null;
-  status: string;
+  status: FeePaymentStatus;
+  recordedBy?: number | null;
+  reversedBy?: number | null;
+  reversedAt?: string | null;
+  reversalReason?: string | null;
+  remarks?: string | null;
   allocations: PaymentAllocationResponse[];
+  createdAt?: string | null;
+}
+
+export interface StudentFinancialProfileResponse {
+  organizationId: number;
+  academicSessionId: number;
+  academicSessionName: string | null;
+  classId: number;
+  className: string | null;
+  enrollmentId: number;
+  studentId: number;
+  admissionNumber: string;
+  studentName: string;
+  assignedFeeStructure: ClassFeeStructureResponse | null;
+  assignedFeeStructureVersion: number | null;
+  monthlyDemands: StudentFeeDemandResponse[];
+  yearlyAndOneTimeDemands: StudentFeeDemandResponse[];
+  concessions: ConcessionResponse[];
+  totalBaseFees: number;
+  totalConcessionsAndWaivers: number;
+  totalLateFees: number;
+  totalNetPayableFees: number;
+  totalPaidAmount: number;
+  unappliedAccountCredit: number;
+  totalOutstandingBalance: number;
+  totalOverdueAmount: number;
+  paymentHistory: FeePaymentReceiptResponse[];
+}
+
+export interface ParentConsolidatedFeesResponse {
+  organizationId: number;
+  academicSessionId: number;
+  academicSessionName: string | null;
+  totalBaseAmount: number;
+  totalConcessionAmount: number;
+  totalLateFeeAmount: number;
+  totalNetPayableAmount: number;
+  totalPaidAmount: number;
+  totalUnappliedCreditAmount: number;
+  totalOutstandingAmount: number;
+  totalOverdueAmount: number;
+  childrenFinancialProfiles: StudentFinancialProfileResponse[];
+}
+
+export interface ChildFeesQueryParams {
+  academicSessionId?: number | null;
+  startDate?: string | null;
+  endDate?: string | null;
+}
+
+export type OfflinePaymentSubmissionStatus =
+  | 'PENDING_VERIFICATION'
+  | 'APPROVED'
+  | 'REJECTED'
+  | string;
+
+export interface SchoolOfflinePaymentInstructionsResponse {
+  organizationId: number;
+  organizationName: string;
+  payeeName: string | null;
+  upiId: string | null;
+  bankName: string | null;
+  accountNumber: string | null;
+  ifscCode: string | null;
+  branchOrAddress: string | null;
+  contactEmail: string | null;
+  contactPhone: string | null;
+  supportedMethods: FeePaymentMethod[];
+  instructionsNote: string | null;
+}
+
+export interface SubmitOfflineFeePaymentRequest {
+  academicSessionId?: number | null;
+  paymentDate: string;
+  amount: number;
+  paymentMethod: FeePaymentMethod;
+  utrOrReferenceNumber: string;
+  targetDemandIds?: number[] | null;
+  remarks?: string | null;
+}
+
+export interface ParentFeePaymentSubmissionResponse {
+  id: number;
+  organizationId: number;
+  academicSessionId: number;
+  academicSessionName: string | null;
+  studentId: number;
+  admissionNumber: string | null;
+  studentName: string | null;
+  enrollmentId: number;
+  submittedByUserId: number;
+  paymentDate: string;
+  amount: number;
+  paymentMethod: FeePaymentMethod;
+  utrOrReferenceNumber: string;
+  targetDemandIds: number[];
+  remarks: string | null;
+  status: OfflinePaymentSubmissionStatus;
+  reviewedBy: number | null;
+  reviewedAt: string | null;
+  reviewRemarks: string | null;
+  approvedPaymentId: number | null;
+  approvedReceiptNumber: string | null;
+  proofFiles: StoredFileResponse[];
+  createdAt: string | null;
+}
+
+export interface ParentChildOfflinePaymentOverviewResponse {
+  studentId: number;
+  studentName: string | null;
+  academicSessionId: number;
+  academicSessionName: string | null;
+  paymentInstructions: SchoolOfflinePaymentInstructionsResponse;
+  submissions: ParentFeePaymentSubmissionResponse[];
+}
+
+export interface PickedPaymentProofAsset {
+  uri: string;
+  name: string;
+  mimeType: string;
+  sizeBytes?: number | null;
+  webFile?: File | null;
 }
 
 export interface AnnouncementResponse {
