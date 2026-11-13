@@ -1,0 +1,48 @@
+{
+  "project_info": {
+    "project_number": "880534112003",
+    "project_id": "side-forge",
+    "storage_bucket": "side-forge.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:880534112003:android:aa1c17bc1cafd3e375cb36",
+        "android_client_info": {
+          "package_name": "com.sideforge.mobile"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBKEiZ60EctRdLhagKR_9mTBsDScdVEQqw"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:880534112003:android:aa1c17bc1cafd3e375cb36",
+        "android_client_info": {
+          "package_name": "com.sideforge.app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBKEiZ60EctRdLhagKR_9mTBsDScdVEQqw"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

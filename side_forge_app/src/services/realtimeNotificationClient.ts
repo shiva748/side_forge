@@ -8,6 +8,7 @@ import { secureStorage } from '@/utils/secureStorage';
 import {
   getOrCreateInstallationId,
   markNotificationDeliveredClientSide,
+  presentRealtimeOsNotificationBanner,
   resolveCurrentDevicePlatform,
 } from './pushNotifications';
 import type { MobileRoleExperience } from '@/types/auth';
@@ -129,11 +130,36 @@ class RealtimeNotificationClient {
         if (!this.active) return;
 
         if (!nowForeground) {
-          this.clearTimers();
-          this.closeSocket(true);
+          // Notify backend that app moved to background so FCM/Expo push is tried first,
+          // while keeping the socket alive as an instant background fallback if FCM isn't configured yet.
+          if (
+            this.socket &&
+            this.socket.readyState === WebSocket.OPEN &&
+            this.installationId
+          ) {
+            this.sendFrame({
+              type: 'PRESENCE_INACTIVE',
+              installationId: this.installationId,
+              organizationId: this.organizationId,
+              platform: resolveCurrentDevicePlatform(),
+            });
+          }
         } else {
           this.reconnectAttempts = 0;
-          this.connectSocket();
+          if (
+            this.socket &&
+            this.socket.readyState === WebSocket.OPEN &&
+            this.installationId
+          ) {
+            this.sendFrame({
+              type: 'PRESENCE_ACTIVE',
+              installationId: this.installationId,
+              organizationId: this.organizationId,
+              platform: resolveCurrentDevicePlatform(),
+            });
+          } else {
+            this.connectSocket();
+          }
           this.syncInboxCaches();
         }
       }
@@ -141,7 +167,7 @@ class RealtimeNotificationClient {
   }
 
   private connectSocket(): void {
-    if (!this.active || !this.appInForeground || !this.installationId) return;
+    if (!this.active || !this.installationId) return;
     const token = secureStorage.getSync(STORAGE_KEYS.ACCESS_TOKEN);
     if (!token) return;
 
@@ -160,7 +186,9 @@ class RealtimeNotificationClient {
         this.reconnectAttempts = 0;
         if (this.installationId) {
           this.sendFrame({
-            type: 'PRESENCE_ACTIVE',
+            type: this.appInForeground
+              ? 'PRESENCE_ACTIVE'
+              : 'PRESENCE_INACTIVE',
             installationId: this.installationId,
             organizationId: this.organizationId,
             platform: resolveCurrentDevicePlatform(),
@@ -181,12 +209,12 @@ class RealtimeNotificationClient {
         if (this.socket !== ws) return;
         this.socket = null;
         this.stopHeartbeat();
-        if (this.active && this.appInForeground) {
+        if (this.active) {
           this.scheduleReconnect();
         }
       };
     } catch {
-      if (this.active && this.appInForeground) {
+      if (this.active) {
         this.scheduleReconnect();
       }
     }
@@ -215,6 +243,7 @@ class RealtimeNotificationClient {
         }
         if (isFirstDelivery) {
           this.syncInboxCaches(notif.organizationId ?? this.organizationId);
+          void presentRealtimeOsNotificationBanner(notif);
         }
       } else if (
         frame.type === 'UNREAD_COUNT' &&
@@ -258,7 +287,6 @@ class RealtimeNotificationClient {
     this.heartbeatTimer = setInterval(() => {
       if (
         !this.active ||
-        !this.appInForeground ||
         !this.installationId ||
         !this.socket ||
         this.socket.readyState !== WebSocket.OPEN
@@ -282,7 +310,7 @@ class RealtimeNotificationClient {
   }
 
   private scheduleReconnect(): void {
-    if (this.reconnectTimer || !this.active || !this.appInForeground) return;
+    if (this.reconnectTimer || !this.active) return;
     this.reconnectAttempts += 1;
     const delay = Math.min(
       ENV.WS_RECONNECT_BASE_DELAY_MS *

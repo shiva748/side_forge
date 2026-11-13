@@ -35,6 +35,7 @@ import com.side.forge.notification.entity.NotificationType;
 import com.side.forge.notification.entity.PushProviderType;
 import com.side.forge.notification.entity.UserDeviceInstallation;
 import com.side.forge.notification.push.ApnsHttp2PushClient;
+import com.side.forge.notification.push.ExpoPushClient;
 import com.side.forge.notification.push.FcmHttpV1PushClient;
 import com.side.forge.notification.push.PushSendResult;
 import com.side.forge.notification.repository.InAppNotificationRepository;
@@ -54,6 +55,7 @@ class HybridNotificationDeliveryTest {
 	private NotificationDeviceInstallationService installationService;
 	private FcmHttpV1PushClient fcmClient;
 	private ApnsHttp2PushClient apnsClient;
+	private ExpoPushClient expoPushClient;
 	private HybridNotificationDeliveryGateway gateway;
 
 	@BeforeEach
@@ -68,6 +70,7 @@ class HybridNotificationDeliveryTest {
 				installationRepository, deliveryRepository, notificationRepository);
 		fcmClient = mock(FcmHttpV1PushClient.class);
 		apnsClient = mock(ApnsHttp2PushClient.class);
+		expoPushClient = mock(ExpoPushClient.class);
 
 		gateway = new HybridNotificationDeliveryGateway(
 				presenceRegistry,
@@ -76,7 +79,8 @@ class HybridNotificationDeliveryTest {
 				notificationRepository,
 				installationService,
 				fcmClient,
-				apnsClient);
+				apnsClient,
+				expoPushClient);
 	}
 
 	@Test

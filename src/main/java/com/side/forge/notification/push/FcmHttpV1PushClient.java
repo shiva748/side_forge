@@ -69,10 +69,11 @@ public class FcmHttpV1PushClient {
 	}
 
 	public boolean isConfiguredAndEnabled() {
-		if (!fcmEnabled) {
+		ServiceAccountCredentials creds = loadCredentialsIfPossible();
+		if (creds == null) {
 			return false;
 		}
-		return loadCredentialsIfPossible() != null;
+		return fcmEnabled || hasAutoDiscoveredCredentialsFile();
 	}
 
 	public PushSendResult sendPushNotification(String deviceToken, NotificationDispatchEvent event) {
@@ -80,7 +81,7 @@ public class FcmHttpV1PushClient {
 			return PushSendResult.failure(true, "EMPTY_TOKEN", "Device push token is empty");
 		}
 		ServiceAccountCredentials creds = loadCredentialsIfPossible();
-		if (!fcmEnabled || creds == null) {
+		if (creds == null || (!fcmEnabled && !hasAutoDiscoveredCredentialsFile())) {
 			return PushSendResult.failure(false, "FCM_DISABLED", "FCM HTTP v1 is disabled or not configured");
 		}
 
@@ -212,6 +213,39 @@ public class FcmHttpV1PushClient {
 		return cachedAccessToken;
 	}
 
+	private boolean hasAutoDiscoveredCredentialsFile() {
+		if (credentialsPath != null && !credentialsPath.isBlank() && Files.exists(Path.of(credentialsPath.trim()))) {
+			return true;
+		}
+		String envAdc = System.getenv("GOOGLE_APPLICATION_CREDENTIALS");
+		if (envAdc != null && !envAdc.isBlank() && Files.exists(Path.of(envAdc.trim()))) {
+			return true;
+		}
+		return findLocalFirebaseServiceAccountPath() != null;
+	}
+
+	private Path findLocalFirebaseServiceAccountPath() {
+		try {
+			Path direct = Path.of("firebase-service-account.json");
+			if (Files.exists(direct)) {
+				return direct;
+			}
+			try (var stream = Files.list(Path.of("."))) {
+				return stream
+						.filter(Files::isRegularFile)
+						.filter(p -> {
+							String name = p.getFileName().toString().toLowerCase();
+							return name.endsWith(".json")
+									&& (name.contains("firebase-adminsdk") || name.contains("service-account"));
+						})
+						.findFirst()
+						.orElse(null);
+			}
+		} catch (Exception ignored) {
+			return null;
+		}
+	}
+
 	private ServiceAccountCredentials loadCredentialsIfPossible() {
 		if (cachedCredentials != null) {
 			return cachedCredentials;
@@ -228,6 +262,16 @@ public class FcmHttpV1PushClient {
 					Path path = Path.of(credentialsPath.trim());
 					if (Files.exists(path)) {
 						rawJson = Files.readString(path, StandardCharsets.UTF_8);
+					}
+				} else {
+					String envAdc = System.getenv("GOOGLE_APPLICATION_CREDENTIALS");
+					if (envAdc != null && !envAdc.isBlank() && Files.exists(Path.of(envAdc.trim()))) {
+						rawJson = Files.readString(Path.of(envAdc.trim()), StandardCharsets.UTF_8);
+					} else {
+						Path autoDiscovered = findLocalFirebaseServiceAccountPath();
+						if (autoDiscovered != null) {
+							rawJson = Files.readString(autoDiscovered, StandardCharsets.UTF_8);
+						}
 					}
 				}
 				if (rawJson == null || rawJson.isBlank()) {

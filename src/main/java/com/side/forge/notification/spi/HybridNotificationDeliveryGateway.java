@@ -17,6 +17,7 @@ import com.side.forge.notification.entity.NotificationInstallationDelivery;
 import com.side.forge.notification.entity.PushProviderType;
 import com.side.forge.notification.entity.UserDeviceInstallation;
 import com.side.forge.notification.push.ApnsHttp2PushClient;
+import com.side.forge.notification.push.ExpoPushClient;
 import com.side.forge.notification.push.FcmHttpV1PushClient;
 import com.side.forge.notification.push.PushSendResult;
 import com.side.forge.notification.repository.InAppNotificationRepository;
@@ -55,6 +56,7 @@ public class HybridNotificationDeliveryGateway implements NotificationDeliveryGa
 	private final NotificationDeviceInstallationService installationService;
 	private final FcmHttpV1PushClient fcmClient;
 	private final ApnsHttp2PushClient apnsClient;
+	private final ExpoPushClient expoPushClient;
 
 	@Override
 	public NotificationDeliveryChannel supportedChannel() {
@@ -123,36 +125,62 @@ public class HybridNotificationDeliveryGateway implements NotificationDeliveryGa
 			if (alreadyDeliveredToInstallation(notificationId, installationId)) {
 				continue;
 			}
-			dispatchBackgroundPushToInstallation(installation, event);
+			boolean dispatchedViaPush = dispatchBackgroundPushToInstallation(installation, event);
+			if (!dispatchedViaPush) {
+				// If native FCM/APNs/Expo push wasn't configured or token isn't registered yet,
+				// fall back to delivering over the background WebSocket session if still connected.
+				boolean sentOverBgSocket = presenceRegistry.sendFrameToInstallation(
+						userId, installationId, notificationFrame);
+				if (sentOverBgSocket) {
+					presenceRegistry.sendFrameToInstallation(userId, installationId, unreadFrame);
+					recordDelivery(
+							event,
+							installationId,
+							InstallationDeliveryChannel.WEBSOCKET,
+							InstallationDeliveryStatus.DELIVERED,
+							"ws-background-fallback",
+							null,
+							null);
+				}
+			}
 		}
 	}
 
-	private void dispatchBackgroundPushToInstallation(
+	private boolean dispatchBackgroundPushToInstallation(
 			UserDeviceInstallation installation, NotificationDispatchEvent event) {
 		if (installation.getPlatform() == DevicePlatform.WEB) {
-			return;
+			return false;
 		}
 		if (installation.getPushPermissionStatus() != DevicePushPermissionStatus.GRANTED) {
-			return;
+			return false;
 		}
-		String token = installation.getNativePushToken();
-		if (token == null || token.isBlank()) {
-			return;
-		}
-
+		String nativeToken = installation.getNativePushToken();
+		String expoToken = installation.getExpoPushToken();
 		String installationId = installation.getInstallationId();
 		PushProviderType provider = installation.getPushProvider();
 
-		if (provider == PushProviderType.APNS && apnsClient.isConfiguredAndEnabled()) {
-			PushSendResult result = apnsClient.sendPushNotification(token, event);
+		if (provider == PushProviderType.APNS
+				&& nativeToken != null && !nativeToken.isBlank()
+				&& apnsClient.isConfiguredAndEnabled()) {
+			PushSendResult result = apnsClient.sendPushNotification(nativeToken, event);
 			handlePushResult(event, installationId, InstallationDeliveryChannel.APNS, result);
-			return;
+			return result.delivered();
 		}
 
-		if (fcmClient.isConfiguredAndEnabled()) {
-			PushSendResult result = fcmClient.sendPushNotification(token, event);
+		if (nativeToken != null && !nativeToken.isBlank() && fcmClient.isConfiguredAndEnabled()) {
+			PushSendResult result = fcmClient.sendPushNotification(nativeToken, event);
 			handlePushResult(event, installationId, InstallationDeliveryChannel.FCM, result);
+			return result.delivered();
 		}
+
+		String candidateExpoToken = (expoToken != null && !expoToken.isBlank()) ? expoToken : nativeToken;
+		if (expoPushClient != null && expoPushClient.isExpoPushToken(candidateExpoToken)) {
+			PushSendResult result = expoPushClient.sendPushNotification(candidateExpoToken, event);
+			handlePushResult(event, installationId, InstallationDeliveryChannel.EXPO, result);
+			return result.delivered();
+		}
+
+		return false;
 	}
 
 	private void handlePushResult(

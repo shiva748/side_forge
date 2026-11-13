@@ -11,7 +11,9 @@
       "supportsTablet": true,
       "bundleIdentifier": "com.sideforge.mobile",
       "infoPlist": {
-        "UIBackgroundModes": ["remote-notification"]
+        "UIBackgroundModes": [
+          "remote-notification"
+        ]
       }
     },
     "android": {
@@ -30,7 +32,10 @@
               "host": "invitations"
             }
           ],
-          "category": ["BROWSABLE", "DEFAULT"]
+          "category": [
+            "BROWSABLE",
+            "DEFAULT"
+          ]
         }
       ]
     },
@@ -49,6 +54,16 @@
     },
     "experiments": {
       "typedRoutes": false
+    },
+    "extra": {
+      "router": {
+        "asyncRoutes": {
+          "web": true
+        }
+      },
+      "eas": {
+        "projectId": "5dc9d66f-8c0b-4b80-881f-fc779426f9f8"
+      }
     }
   }
 }

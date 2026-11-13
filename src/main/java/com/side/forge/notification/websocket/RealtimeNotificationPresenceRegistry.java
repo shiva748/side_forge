@@ -31,6 +31,7 @@ public class RealtimeNotificationPresenceRegistry {
 		private final WebSocketSession session;
 		private volatile Long activeOrganizationId;
 		private volatile Instant lastHeartbeatAt;
+		private volatile boolean foregroundActive;
 
 		public InstallationPresenceSession(
 				Long userId,
@@ -44,6 +45,7 @@ public class RealtimeNotificationPresenceRegistry {
 			this.activeOrganizationId = activeOrganizationId;
 			this.session = session;
 			this.lastHeartbeatAt = Instant.now();
+			this.foregroundActive = true;
 		}
 
 		public void refreshHeartbeat(Long organizationId) {
@@ -51,6 +53,11 @@ public class RealtimeNotificationPresenceRegistry {
 			if (organizationId != null && organizationId > 0) {
 				this.activeOrganizationId = organizationId;
 			}
+		}
+
+		public void setForegroundActive(boolean foregroundActive) {
+			this.foregroundActive = foregroundActive;
+			this.lastHeartbeatAt = Instant.now();
 		}
 	}
 
@@ -110,9 +117,16 @@ public class RealtimeNotificationPresenceRegistry {
 			return;
 		}
 		String key = buildCompositeKey(userId, installationId.trim());
-		InstallationPresenceSession removed = sessionsByKey.remove(key);
-		if (removed != null && removed.getSession() != null) {
-			keyBySessionId.remove(removed.getSession().getId());
+		InstallationPresenceSession existing = sessionsByKey.get(key);
+		if (existing != null) {
+			if (existing.getSession() != null && existing.getSession().isOpen()) {
+				existing.setForegroundActive(false);
+			} else {
+				sessionsByKey.remove(key, existing);
+				if (existing.getSession() != null) {
+					keyBySessionId.remove(existing.getSession().getId());
+				}
+			}
 		}
 	}
 
@@ -144,7 +158,7 @@ public class RealtimeNotificationPresenceRegistry {
 			sessionsByKey.remove(key, presence);
 			return false;
 		}
-		return true;
+		return presence.isForegroundActive();
 	}
 
 	public List<InstallationPresenceSession> getActiveSessionsForUser(Long userId) {
@@ -156,7 +170,9 @@ public class RealtimeNotificationPresenceRegistry {
 			InstallationPresenceSession presence = entry.getValue();
 			if (userId.equals(presence.getUserId())) {
 				if (isSessionLeaseValid(presence)) {
-					active.add(presence);
+					if (presence.isForegroundActive()) {
+						active.add(presence);
+					}
 				} else {
 					sessionsByKey.remove(entry.getKey(), presence);
 				}

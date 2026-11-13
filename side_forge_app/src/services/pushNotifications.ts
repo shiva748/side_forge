@@ -90,8 +90,13 @@ if (Platform.OS !== 'web') {
       const data = notification.request.content.data as
         | Record<string, unknown>
         | undefined;
+      const isLocalRealtimeBanner = data?._localRealtimeBanner === true;
       const rawId = Number(data?.notificationId ?? data?.id ?? 0);
-      if (rawId > 0 && hasNotificationBeenProcessedClientSide(rawId)) {
+      if (
+        !isLocalRealtimeBanner &&
+        rawId > 0 &&
+        hasNotificationBeenProcessedClientSide(rawId)
+      ) {
         return {
           shouldShowAlert: false,
           shouldPlaySound: false,
@@ -114,6 +119,71 @@ if (Platform.OS !== 'web') {
   });
 }
 
+let androidChannelConfigured = false;
+
+export async function ensureAndroidNotificationChannelAsync(): Promise<void> {
+  if (Platform.OS !== 'android' || androidChannelConfigured) {
+    return;
+  }
+  await Notifications.setNotificationChannelAsync(
+    ENV.ANDROID_NOTIFICATION_CHANNEL_ID,
+    {
+      name: 'School Updates & Alerts',
+      importance: Notifications.AndroidImportance.MAX,
+      vibrationPattern: [0, 200, 150, 200],
+      lightColor: '#3730A3',
+      enableVibrate: true,
+      showBadge: true,
+    }
+  );
+  androidChannelConfigured = true;
+}
+
+/**
+ * Triggers a native OS heads-up system notification banner on Android/iOS
+ * when a notification arrives over the real-time WebSocket channel.
+ */
+export async function presentRealtimeOsNotificationBanner(notification: {
+  id: number;
+  organizationId?: number | null;
+  category?: string | null;
+  type?: string | null;
+  title: string;
+  message: string;
+  resourceType?: string | null;
+  resourceId?: number | null;
+  navigationUrl?: string | null;
+}): Promise<void> {
+  if (Platform.OS === 'web') return;
+  try {
+    await ensureAndroidNotificationChannelAsync();
+    await Notifications.scheduleNotificationAsync({
+      content: {
+        title: notification.title || 'Side Forge Alert',
+        body: notification.message || 'You have a new update.',
+        sound: 'default',
+        data: {
+          notificationId: notification.id,
+          id: notification.id,
+          organizationId: notification.organizationId ?? null,
+          category: notification.category ?? null,
+          type: notification.type ?? null,
+          resourceType: notification.resourceType ?? null,
+          resourceId: notification.resourceId ?? null,
+          navigationUrl: notification.navigationUrl ?? null,
+          _localRealtimeBanner: true,
+        },
+        ...(Platform.OS === 'android'
+          ? { channelId: ENV.ANDROID_NOTIFICATION_CHANNEL_ID }
+          : {}),
+      },
+      trigger: null,
+    });
+  } catch {
+    // Ignore if OS notification permission was revoked
+  }
+}
+
 
 export interface PushRegistrationResult {
   granted: boolean;
@@ -133,15 +203,7 @@ export async function registerForPushNotificationsAsync(options?: {
   const promptIfUndetermined = options?.promptIfUndetermined ?? true;
 
   if (Platform.OS === 'android') {
-    await Notifications.setNotificationChannelAsync(
-      ENV.ANDROID_NOTIFICATION_CHANNEL_ID,
-      {
-        name: 'School Updates & Alerts',
-        importance: Notifications.AndroidImportance.MAX,
-        vibrationPattern: [0, 200, 150, 200],
-        lightColor: '#3730A3',
-      }
-    );
+    await ensureAndroidNotificationChannelAsync().catch(() => {});
   }
 
   if (Platform.OS === 'web' || !Device.isDevice) {
@@ -176,41 +238,64 @@ export async function registerForPushNotificationsAsync(options?: {
     };
   }
 
+  let nativePushToken: string | null = null;
+  let expoPushToken: string | null = null;
+  let lastErrorReason: string | undefined;
+
   try {
     const deviceTokenResponse = await Notifications.getDevicePushTokenAsync();
-    const rawToken =
-      typeof deviceTokenResponse.data === 'string'
-        ? deviceTokenResponse.data.trim()
-        : null;
-    const tokenProvider: PushTokenProvider =
-      Platform.OS === 'android'
-        ? 'FCM'
-        : Platform.OS === 'ios'
-        ? 'APNS'
-        : 'NONE';
-
-    return {
-      granted: true,
-      installationId,
-      platform,
-      tokenProvider,
-      nativePushToken: rawToken,
-      expoPushToken: rawToken,
-    };
+    if (
+      typeof deviceTokenResponse.data === 'string' &&
+      deviceTokenResponse.data.trim().length > 0
+    ) {
+      nativePushToken = deviceTokenResponse.data.trim();
+    }
   } catch (err) {
-    return {
-      granted: true,
-      installationId,
-      platform,
-      tokenProvider: Platform.OS === 'android' ? 'FCM' : 'APNS',
-      nativePushToken: null,
-      expoPushToken: null,
-      reason:
-        err instanceof Error
-          ? err.message
-          : 'Native push token unavailable until google-services.json / APNs is configured in a development build.',
-    };
+    lastErrorReason =
+      err instanceof Error
+        ? err.message
+        : 'Native FCM/APNs token unavailable on this build.';
   }
+
+  try {
+    const easProjectId =
+      (
+        Constants.expoConfig?.extra as
+          | { eas?: { projectId?: string } }
+          | undefined
+      )?.eas?.projectId ?? Constants.easConfig?.projectId;
+    const expoTokenResponse = await Notifications.getExpoPushTokenAsync(
+      easProjectId ? { projectId: easProjectId } : undefined
+    );
+    if (
+      typeof expoTokenResponse.data === 'string' &&
+      expoTokenResponse.data.trim().length > 0
+    ) {
+      expoPushToken = expoTokenResponse.data.trim();
+    }
+  } catch (err) {
+    if (!lastErrorReason && err instanceof Error) {
+      lastErrorReason = err.message;
+    }
+  }
+
+  const tokenProvider: PushTokenProvider =
+    Platform.OS === 'android'
+      ? 'FCM'
+      : Platform.OS === 'ios'
+      ? 'APNS'
+      : 'NONE';
+
+  return {
+    granted: true,
+    installationId,
+    platform,
+    tokenProvider:
+      !nativePushToken && expoPushToken ? 'EXPO' : tokenProvider,
+    nativePushToken,
+    expoPushToken: expoPushToken ?? nativePushToken,
+    ...(nativePushToken || expoPushToken ? {} : { reason: lastErrorReason }),
+  };
 }
 
 export async function syncDeviceInstallationWithBackend(options?: {

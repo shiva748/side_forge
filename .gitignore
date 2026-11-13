@@ -36,12 +36,11 @@ build/
 .env
 .env.local
 .env.*.local
-**/google-services.json
-**/GoogleService-Info.plist
 **/*service-account*.json
 **/*firebase-adminsdk*.json
 **/*.p8
 **/*.p12
 **/*.jks
 **/*.keystore
+
 
