@@ -129,6 +129,7 @@ export default function WorkspaceSelectScreen() {
   );
 
   const orgIds = Object.keys(groupedByOrg).map(Number);
+  const hasActiveWorkspace = Boolean(activeWorkspace);
 
   return (
     <ScreenContainer
@@ -136,13 +137,13 @@ export default function WorkspaceSelectScreen() {
       onRefresh={loadData}
       header={
         <ScreenHeader
-          title="Select Workspace"
+          title={hasActiveWorkspace ? 'Switch Workspace' : 'Select Workspace'}
           subtitle={
             user?.email
               ? `Signed in as ${user.email}`
               : 'Choose your school and role'
           }
-          showBack={Boolean(activeWorkspace)}
+          showBack={hasActiveWorkspace}
         />
       }
     >
@@ -310,8 +311,18 @@ export default function WorkspaceSelectScreen() {
                         </View>
 
                         <AppButton
-                          label={isCurrent ? 'Active' : 'Switch'}
-                          variant={isCurrent ? 'primary' : 'secondary'}
+                          label={
+                            isCurrent
+                              ? 'Active'
+                              : hasActiveWorkspace
+                              ? 'Switch'
+                              : 'Select'
+                          }
+                          variant={
+                            isCurrent || !hasActiveWorkspace
+                              ? 'primary'
+                              : 'secondary'
+                          }
                           size="sm"
                           loading={selectingKey === ws.key}
                           onPress={() => handleSelectWorkspace(ws)}

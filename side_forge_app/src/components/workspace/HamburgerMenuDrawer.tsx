@@ -1,10 +1,13 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
+  Animated,
+  Easing,
   Modal,
   Pressable,
   ScrollView,
   StyleSheet,
   Text,
+  useWindowDimensions,
   View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -14,7 +17,6 @@ import {
   ChevronRight,
   LogOut,
   Settings,
-  X,
 } from 'lucide-react-native';
 import { useAppTheme } from '@/theme';
 import { useAuthWorkspaceStore } from '@/store/useAuthWorkspaceStore';
@@ -53,11 +55,44 @@ export function HamburgerMenuDrawer({
   onClose,
 }: HamburgerMenuDrawerProps) {
   const insets = useSafeAreaInsets();
+  const { width: windowWidth } = useWindowDimensions();
   const queryClient = useQueryClient();
   const { colors, spacing, typography, radius, iconSizes, touchTargets } =
     useAppTheme();
   const { pathname, currentSection, navigateTo, resetToLogin } =
     useSafeNavigation();
+
+  const drawerWidth = Math.min(Math.round((windowWidth || 360) * 0.82), 320);
+  const [modalMounted, setModalMounted] = useState(visible);
+  const slideProgress = useRef(new Animated.Value(visible ? 1 : 0)).current;
+
+  useEffect(() => {
+    if (visible) {
+      setModalMounted(true);
+      Animated.timing(slideProgress, {
+        toValue: 1,
+        duration: 240,
+        easing: Easing.out(Easing.cubic),
+        useNativeDriver: true,
+      }).start();
+    } else {
+      Animated.timing(slideProgress, {
+        toValue: 0,
+        duration: 200,
+        easing: Easing.in(Easing.cubic),
+        useNativeDriver: true,
+      }).start(({ finished }) => {
+        if (finished) {
+          setModalMounted(false);
+        }
+      });
+    }
+  }, [visible, slideProgress]);
+
+  const translateX = slideProgress.interpolate({
+    inputRange: [0, 1],
+    outputRange: [-drawerWidth, 0],
+  });
 
   const user = useAuthWorkspaceStore((s) => s.user);
   const activeWorkspace = useAuthWorkspaceStore((s) => s.activeWorkspace);
@@ -138,26 +173,49 @@ export function HamburgerMenuDrawer({
     }
   };
 
+  if (!modalMounted && !visible) {
+    return null;
+  }
+
   return (
     <Modal
-      visible={visible}
+      visible={modalMounted}
       transparent
-      animationType="fade"
+      animationType="none"
       onRequestClose={onClose}
     >
       <View style={styles.overlayRow}>
-        <View
+        <Animated.View
+          style={[
+            styles.backdropOverlay,
+            {
+              backgroundColor: colors.overlayScrim,
+              opacity: slideProgress,
+            },
+          ]}
+        >
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Dismiss navigation menu"
+            style={styles.backdropOverlay}
+            onPress={onClose}
+          />
+        </Animated.View>
+
+        <Animated.View
           style={[
             styles.drawerSheet,
             {
+              width: drawerWidth,
               backgroundColor: colors.surface,
               borderRightColor: colors.border,
               paddingTop: Math.max(insets.top, spacing.sm),
               paddingBottom: Math.max(insets.bottom, spacing.md),
+              transform: [{ translateX }],
             },
           ]}
         >
-          {/* A. Top Section: Clickable User Profile Header + Dismiss Action */}
+          {/* A. Top Section: Clickable User Profile Header */}
           <View
             style={[
               styles.topBarRow,
@@ -236,25 +294,6 @@ export function HamburgerMenuDrawer({
               </View>
 
               <ChevronRight size={iconSizes.sm} color={colors.textMuted} />
-            </Pressable>
-
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel="Close navigation drawer"
-              hitSlop={8}
-              onPress={onClose}
-              style={({ pressed }) => [
-                styles.closeBtn,
-                {
-                  backgroundColor: pressed
-                    ? colors.surfaceInteractivePressed
-                    : colors.surfaceMuted,
-                  borderRadius: radius.sm,
-                  marginLeft: spacing.xs,
-                },
-              ]}
-            >
-              <X size={iconSizes.sm} color={colors.textSecondary} />
             </Pressable>
           </View>
 
@@ -440,14 +479,7 @@ export function HamburgerMenuDrawer({
               </Text>
             </Pressable>
           </View>
-        </View>
-
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel="Dismiss navigation menu"
-          style={[styles.backdrop, { backgroundColor: colors.overlayScrim }]}
-          onPress={onClose}
-        />
+        </Animated.View>
       </View>
     </Modal>
   );
@@ -524,14 +556,17 @@ const styles = StyleSheet.create({
     flex: 1,
     flexDirection: 'row',
   },
+  backdropOverlay: {
+    position: 'absolute',
+    top: 0,
+    right: 0,
+    bottom: 0,
+    left: 0,
+  },
   drawerSheet: {
-    width: '82%',
-    maxWidth: 320,
     height: '100%',
     borderRightWidth: 1,
-  },
-  backdrop: {
-    flex: 1,
+    zIndex: 2,
   },
   topBarRow: {
     flexDirection: 'row',
@@ -546,12 +581,6 @@ const styles = StyleSheet.create({
   },
   profileTextBlock: {
     flex: 1,
-  },
-  closeBtn: {
-    width: 34,
-    height: 34,
-    alignItems: 'center',
-    justifyContent: 'center',
   },
   switchWorkspaceBtn: {
     flexDirection: 'row',
